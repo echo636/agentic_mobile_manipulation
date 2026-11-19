@@ -1,4 +1,5 @@
 """Regression tests for the real-robot-observable feedback path."""
+import asyncio
 import base64
 import io
 import json
@@ -167,6 +168,57 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
             f.receive('act', cmd('place_inside', 4, (.5,.5)), packet(5, None, front=moved))
             self.assertIsNone(f.memory.grasp)
 
+    def test_repeated_material_requests_do_not_imply_a_failed_action(self):
+        for op in ('cut', 'pour'):
+            f = Feedback('evidence')
+            f.receive('initialize', {}, packet(0, None))
+            for rev in range(2):
+                result = f.receive('act', cmd(op, rev), packet(rev + 1, None))
+                info = body(result)['visual_evidence']
+                self.assertTrue(any(row['label'] == 'Prior ' + op + ' selection' for row in info['rows']))
+                self.assertNotIn('repeated_similar_images', info)
+
+    def test_small_color_change_at_selected_point_resets_grasp_hint(self):
+        original = Image.new('RGB', (512, 512), (255, 0, 0))
+        moved = original.copy()
+        # Red and this green have the same luminance in Pillow.
+        moved.paste((0, 130, 0), (251, 251, 261, 261))
+        f = Feedback('evidence')
+        f.receive('initialize', {}, packet(0, None, front=original))
+        for rev in range(2):
+            f.receive('act', cmd('grasp', rev, (.5,.5)), packet(rev + 1, None, front=original))
+        self.assertEqual(f.memory.similar_count, 2)
+        result = f.receive('act', cmd('grasp', 2, (.5,.5)), packet(3, None, front=moved))
+        self.assertNotIn('repeated_similar_images', body(result)['visual_evidence'])
+        self.assertEqual(f.memory.grasp['image_ref'], 'front-2')
+
+    async def test_concurrent_finish_clears_rgb_for_reconnected_inspection(self):
+        entered, closing = asyncio.Event(), asyncio.Event()
+        async def upstream_call(name, args):
+            if name == 'act':
+                entered.set()
+                await closing.wait()
+                return packet(1)
+            if name == 'finish':
+                closing.set()
+                return types.CallToolResult(content=[txt({'closed': True})])
+            return packet(0)
+        with tempfile.TemporaryDirectory() as tmp:
+            upstream = SimpleNamespace(list_tools=AsyncMock(return_value=types.ListToolsResult(
+                tools=[types.Tool(**s) for s in tool_specs('basic-skills')])), call_tool=upstream_call)
+            config = dict(mode='evidence', state=str(Path(tmp) / 'state.json'))
+            actor = await create_server(upstream, config)
+            await actor.call_tool('initialize', {})
+            action = asyncio.create_task(actor.call_tool('act', cmd('grasp', 0)))
+            await asyncio.wait_for(entered.wait(), 2)
+            finish = asyncio.create_task(actor.call_tool('finish', dict(outcome='aborted', reason='fixture')))
+            _, closed = await asyncio.wait_for(asyncio.gather(action, finish), 2)
+            self.assertTrue(body(closed)['closed'])
+            resumed = await create_server(upstream, config)
+            inspected = await resumed.call_tool('inspect_target', dict(revision=1, image_ref='front-1', point=[.5,.5]))
+            self.assertTrue(inspected.isError)
+            self.assertFalse(any(part.type == 'image' for part in inspected.content))
+
     def test_only_selected_geometry_and_readonly(self):
         f=Feedback('evidence')
         f.receive('initialize',{},packet(0))
@@ -243,4 +295,8 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
                 planner.observe('act', cmd('grasp',1), stopped)
                 self.assertFalse(planner.consult('after interruption')['ok'])
                 self.assertEqual(planner.images, [])
+                planner.observe('inspect_target', {}, inspect)
+                planner.observe('finish', {}, types.CallToolResult(content=[txt({'ok': True, 'closed': True})]))
+                self.assertFalse(planner.consult('after closure')['ok'])
+                self.assertFalse(planner.images)
             finally:planner.events.close()

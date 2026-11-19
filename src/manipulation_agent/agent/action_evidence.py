@@ -5,7 +5,7 @@ import hashlib
 import io
 import math
 
-from PIL import Image, ImageChops, ImageDraw, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageStat
 
 INSPECT_TOOL = {
     'name': 'inspect_target',
@@ -93,7 +93,13 @@ def similar_action_views(previous, current, selection):
             return False
         if selection and frame['view'] == selection['view']:
             box = tuple(selection['box'])
-            if not similar(before.crop(box), after.crop(box), (24, 24)):
+            old_patch, new_patch = before.crop(box), after.crop(box)
+            if not similar(old_patch, new_patch, (24, 24)):
+                return False
+            # A few changing coloured pixels can be diluted in the mean, even inside a crop.
+            delta = ImageChops.difference(old_patch.resize((28, 28), Image.Resampling.BOX),
+                                          new_patch.resize((28, 28), Image.Resampling.BOX))
+            if max(peak for _, peak in delta.filter(ImageFilter.BoxBlur(1)).getextrema()) > 12:
                 return False
     return True
 
@@ -159,8 +165,11 @@ class EvidenceMemory:
         row = None
         if src and valid_point(target.get('point')):
             row = sample(src, target['point'], primitive, revision)
-        similar = similar_action_views(previous, current, row)
-        if similar:
+        # Appearance is useful for recovering the pickup selection. Material changes
+        # can succeed repeatedly while leaving almost the entire image unchanged.
+        compare_hand = hand == 'unavailable' and (primitive == 'grasp' or primitive in RELEASE)
+        similar = compare_hand and similar_action_views(previous, current, row)
+        if primitive == 'grasp' and similar:
             self.similar_count = self.similar_count + 1 if self.similar_command == primitive else 1
             self.similar_command = primitive
         else:
@@ -239,9 +248,9 @@ class EvidenceMemory:
         data = png(panel)
         info = dict(rows=descriptors, sha256=digest(data),
                     interpretation='Ticks mark your selected image location. Camera and objects may move. Use current full views for action coordinates.')
-        if self.similar_count >= 2:
+        if self.similar_command == 'grasp' and self.similar_count >= 2:
             info['repeated_similar_images'] = dict(command=self.similar_command, count=self.similar_count,
-                message='The four camera views changed very little after each of these consecutive commands, including the selected patch when there was a target. The physical effect is uncertain. Check the earlier selection and consider a different observation or recovery action.')
+                message='You made consecutive grasp requests with similar before and after images. Hand occupancy is unmeasured. Compare the earlier pickup selection with the current views before choosing your next action.')
         if cycling:
             info['repeated_access'] = dict(revisions=[r['revision'] for r in self.access],
                 message='Your alternating access commands have revisited similar views twice. Compare the visible changes and the locations you tried. What changed toward the goal? Inspect from another view or revise the plan if more evidence is needed.')

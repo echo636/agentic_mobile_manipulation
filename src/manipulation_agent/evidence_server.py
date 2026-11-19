@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+from contextlib import asynccontextmanager
 import io
 import json
 import logging
@@ -182,11 +183,14 @@ class Feedback:
         return self.render({'ok': True, 'observation': self.observation,
                             'evidence_id': receipt_id('inspect_target', args, self.observation), 'hand': {'state': self.memory.occupancy}}, inspection=crop)
 
-    def invalidate(self, code='observation_unavailable'):
+    def clear_observation(self):
         self.current = {}
         self.observation = None
         self.memory = EvidenceMemory()
         self.persist()
+
+    def invalidate(self, code='observation_unavailable'):
+        self.clear_observation()
         return reply({'ok': False, 'error': {'code': code}}, error=True)
 
     def receive(self, name, args, upstream):
@@ -241,7 +245,7 @@ async def create_server(session, config):
     from pydantic import ConfigDict
     import fcntl
 
-    catalog = (await session.list_tools()).tools
+    catalog = list((await session.list_tools()).tools)
     if not {t.name for t in catalog} <= BASIC_TOOLS:
         raise ValueError('Feedback requires a minimal or basic-skills robot endpoint')
     if config['mode'] == 'evidence':
@@ -253,28 +257,42 @@ async def create_server(session, config):
     lock = asyncio.Lock()
     state = Path(config['state'])
     state.parent.mkdir(parents=True, exist_ok=True)
+
+    @asynccontextmanager
+    async def locked_feedback():
+        # Separate MCP transports can attach to the same live robot on resume.
+        async with lock:
+            with state.with_suffix('.lock').open('a') as lock_file:
+                await asyncio.to_thread(fcntl.flock, lock_file, fcntl.LOCK_EX)
+                yield Feedback(config['mode'], state)
+
     def wrap(name):
         async def invoke(**args):
-            if name == 'finish' or name in ('list_skills', 'read_skill'):
+            if name == 'finish':
+                # Send closure immediately so it can interrupt an action holding the lock.
+                # Once it returns, local inspection must no longer serve that action's RGB.
+                try:
+                    upstream = await session.call_tool(name, args)
+                    return Feedback(config['mode']).receive(name, args, upstream)
+                finally:
+                    async with locked_feedback() as feedback:
+                        feedback.clear_observation()
+            if name in ('list_skills', 'read_skill'):
                 upstream = await session.call_tool(name, args)
                 return Feedback(config['mode']).receive(name, args, upstream)
-            async with lock:
-                # Separate MCP transports can attach to the same live robot on resume.
-                with state.with_suffix('.lock').open('a') as lock_file:
-                    await asyncio.to_thread(fcntl.flock, lock_file, fcntl.LOCK_EX)
-                    feedback = Feedback(config['mode'], state)
-                    if name == 'inspect_target':
-                        return feedback.inspect(args)
-                    try:
-                        upstream = await session.call_tool(name, args)
-                        return feedback.receive(name, args, upstream)
-                    except asyncio.CancelledError:
-                        feedback.invalidate()
-                        raise
-                    except Exception as exc:
-                        # The motor may have moved before the transport or image check failed.
-                        logging.getLogger(__name__).warning('Camera reply unavailable (%s)', type(exc).__name__)
-                        return feedback.invalidate()
+            async with locked_feedback() as feedback:
+                if name == 'inspect_target':
+                    return feedback.inspect(args)
+                try:
+                    upstream = await session.call_tool(name, args)
+                    return feedback.receive(name, args, upstream)
+                except asyncio.CancelledError:
+                    feedback.invalidate()
+                    raise
+                except Exception as exc:
+                    # The motor may have moved before the transport or image check failed.
+                    logging.getLogger(__name__).warning('Camera reply unavailable (%s)', type(exc).__name__)
+                    return feedback.invalidate()
         return invoke
     return FastMCP('robot-rgb-feedback', log_level='WARNING', tools=[
         Tool(name=t.name, description=t.description or '', parameters=t.inputSchema,

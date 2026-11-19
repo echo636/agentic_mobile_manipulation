@@ -93,10 +93,13 @@ class PlanningSubagent:
         if 'hand' in body:
             self.hand = body['hand']
         error = body.get('error')
-        if isinstance(error, dict) and error.get('code') in {
-                'episode_cancelled', 'episode_timeout', 'episode_closed', 'observation_unavailable'}:
-            self.observation, self.images, self.selection_context = None, [], []
+        unavailable = isinstance(error, dict) and error.get('code') in {
+            'episode_cancelled', 'episode_timeout', 'episode_closed', 'observation_unavailable'}
         observation = body.get('observation')
+        if body.get('closed') or unavailable:
+            self.observation, self.images, self.selection_context = None, [], []
+            self.hand = None
+            observation = None
         if observation and observation.get('observation_mode') == 'rgb_only':
             self.selection_context = []
             if body.get('visual_evidence'):
