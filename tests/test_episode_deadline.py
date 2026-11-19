@@ -275,18 +275,20 @@ class ControllerDeadlineTests(unittest.TestCase):
                 pid=123456;returncode=0
                 def __init__(self,*args,**kwargs):self.stdout=kwargs['stdout']
                 def poll(self):return self.returncode
-                def communicate(self,text,timeout):
+                def wait(self,timeout):
                     self.stdout.write(json.dumps({'type':'item.completed','item':{
                         'type':'mcp_tool_call','server':'manipulation','tool':'finish',
                         'result':{'content':[{'type':'text','text':'{"ok":true,"closed":true}'}]}}})+'\n')
+                    self.stdout.flush()
                     clock[0]=149.0
-                    return None,None
+                    return self.returncode
             def run(project, output, timeout, on_start):
                 observed['model_timeout']=timeout
                 return run_process(project, output, timeout, on_start)
             decode=json.loads
             def decode_after_policy(text,*args,**kwargs):
-                if text.startswith('{"type": "item.completed"'):clock[0]=151.0
+                # The runner tails bytes live, then parses saved text after the policy exits.
+                if isinstance(text, str) and text.startswith('{"type": "item.completed"'):clock[0]=151.0
                 return decode(text,*args,**kwargs)
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800','--deadline-unix','150']
@@ -313,14 +315,17 @@ class ControllerDeadlineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'controller';clock=[100.0]
             class Process:
-                pid=123456;returncode=-15
+                pid=123456;returncode=None
                 def __init__(self,*args,**kwargs):self.stdout=kwargs['stdout']
-                def poll(self):return None
-                def communicate(self,text,timeout):
-                    self.stdout.write('{"type":"unfinished')
-                    clock[0]=151
-                    raise controller.subprocess.TimeoutExpired('fixture',timeout)
-                def wait(self,timeout):return self.returncode
+                def poll(self):return self.returncode
+                def wait(self,timeout):
+                    if clock[0] < 151:
+                        self.stdout.write('{"type":"unfinished')
+                        self.stdout.flush()
+                        clock[0]=151
+                        raise controller.subprocess.TimeoutExpired('fixture',timeout)
+                    self.returncode=-15
+                    return self.returncode
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800','--deadline-unix','150']
             with patch('sys.argv',argv), patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:clock[0]), \
@@ -360,11 +365,12 @@ class ControllerDeadlineTests(unittest.TestCase):
                     assert clock_path.exists()
                     order.append('model');self.stdout=kwargs['stdout']
                 def poll(self):return self.returncode
-                def communicate(self,text,timeout):
+                def wait(self,timeout):
                     self.stdout.write(json.dumps({'type':'item.completed','item':{
                         'type':'mcp_tool_call','server':'manipulation','tool':'finish',
                         'result':{'content':[{'type':'text','text':'{"ok":true,"closed":true}'}]}}})+'\n')
-                    return None,None
+                    self.stdout.flush()
+                    return self.returncode
             def run(project, output, timeout, on_start):
                 waits['model']=timeout
                 return run_process(project, output, timeout, on_start)
