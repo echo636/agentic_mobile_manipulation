@@ -49,7 +49,14 @@ from .tools.finish_guard import FinishGuard
 from .agent.state_memory import StateMemory
 from .agent.failure_memory import FailureMemory
 from .agent.stance_repeat import StanceRepeatGuard
-from .tools.zoom_select import ZOOM_TOOL, two_step_catalog, zoom_image, zoom_to_full
+from .tools.zoom_select import ZOOM_LIMIT, ZOOM_TOOL, compose_region, two_step_catalog, zoom_image, zoom_to_full
+
+# v12b (--two-step-select only): correct call shapes quoted in rejection messages.
+TARGET_SHAPE = ('target {"image_ref": <newest image_ref>, "point": [x, y]} or {"zoom_ref": <latest zoom_ref>, '
+                '"point": [x, y]}')
+ACT_SHAPE = ('act takes {"primitive": <primitive>, "revision": <latest revision>, "target": {"image_ref": <newest '
+             'image_ref>, "point": [x, y]} (or {"zoom_ref": <latest zoom_ref>, "point": [x, y]}), '
+             '"placement_roll_degrees": null, "placement_yaw_degrees": null, "wait_seconds": null}.')
 from .tools.finish_evidence import FinishEvidence, agy_judge, codex_judge, relay_judge
 from .agent.task_graph_planner import TaskGraphSession
 from .contracts import SkillError, validate
@@ -348,7 +355,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     # Harness option (--stance-repeat-guard, v12, default off): same primitive failing repeatedly at one stance.
     stance = StanceRepeatGuard(state_path=stance_repeat_state) if stance_repeat_guard else None
     # Harness option (--two-step-select, v12, default off): zoom state (newest frame refs, open zoom_refs).
-    zoom_state = {'latest_refs': set(), 'zooms': {}, 'zoomed_since_step': False, 'count': 0}
+    zoom_state = {'latest_refs': set(), 'zooms': {}, 'zoomed_since_step': 0, 'count': 0, 'latest': None}
     # Harness option (--finish-evidence, v9, default off): item-by-item image evidence before finish(achieved).
     evidence = None
     if finish_evidence:
@@ -401,6 +408,17 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                     }
                     return [types.TextContent(type='text', text=json.dumps(checkpoint, ensure_ascii=False))]
                 zoom_note = None
+                if two_step_select and name in ('act', 'look') and isinstance(arguments, dict):
+                    # v12b: arguments meant for zoom (top-level image_ref/point) sent to act/look -> show the shape.
+                    if 'image_ref' in arguments or ('point' in arguments and 'target' not in arguments):
+                        how = (ACT_SHAPE if name == 'act' else
+                               'look takes only {"revision": <latest revision>, "yaw_degrees": <degrees>} and turns '
+                               'the view. To enlarge part of an image call zoom {"image_ref": <newest image_ref>, '
+                               '"point": [x, y]}; to act on a point call act with ' + TARGET_SHAPE + '.')
+                        rejected = {'ok': False, 'error': {
+                            'code': 'invalid_arguments', 'action_step_used': False, 'world_may_have_changed': False,
+                            'message': 'image_ref and point are not top-level arguments of ' + name + '. ' + how}}
+                        return [types.TextContent(type='text', text=json.dumps(without_wall_clock(rejected), ensure_ascii=False))]
                 if two_step_select and name == 'act' and isinstance(arguments, dict):
                     zt = arguments.get('target')
                     if isinstance(zt, dict) and 'zoom_ref' in zt:
@@ -408,12 +426,22 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         zp = zt.get('point')
                         if (zoom is None or not isinstance(zp, list) or len(zp) != 2
                                 or not all(isinstance(v, (int, float)) and 0 <= v <= 1 for v in zp)):
+                            latest = zoom_state['latest'] if zoom_state['zooms'] else None
+                            msg = ('target.point must be [x, y] normalized to the zoomed image (0..1). '
+                                   if zoom is not None else
+                                   ('Only the latest zoom_ref (' + latest + ') can be used, by the next act only. '
+                                    if latest else 'There is no usable zoom_ref (a zoom_ref serves the next act '
+                                    'only and expires after any act or look). '))
+                            msg += ('Call act with target {"zoom_ref": "' + latest + '", "point": [x, y]}, or with '
+                                    '{"image_ref": <newest image_ref>, "point": [x, y]} on a full image.'
+                                    if latest else 'Call act with target {"image_ref": <newest image_ref>, "point": '
+                                    '[x, y]} on a full image, or call zoom first.')
+                            if zoom is not None:
+                                zoom_state['zooms'][zt['zoom_ref']] = zoom   # a malformed point does not use it up
                             rejected = {'ok': False, 'error': {
                                 'code': 'invalid_arguments', 'action_step_used': False, 'world_may_have_changed': False,
-                                'message': ('target.zoom_ref is unknown or already used, or target.point is not '
-                                            '[u, v] in 0..1. A zoom_ref is valid for the next act only; zoom again '
-                                            'or give {"image_ref", "point"} on a full image.')}}
-                            return [types.TextContent(type='text', text=json.dumps(rejected, ensure_ascii=False))]
+                                'message': msg}}
+                            return [types.TextContent(type='text', text=json.dumps(without_wall_clock(rejected), ensure_ascii=False))]
                         full_point = zoom_to_full(zoom['region'], zp)
                         arguments = {**arguments, 'target': {'image_ref': zoom['image_ref'], 'point': full_point}}
                         zoom_note = {'zoom_ref': zt['zoom_ref'], 'zoom_point': zp,
@@ -438,7 +466,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         zoom_state['latest_refs'] = {f.get('image_ref') for f in images}
                     if name in ('act', 'look'):
                         zoom_state['zooms'].clear()
-                        zoom_state['zoomed_since_step'] = False
+                        zoom_state['zoomed_since_step'] = 0
                     if zoom_note is not None:
                         result['zoom_selection'] = {**zoom_note, 'note': 'zoom point converted to the full image'}
                 if proxy_memory is not None and isinstance(result, dict):
@@ -647,23 +675,37 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
             async with lock:
                 ref, point = arguments.get('image_ref'), arguments.get('point')
                 error = None
-                if zoom_state['zoomed_since_step']:
-                    error = 'Only one zoom is allowed between two act/look calls. Act or look first.'
-                elif ref not in zoom_state['latest_refs']:
-                    error = 'image_ref must be one of the newest observation images.'
+                latest = zoom_state['latest'] if zoom_state['zooms'] else None
+                if zoom_state['zoomed_since_step'] >= ZOOM_LIMIT:
+                    error = ('Zoom limit reached (' + str(ZOOM_LIMIT) + ' zooms between two act/look calls). Call act '
+                             'now with target {"zoom_ref": "' + str(latest) + '", "point": [x, y]}, or call look.')
+                elif ref not in zoom_state['latest_refs'] and ref != latest:
+                    error = ('image_ref must be one of the newest observation images ('
+                             + ', '.join(sorted(r for r in zoom_state['latest_refs'] if r)) + ')'
+                             + (' or the latest zoom_ref (' + latest + ')' if latest else '')
+                             + '. For another view, call look first to get a new picture, then zoom on it.')
                 elif (not isinstance(point, list) or len(point) != 2
                       or not all(isinstance(v, (int, float)) and 0 <= v <= 1 for v in point)):
-                    error = 'point must be [x, y] normalized to the full image (0..1).'
+                    error = ('point must be [x, y] normalized to that image (0..1), for example '
+                             '{"image_ref": "' + str(ref) + '", "point": [0.5, 0.5]}.')
                 if error:
                     payload = {'ok': False, 'error': {'code': 'invalid_arguments', 'action_step_used': False,
                                                       'world_may_have_changed': False, 'message': error}}
                     return [types.TextContent(type='text', text=json.dumps(without_wall_clock(payload), ensure_ascii=False))]
-                data = await asyncio.to_thread(fetch, url.rstrip('/') + '/image/' + quote(ref, safe=''))
-                jpeg, region = zoom_image(data, point)
+                if ref == latest:   # nested zoom on the latest zoomed image
+                    parent = zoom_state['zooms'][latest]
+                    jpeg, sub, clean = zoom_image(parent['clean'], point, with_clean=True)
+                    region, source = compose_region(parent['region'], sub), parent['image_ref']
+                else:
+                    data = await asyncio.to_thread(fetch, url.rstrip('/') + '/image/' + quote(ref, safe=''))
+                    jpeg, region, clean = zoom_image(data, point, with_clean=True)
+                    source = ref
                 zoom_state['count'] += 1
                 zoom_ref = f'zoom-{zoom_state["count"]:05d}'
-                zoom_state['zooms'] = {zoom_ref: {'image_ref': ref, 'region': region}}
-                zoom_state['zoomed_since_step'] = True
+                zoom_state['zooms'] = {zoom_ref: {'image_ref': source, 'region': region, 'clean': clean}}
+                zoom_state['latest'] = zoom_ref
+                zoom_state['zoomed_since_step'] += 1
+                ref = source
                 payload = {'ok': True, 'zoom_ref': zoom_ref, 'source_image_ref': ref, 'region': region,
                            'message': ('Enlarged view of the region above (grid lines every 0.125 of the zoomed '
                                        'image). To act on a point in it, use target {"zoom_ref": "' + zoom_ref

@@ -30,13 +30,15 @@ if tool == "call_mcp_tool":
     if server == "manipulation" and (not ALLOWED_TOOLS or target in ALLOWED_TOOLS):
         print(json.dumps({"decision": "allow"}))
         sys.exit(0)
-    print(json.dumps({
-        "decision": "deny",
-        "reason": (
-            f"MCP call to ServerName={server!r} ToolName={target!r} is not permitted. "
-            f"Use ServerName='manipulation' with one of: {sorted(ALLOWED_TOOLS)}."
-        ),
-    }))
+    reason = (f"MCP call to ServerName={server!r} ToolName={target!r} is not permitted. "
+              f"Use ServerName='manipulation' with one of: {sorted(ALLOWED_TOOLS)}.")
+    if "zoom" in ALLOWED_TOOLS and server == "manipulation" and target not in ALLOWED_TOOLS:
+        # v12b, only with --two-step-select (keeps the switch-off text identical): show the correct call shape.
+        reason += (f" If {target!r} is an action, call ToolName='act' with Arguments "
+                   "{\"primitive\": \"" + str(target) + "\", \"revision\": <latest revision>, "
+                   "\"target\": {\"image_ref\": <newest image_ref>, \"point\": [x, y]} or {\"zoom_ref\": <latest zoom_ref>, \"point\": [x, y]}, "
+                   "\"placement_roll_degrees\": null, \"placement_yaw_degrees\": null, \"wait_seconds\": null}.")
+    print(json.dumps({"decision": "deny", "reason": reason}))
     sys.exit(0)
 
 if tool == "read_file":

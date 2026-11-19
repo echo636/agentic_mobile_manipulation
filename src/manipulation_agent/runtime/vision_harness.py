@@ -534,7 +534,7 @@ class VisionHarness:
                 'reached':'Reached the selected point. Inspect the updated RGB.',
                 'approached':'Moved to a feasible approach toward the selected point. This does not verify manipulation reach; inspect the updated RGB.',
                 'incomplete':'The move did not reach the selected destination. Inspect the returned RGB before choosing the next action.',
-                'already_at_closest_approach':'Already at the closest approach found by this navigation search. Repeating the same click will not move closer; inspect the updated RGB for an alternative.',
+                'already_at_closest_approach':'The base did not move; it is already at the closest feasible standing point for the selected target. Inspect the updated RGB.',
             }
             status=details.get('nav_status')
             if status in messages:effect.update(navigation_status=status,message=messages[status])

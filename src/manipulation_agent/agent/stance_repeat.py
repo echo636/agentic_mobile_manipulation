@@ -8,6 +8,8 @@ attempts in place. It only advises; nothing is blocked.
 
 Built only from what the robot itself knows: the model's own act arguments (primitive), the receipt's ok/error, and
 its own navigation history (a completed navigate_to starts a new stance). No simulator state, no object identity.
+v12b: a navigate_to whose public receipt says navigation_status "already_at_closest_approach" (the base did not move)
+is treated as a repeat at the same stance.
 """
 from __future__ import annotations
 
@@ -17,7 +19,14 @@ from pathlib import Path
 DEFAULT_LIMIT = 3
 
 
+NO_MOVE = 'already_at_closest_approach'   # v12b public navigation status: the base did not move
+
+
 def stance_message(primitive: str, count: int) -> str:
+    if primitive == 'navigate_to':
+        return (f'navigate_to has left the base in the same place {count} times in a row. Clicking the same target '
+                'again will not move it: choose a different destination (for example a doorway or open floor on the '
+                'way, then the target from there) or use look to see the surroundings from another direction.')
     return (f'{primitive} has failed {count} times in a row from this stance. Before trying it again, change '
             'the stance (navigate_to a place with a closer, more head-on view of the target) or use look to see '
             'it from another direction; repeating the action from the same stance is unlikely to work.')
@@ -49,6 +58,9 @@ class StanceRepeatGuard:
             return None          # rejected before execution (budget/argument checks): not an attempt
         primitive = (arguments or {}).get('primitive', name) if isinstance(arguments, dict) else name
         ok = error is None and result.get('ok', True) is not False
+        effect = result.get('effect') if isinstance(result.get('effect'), dict) else {}
+        if ok and name == 'act' and primitive == 'navigate_to' and effect.get('navigation_status') == NO_MOVE:
+            ok = False           # v12b: a navigate_to that left the base in place counts as a repeat at this stance
         if ok:
             # any completed act/look ends the run of consecutive failures (a look or a move is the advised change)
             self.primitive, self.count, self.active = None, 0, False

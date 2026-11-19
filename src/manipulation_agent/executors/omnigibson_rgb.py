@@ -28,6 +28,29 @@ def fixed_for_grasp(backend,obj):
     # Fixed in the scene, or declared a fixed support by the task input (v11; see CustomTaskBackend).
     return bool(getattr(obj,'fixed_base',False)) or getattr(obj,'name',None) in getattr(backend,'fixed_support_names',())
 
+
+NOT_MOVED_M = 0.1
+
+
+def room_of_points(scene, points):
+    """Room-instance id (0 = no room / boundary) of each world xy point from the scene's room segmentation map, or
+    None when the scene has no segmentation map. Vectorised version of SegmentationMap.get_room_instance_by_point."""
+    try:
+        seg = scene.seg_map
+        ins = seg.room_ins_map
+    except Exception:
+        return None
+    if seg is None or ins is None:
+        return None
+    import torch
+    xy = torch.as_tensor(points, dtype=torch.float64).reshape(-1, 2)
+    idx = (xy / seg.map_resolution + seg.map_size / 2.0).int()
+    row, col = idx[:, 1].long(), idx[:, 0].long()
+    ok = (row >= 0) & (row < ins.shape[0]) & (col >= 0) & (col < ins.shape[1])
+    out = torch.zeros(len(xy), dtype=torch.long)
+    out[ok] = torch.as_tensor(ins)[row[ok], col[ok]].long()
+    return out
+
 class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
@@ -716,6 +739,19 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             # and local manipulation must stay near the selected object.
             points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
             distances=self.torch.linalg.norm(points-hint,dim=1)
+            # v12b (benchmark side): stand in the selected target's room when that room has a connected walkable
+            # cell within the fallback reach, so a target beside an exterior wall or seen through glass is not
+            # approached from the other side of the wall. No such cell (or target on a room boundary, such as a
+            # door): the previous rule applies unchanged.
+            same=room_of_points(self.env.scene,points)
+            target_room=room_of_points(self.env.scene,hint[None])
+            room_filter='not_applied'
+            if same is not None and target_room is not None and int(target_room[0])!=0:
+                mask=(same==int(target_room[0]))
+                if bool((mask & (distances<=self.local_limits.fallback_reach_m)).any()):
+                    points=points[mask];distances=distances[mask];room_filter='same_room'
+                else:
+                    room_filter='no_cell_in_target_room'
             within=distances<=self.local_limits.reach_m
             if bool(within.any()):
                 points=points[within];distances=distances[within]
@@ -745,6 +781,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'map_sha256':hashlib.sha256(occupancy.tobytes()).hexdigest(),
                 'native_map_open_doors':opened_doors,'native_map_added_fixtures':added_fixtures,
                 'reach_fallback_m':reach_fallback,'floor_click_snap_m':floor_snap,
+                'room_filter':None if floor_click else room_filter,
                 'dynamic_collision_check':False}
         try:
             self.deadline.check()
@@ -762,6 +799,12 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             tolerance=(trav.map_resolution if floor_click else self.local_limits.reach_m if reach_fallback is None
                        else min(self.local_limits.fallback_reach_m,reach_fallback+2*float(trav.map_resolution)))
             nav_status=('reached' if floor_click else 'approached') if target_distance<=tolerance else 'incomplete'
+            # v12b (benchmark side): odometry-level honesty. An object approach whose base displacement is below
+            # NOT_MOVED_M did not move; say so instead of reporting an approach.
+            moved=float(self.torch.linalg.norm(actual-start))
+            if not floor_click and nav_status=='approached' and moved<NOT_MOVED_M:
+                nav_status='already_at_closest_approach'
+            record.update(base_displacement_m=moved)
             return {**result,'strategy':record['strategy'],'path_distance_m':float(length),
                     'nav_status':nav_status,
                     **({'nav_incomplete_reason':'floor_point_not_walkable'}

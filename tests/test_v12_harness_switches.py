@@ -128,8 +128,9 @@ def test_zoom_tool_and_act_conversion_through_proxy():
             server = await mcp_server.create_server('http://127.0.0.1:1', two_step_select=True)
             tools = server._tool_manager
             await tools.get_tool('look').fn(yaw_degrees=0, revision=0)
+            first = json.loads((await tools.get_tool('zoom').fn(image_ref='rgb-00001-front', point=[0.5, 0.5]))[0].text)
             z = json.loads((await tools.get_tool('zoom').fn(image_ref='rgb-00001-front', point=[0.5, 0.5]))[0].text)
-            again = json.loads((await tools.get_tool('zoom').fn(image_ref='rgb-00001-front', point=[0.5, 0.5]))[0].text)
+            again = first
             out = await tools.get_tool('act').fn(primitive='grasp', revision=1,
                                                  target={'zoom_ref': z['zoom_ref'], 'point': [0.5, 0.5]})
             reused = json.loads((await tools.get_tool('act').fn(
@@ -137,12 +138,12 @@ def test_zoom_tool_and_act_conversion_through_proxy():
             stale = json.loads((await tools.get_tool('zoom').fn(image_ref='rgb-00001-front', point=[0.5, 0.5]))[0].text)
             return z, again, json.loads(out[0].text), reused, stale
     z, again, act, reused, stale = asyncio.run(run())
-    assert z['ok'] and z['zoom_ref'] == 'zoom-00001'
-    assert again['ok'] is False and 'one zoom' in again['error']['message']
+    # v12b: a second zoom is allowed and replaces the first
+    assert again['ok'] and z['ok'] and z['zoom_ref'] == 'zoom-00002'
     assert [c[0] for c in calls] == ['look', 'act']          # zoom never reaches the simulator
     sent = calls[1][1]['target']
     assert sent['image_ref'] == 'rgb-00001-front' and sent['point'] == pytest.approx([0.5, 0.5], abs=0.003)
-    assert act['zoom_selection']['zoom_ref'] == 'zoom-00001'
+    assert act['zoom_selection']['zoom_ref'] == 'zoom-00002'
     assert reused['ok'] is False and reused['error']['action_step_used'] is False
     assert stale['ok'] is False and 'newest observation' in stale['error']['message']
 
