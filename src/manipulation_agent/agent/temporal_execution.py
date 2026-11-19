@@ -524,6 +524,12 @@ class DispatchController:
             "Grounder twice requested action and verification on the same frame"
         )
 
+    def record_changes(self, decision):
+        changes = self.memory.observe(decision["changes"], self.camera)
+        if changes:
+            self.log("delta", facts=changes)
+        return changes
+
     def complete(self, decision, skill):
         job = self.active
         evidence = {row["id"]: row["evidence"].strip() for row in decision["verified"]}
@@ -531,6 +537,7 @@ class DispatchController:
             raise ValueError(
                 "Each dispatched obligation needs its own current visual evidence"
             )
+        self.record_changes(decision)
         self.completed.update(dict.fromkeys(job.members, self.clock))
         self.methods = {
             group: value
@@ -568,14 +575,14 @@ class DispatchController:
         evidence = decision["evidence"].strip()
         if not evidence:
             raise ValueError("A grounding decision requires an observation")
-        changes = self.memory.observe(decision["changes"], self.camera)
-        if changes:
-            self.log("delta", facts=changes)
         early = max(
             [0] + [w["earliest_in_s"] for w in windows if w["check"] in job.members]
         )
         if decision["decision"] == "anomaly":
+            self.record_changes(decision)
             raise ValueError(evidence[:600])
+        if decision["decision"] not in ("act", "done"):
+            raise ValueError("Unknown grounding decision")
         if early > 0 and (
             decision["decision"] == "done"
             or decision["primitive"] not in ("look", "navigate_to")
@@ -584,9 +591,8 @@ class DispatchController:
         if decision["decision"] == "done":
             self.complete(decision, skill)
             return None
-        if decision["decision"] != "act":
-            raise ValueError("Unknown grounding decision")
         op, args = self.arguments(decision)
+        changes = self.record_changes(decision)
         if self.memory.repeated_hand_request(op, job.members):
             # A revised method may retry even on this same camera frame.
             self.memory.recent.append({"hand_visual_review": self.camera.revision})

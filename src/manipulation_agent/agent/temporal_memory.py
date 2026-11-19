@@ -193,7 +193,7 @@ class DeltaMemory:
         )
 
     def observe(self, changes, camera):
-        changed = []
+        pending = []
         for entry in changes[:12]:
             key = (entry["subject"].strip()[:120], entry["relation"].strip()[:80])
             value = entry["value"].strip()[:220]
@@ -207,17 +207,20 @@ class DeltaMemory:
                 raise ValueError(
                     "A belief needs a current view and an epistemic status"
                 )
+            pending.append((key, value, view, entry["certainty"]))
+        changed = []
+        for key, value, view, certainty in pending:
             prior = self.facts.get(key)
             if prior and (prior["value"], prior["certainty"]) == (
                 value,
-                entry["certainty"],
+                certainty,
             ):
                 continue
             fact = {
                 "subject": key[0],
                 "relation": key[1],
                 "value": value,
-                "certainty": entry["certainty"],
+                "certainty": certainty,
                 "revision": camera.revision,
                 "view": view,
                 "image_ref": camera.frames[view]["image_ref"],

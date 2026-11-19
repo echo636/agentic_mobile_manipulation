@@ -981,6 +981,37 @@ def test_a_group_method_neither_leaks_to_a_member_nor_suggests_an_incompatible_m
     ] == ["look", "none"]
 
 
+@pytest.mark.parametrize(
+    "malformed", ["missing_member", "invalid_delta", "early_check"]
+)
+def test_rejected_or_early_completion_keeps_beliefs_keyframes_and_completed_work_atomic(
+    malformed,
+):
+    from manipulation_agent.agent.temporal_graph import Job
+
+    c = DispatchController("inspect both objects", [], None, None)
+    c.observe(camera(0, 0))
+    c.active = Job(("one", "two"), "A", "A", 20)
+    fact = dict(
+        subject="first", relation="on", value="table", certainty="seen", view="front"
+    )
+    answer = dict(decision("done", key="one"), changes=[fact])
+    windows = []
+    if malformed != "missing_member":
+        answer["verified"].append(dict(id="two", evidence="current right view"))
+    if malformed == "invalid_delta":
+        answer["changes"].append(dict(fact, view="unknown"))
+    if malformed == "early_check":
+        c.graph = TemporalGraph.read(graph([work("one"), work("two")]))
+        c.region = "A"
+        windows = [dict(check="one", earliest_in_s=10, latest_in_s=30)]
+        assert c.advance(answer, "inspect", windows)[1]["primitive"] == "wait"
+    else:
+        with pytest.raises(ValueError):
+            c.advance(answer, "inspect", windows)
+    assert not c.completed and not c.memory.facts and not c.memory.keyframes
+
+
 def test_declared_precedence_is_enforced_even_if_successor_omits_redundant_after_edge():
     raw = graph([work("wipe", "B"), work("place", "A")])
     raw["required_order"] = [{"first": "wipe", "then": "place"}]
