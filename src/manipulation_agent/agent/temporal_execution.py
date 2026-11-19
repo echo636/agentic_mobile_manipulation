@@ -36,6 +36,8 @@ class DispatchController:
         grounder,
         *,
         serial=False,
+        grouping=True,
+        overlap=True,
         log=None,
         repair_inspection=True,
     ):
@@ -43,6 +45,8 @@ class DispatchController:
         self.catalog = tuple(catalog)
         self.planner, self.grounder = planner, grounder
         self.serial = serial
+        self.grouping = grouping and not serial
+        self.overlap = overlap and not serial
         self.log = log or (lambda kind, **row: None)
         self.memory = DeltaMemory()
         self.repair_inspection = repair_inspection
@@ -305,12 +309,14 @@ class DispatchController:
             now=self.clock,
             carrier_locations=self.carriers,
             serial=self.serial,
+            grouping=self.grouping,
+            overlap=self.overlap,
         )
         if result.status == "unknown":
             # A solver timeout is not evidence of a physical obstacle. Try the smaller
             # circuit of single trips before requesting a semantic repair.
             self.log(
-                "solver_timeout", group_search=not self.serial, solver_s=result.seconds
+                "solver_timeout", group_search=self.grouping, solver_s=result.seconds
             )
             result = schedule(
                 self.graph,
@@ -320,6 +326,7 @@ class DispatchController:
                 carrier_locations=self.carriers,
                 grouping=False,
                 serial=self.serial,
+                overlap=self.overlap,
                 solver_seconds=4,
             )
         self.log(

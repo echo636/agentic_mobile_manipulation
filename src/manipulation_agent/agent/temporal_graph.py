@@ -14,6 +14,14 @@ from math import ceil, floor, isfinite
 from time import monotonic
 
 
+DISPATCH_POLICIES = {
+    "temporal": {},
+    "serial": {"serial": True},
+    "overlap-only": {"grouping": False},
+    "batch-only": {"overlap": False},
+}
+
+
 def word(value):
     if not isinstance(value, str) or not value.strip() or len(value) > 800:
         raise ValueError("Expected a nonempty, bounded description")
@@ -514,6 +522,7 @@ def schedule(
     carrier_locations=None,
     grouping=True,
     serial=False,
+    overlap=True,
     solver_seconds=1.0,
 ):
     """Return a feasible schedule or an explicit failure; never execute a partial proof."""
@@ -536,8 +545,9 @@ def schedule(
     jobs = candidates(graph, completed, locations, grouping and not serial)
     if not jobs:
         return Schedule("complete", [], monotonic() - t0)
+    reserve_process_intervals = serial or not overlap
     incumbent = feasible_incumbent(
-        graph, jobs, completed, region, now, locations, serial
+        graph, jobs, completed, region, now, locations, reserve_process_intervals
     )
     max_travel = max([graph.unknown_travel, *graph.travel.values()])
     horizon = (
@@ -582,7 +592,7 @@ def schedule(
         model.Add(end[w.check] <= upper)
         # Operation at the machine and subsequent background phase share one device.
         resource_uses.setdefault((w.resource, w.start), []).append(end[w.check])
-        if serial:
+        if reserve_process_intervals:
             for k in remaining:
                 if k not in (w.start, w.check) and not (
                     k in graph.windows and graph.windows[k].start == w.start

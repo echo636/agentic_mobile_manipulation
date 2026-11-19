@@ -6,7 +6,11 @@ from itertools import permutations
 import pytest
 
 from manipulation_agent.agent.temporal_execution import DispatchController
-from manipulation_agent.agent.temporal_graph import TemporalGraph, schedule
+from manipulation_agent.agent.temporal_graph import (
+    DISPATCH_POLICIES,
+    TemporalGraph,
+    schedule,
+)
 from manipulation_agent.agent.temporal_memory import Camera, DeltaMemory
 
 ortools = pytest.importorskip("ortools")
@@ -107,6 +111,42 @@ def test_calendar_against_independent_enumeration(distance, length, serial):
 
 def carrier(cap=2, loc="A", handling=2):
     return {"name": "tray", "location": loc, "capacity": cap, "handling": handling}
+
+
+@pytest.mark.parametrize(
+    ("policy", "makespan", "grouped", "interleaved"),
+    [
+        ("serial", 215, False, False),
+        ("overlap-only", 180, False, True),
+        ("batch-only", 186, True, False),
+        ("temporal", 151, True, True),
+    ],
+)
+def test_independent_process_and_transport_modes(policy, makespan, grouped, interleaved):
+    tasks = [work("start"), work("visit"), work("prep", seconds=35)]
+    tasks += [work(k, "B", "A", after=["visit"], load=1) for k in ("p", "q")]
+    raw = graph(tasks, [window(earliest=80, latest=90)], [carrier(loc="B", handling=1)])
+    schedules = []
+
+    def capture(kind, **row):
+        if kind == "schedule":
+            schedules.append(row)
+
+    controller = DispatchController(
+        "", [], None, None, log=capture, **DISPATCH_POLICIES[policy]
+    )
+    controller.graph = TemporalGraph.read(raw)
+    controller.region = controller.graph.region
+    assert controller.choose() == "optimal"
+    slots = schedules[0]["slots"]
+    by_id = {key: slot for slot in slots for key in slot["job"]["members"]}
+    assert slots[-1]["end"] == makespan
+    assert (by_id["p"] is by_id["q"]) == grouped
+    prep_within_window = (
+        by_id["start"]["end"] <= by_id["prep"]["start"]
+        and by_id["prep"]["end"] <= by_id["visit"]["start"]
+    )
+    assert prep_within_window == interleaved
 
 
 @pytest.mark.parametrize(
@@ -871,9 +911,17 @@ def test_order_repair_accepts_unchanged_duplicate_from_a_compound_phrase_but_req
         correct_order_references(raw, (0,), [{"entry": 0, "relations": [retained]}])
 
 
-@pytest.mark.parametrize("disabled", [True, False])
+@pytest.mark.parametrize(
+    "disabled,policy",
+    [
+        (True, "temporal"),
+        (False, "temporal"),
+        (False, "overlap-only"),
+        (False, "batch-only"),
+    ],
+)
 def test_existing_batch_entry_point_initializes_the_temporal_client(
-    tmp_path, monkeypatch, disabled
+    tmp_path, monkeypatch, disabled, policy
 ):
     import runpy
     from pathlib import Path
@@ -900,7 +948,7 @@ def test_existing_batch_entry_point_initializes_the_temporal_client(
                 "--timeout",
                 "0",
                 "--dispatch-policy",
-                "temporal",
+                policy,
                 "--planner-model",
                 "planner",
                 "--fast-vision-port",
@@ -911,5 +959,6 @@ def test_existing_batch_entry_point_initializes_the_temporal_client(
         == 0
     )
     args = seen[0]
+    assert args.dispatch_policy == policy
     assert args.no_repair_inspection == disabled and args.timeout == 0
     assert args.reasoning_effort == "low" and args.fast_vision_port == 18087

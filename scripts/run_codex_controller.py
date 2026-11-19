@@ -24,6 +24,7 @@ if _SRC_ROOT not in sys.path:
 from manipulation_agent.task_objective import with_scoring_objective
 from manipulation_agent.clients import ClientConfig, get_adapter
 from manipulation_agent.clients.events import write_derived_events
+from manipulation_agent.agent.temporal_graph import DISPATCH_POLICIES
 
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.tools.intent import PROTOCOL as INTENT_PROTOCOL, LEGACY_PROTOCOL
@@ -301,7 +302,7 @@ def main(argv=None, *, allow_client=False):
                    help='Opt-in native-history forks for an unavailable sticky route; retains the same live robot episode')
     p.add_argument('--action-feedback', choices=['off', 'sensor_only', 'evidence'], default='off',
                    help='Select the RGB feedback contract for a minimal/basic-skills episode')
-    p.add_argument('--dispatch-policy', choices=['serial','temporal'], help='Use the event-driven ST-DAG controller')
+    p.add_argument('--dispatch-policy', choices=DISPATCH_POLICIES, help='Use the event-driven ST-DAG controller')
     p.add_argument('--fast-vision-port', type=int, help='Use the local Qwen2.5-VL inference server')
     p.add_argument('--no-repair-inspection', action='store_true', help='Disable the current-RGB local repair crop')
     args = p.parse_args(argv)

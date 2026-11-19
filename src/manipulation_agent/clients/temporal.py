@@ -11,6 +11,7 @@ from collections import Counter
 from pathlib import Path
 
 from ..agent.temporal_execution import DispatchController
+from ..agent.temporal_graph import DISPATCH_POLICIES
 from ..agent.temporal_memory import Camera
 from ..agent.temporal_models import ModelRole
 from ..records import now, write_json
@@ -137,9 +138,9 @@ def run(args):
             (),
             native("slow", args.planner_model, args.planner_reasoning_effort),
             fast,
-            serial=args.dispatch_policy == "serial",
             repair_inspection=not args.no_repair_inspection,
             log=log,
+            **DISPATCH_POLICIES[args.dispatch_policy],
         )
 
         async def connect():
@@ -195,7 +196,7 @@ def main():
     p.add_argument("--mcp-command", required=True)
     p.add_argument("--mcp-args-json", required=True)
     p.add_argument("--output", type=Path, required=True)
-    p.add_argument("--dispatch-policy", choices=("temporal", "serial"), required=True)
+    p.add_argument("--dispatch-policy", choices=DISPATCH_POLICIES, required=True)
     p.add_argument("--model", required=True, help="Fast model identifier")
     p.add_argument("--reasoning-effort", default="low")
     p.add_argument(
