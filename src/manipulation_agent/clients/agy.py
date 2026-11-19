@@ -237,6 +237,11 @@ class AgyAdapter(ClientAdapter):
             "- `look`: `{\"Arguments\": {\"yaw_degrees\": 45, \"revision\": 0}}` (`yaw_degrees` in `[-90, 90]`, positive=left, negative=right)",
             "- `finish`: `{\"Arguments\": {\"outcome\": \"<achieved|blocked|aborted>\", \"reason\": \"...\"}}`",
         ]
+        if "zoom" in tool_names:
+            schema_lines.append(
+                "- `zoom`: `{\"Arguments\": {\"image_ref\": \"rgb-00001-front\", \"point\": [0.5, 0.5]}}`; then `act` may use "
+                "`\"target\": {\"zoom_ref\": \"zoom-00001\", \"point\": [0.5, 0.5]}` (point in the zoomed image)"
+            )
         if "list_skills" in tool_names:
             schema_lines.append("- `list_skills`: `{\"Arguments\": {}}`")
         if "read_skill" in tool_names:

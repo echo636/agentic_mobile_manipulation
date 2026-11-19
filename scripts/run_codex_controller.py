@@ -365,6 +365,10 @@ def main(argv=None, *, allow_client=False):
         if args.handoff_progress_note == 'on' and '--handoff-progress-note' not in raw_mcp_args:
             raw_mcp_args = [*raw_mcp_args, '--handoff-progress-note', 'on']
         args.mcp_args_json = json.dumps(raw_mcp_args)
+        if '--two-step-select' in raw_mcp_args and raw_mcp_args[raw_mcp_args.index('--two-step-select') + 1] == 'on':
+            # v12 harness option: the proxy adds the zoom tool and a zoom target for act; the frozen catalog matches.
+            from manipulation_agent.tools.zoom_select import two_step_catalog
+            catalog = two_step_catalog(catalog)
     planner_config = None
     mcp_env_vars = ()
     judge_relay_config = None
@@ -573,7 +577,12 @@ def main(argv=None, *, allow_client=False):
             )
             resume_project = adapter.prepare_handoff(project, resume_prompt)
         else:
-            resume_prompt=NUDGE_PROMPT if mode == 'nudge' else (
+            stance_note = None
+            if mode == 'nudge' and isinstance(raw_mcp_args, list) and '--stance-repeat-state' in raw_mcp_args:
+                # v12 --stance-repeat-guard: the nudge gives the same advice as the receipt (change stance or look).
+                from manipulation_agent.agent.stance_repeat import active_message
+                stance_note = active_message(raw_mcp_args[raw_mcp_args.index('--stance-repeat-state') + 1])
+            resume_prompt=(NUDGE_PROMPT + (' ' + stance_note if stance_note else '')) if mode == 'nudge' else (
                            'Continue the same robot task in the same simulator episode. '
                            'A model service error interrupted the previous turn. '
                            'Use the prior conversation and current RGB tool feedback; continue choosing '

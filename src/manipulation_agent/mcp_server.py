@@ -48,6 +48,8 @@ from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
 from .agent.state_memory import StateMemory
 from .agent.failure_memory import FailureMemory
+from .agent.stance_repeat import StanceRepeatGuard
+from .tools.zoom_select import ZOOM_TOOL, two_step_catalog, zoom_image, zoom_to_full
 from .tools.finish_evidence import FinishEvidence, agy_judge, codex_judge, relay_judge
 from .agent.task_graph_planner import TaskGraphSession
 from .contracts import SkillError, validate
@@ -152,6 +154,51 @@ def look_again_caption(kind, before_ref, after_ref, size):
     return (f'Look again after the failed action: wider view of {after_ref}, {size}x{size} px around the pixel '
             'you selected (not enlarged); the magenta ring marks it. Use it to see what the point is on and what '
             'surrounds it.')
+
+
+# Harness option --echo-full-frame (v12, default off): echoes are shown on the FULL camera view the model cited, with
+# the selected point marked, so coordinates have a single frame of reference; the enlarged crops stay, labelled as
+# detail-only. Uses only the robot's own image.
+CROP_ONLY_NOTE = (' This crop is only for seeing details: read and give coordinates only from the full view '
+                  '(normalized to the whole image), never from a crop.')
+
+
+def full_frame_marked(images, point):
+    """JPEG of one or more full views side by side, each marked (cross + ring + [x, y] label) at `point`."""
+    import io
+    from PIL import Image, ImageDraw
+    frames = [Image.open(io.BytesIO(data)).convert('RGB') for data in images]
+    gap = 8
+    canvas = Image.new('RGB', (sum(f.width for f in frames) + gap * (len(frames) - 1), max(f.height for f in frames)),
+                       (255, 255, 255))
+    left = 0
+    for frame in frames:
+        width, height = frame.size
+        x = min(width - 1, max(0, round(float(point[0]) * (width - 1))))
+        y = min(height - 1, max(0, round(float(point[1]) * (height - 1))))
+        draw = ImageDraw.Draw(frame)
+        for colour, line in (((0, 0, 0), 5), ((255, 0, 255), 2)):
+            draw.ellipse([x - 12, y - 12, x + 12, y + 12], outline=colour, width=line)
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                draw.line([x + 5 * dx, y + 5 * dy, x + 24 * dx, y + 24 * dy], fill=colour, width=line)
+        label = f'[{float(point[0]):.2f}, {float(point[1]):.2f}]'
+        tx, ty = min(max(0, x + 16), width - 90), min(max(0, y + 14), height - 16)
+        draw.rectangle([tx - 2, ty - 1, tx + 86, ty + 13], fill=(0, 0, 0))
+        draw.text((tx, ty), label, fill=(255, 255, 255))
+        canvas.paste(frame, (left, 0))
+        left += width + gap
+    out = io.BytesIO()
+    canvas.save(out, format='JPEG', quality=88)
+    return out.getvalue()
+
+
+def full_frame_caption(kind, refs, point):
+    where = f'[{float(point[0]):.2f}, {float(point[1]):.2f}]'
+    if kind == 'pair':
+        return (f'Full views: LEFT is {refs[0]} before the action, RIGHT is {refs[1]} (same camera) after it; the '
+                f'magenta cross marks the point you selected, {where} in whole-image normalized coordinates.')
+    return (f'Full view {refs[0]} with the point you selected marked by the magenta cross at {where} '
+            '(whole-image normalized coordinates).')
 
 
 def place_look_again_caption(kind, before_ref, after_ref, size):
@@ -263,7 +310,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         rolling_handoff_steps=0, planning_mode='off', handoff_note=False,
                         selection_assist=False, argument_tolerance=False, failure_look_again=False,
                         failure_memory=False, place_look_again=False, finish_evidence=False,
-                        finish_evidence_judge=None, finish_evidence_dir=None):
+                        finish_evidence_judge=None, finish_evidence_dir=None, stance_repeat_guard=False,
+                        stance_repeat_state=None, echo_full_frame=False, two_step_select=False):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -297,6 +345,10 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     proxy_memory = StateMemory() if state_memory else None
     # Harness option (--failure-memory, default off): the model's own recent failed attempts.
     failures = FailureMemory() if failure_memory else None
+    # Harness option (--stance-repeat-guard, v12, default off): same primitive failing repeatedly at one stance.
+    stance = StanceRepeatGuard(state_path=stance_repeat_state) if stance_repeat_guard else None
+    # Harness option (--two-step-select, v12, default off): zoom state (newest frame refs, open zoom_refs).
+    zoom_state = {'latest_refs': set(), 'zooms': {}, 'zoomed_since_step': False, 'count': 0}
     # Harness option (--finish-evidence, v9, default off): item-by-item image evidence before finish(achieved).
     evidence = None
     if finish_evidence:
@@ -330,7 +382,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                     arguments = unwrapped
 
             async def call():
-                nonlocal segment_steps
+                nonlocal segment_steps, arguments
                 if rolling_handoff_steps > 0 and name in ('act', 'look') and segment_steps >= rolling_handoff_steps:
                     checkpoint = {
                         'ok': False,
@@ -348,6 +400,24 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         },
                     }
                     return [types.TextContent(type='text', text=json.dumps(checkpoint, ensure_ascii=False))]
+                zoom_note = None
+                if two_step_select and name == 'act' and isinstance(arguments, dict):
+                    zt = arguments.get('target')
+                    if isinstance(zt, dict) and 'zoom_ref' in zt:
+                        zoom = zoom_state['zooms'].pop(zt.get('zoom_ref'), None)
+                        zp = zt.get('point')
+                        if (zoom is None or not isinstance(zp, list) or len(zp) != 2
+                                or not all(isinstance(v, (int, float)) and 0 <= v <= 1 for v in zp)):
+                            rejected = {'ok': False, 'error': {
+                                'code': 'invalid_arguments', 'action_step_used': False, 'world_may_have_changed': False,
+                                'message': ('target.zoom_ref is unknown or already used, or target.point is not '
+                                            '[u, v] in 0..1. A zoom_ref is valid for the next act only; zoom again '
+                                            'or give {"image_ref", "point"} on a full image.')}}
+                            return [types.TextContent(type='text', text=json.dumps(rejected, ensure_ascii=False))]
+                        full_point = zoom_to_full(zoom['region'], zp)
+                        arguments = {**arguments, 'target': {'image_ref': zoom['image_ref'], 'point': full_point}}
+                        zoom_note = {'zoom_ref': zt['zoom_ref'], 'zoom_point': zp,
+                                     'image_ref': zoom['image_ref'], 'point': full_point}
                 target = (arguments.get('target') if ((enable_click_echo or selection_assist or failure_look_again
                                                        or place_look_again)
                                                       and name == 'act'
@@ -362,6 +432,15 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                     except Exception:
                         pre_source = None
                 result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()),timeout=rpc_timeout)
+                if two_step_select and name in ('initialize', 'act', 'look') and isinstance(result, dict):
+                    images = (result.get('observation') or {}).get('images') or []
+                    if images:
+                        zoom_state['latest_refs'] = {f.get('image_ref') for f in images}
+                    if name in ('act', 'look'):
+                        zoom_state['zooms'].clear()
+                        zoom_state['zoomed_since_step'] = False
+                    if zoom_note is not None:
+                        result['zoom_selection'] = {**zoom_note, 'note': 'zoom point converted to the full image'}
                 if proxy_memory is not None and isinstance(result, dict):
                     proxy_memory.observe(name, arguments if isinstance(arguments, dict) else {}, result)
                     if name in ('initialize', 'act', 'look') and 'state_memory' not in result:
@@ -372,6 +451,10 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                     summary = failures.observe(name, arguments if isinstance(arguments, dict) else {}, result)
                     if summary is not None:
                         result['failure_memory'] = summary
+                if stance is not None and isinstance(result, dict):
+                    note = stance.observe(name, arguments if isinstance(arguments, dict) else {}, result)
+                    if note is not None:
+                        result.update(note)
                 if guard is not None:
                     guard.observe(result, name, arguments)
                 if evidence is not None and name in ('act', 'look') and isinstance(result, dict):
@@ -427,9 +510,18 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         pass
                 if enable_click_echo and pre_source is not None and result.get('observation') is not None:
                     try:
+                        if echo_full_frame:
+                            full, full_mime = encode_within_byte_limit(
+                                full_frame_marked([pre_source], target['point']), 'image/jpeg', max_inline_image_bytes)
+                            content.append(types.TextContent(type='text', text=full_frame_caption(
+                                'single', [target['image_ref']], target['point'])))
+                            content.append(types.ImageContent(
+                                type='image', data=base64.b64encode(full).decode(), mimeType=full_mime,
+                                _meta={'codex/imageDetail': 'original'}))
                         echo, size = click_echo(pre_source, target['point'])
                         echo, echo_mime = encode_within_byte_limit(echo, 'image/jpeg', max_inline_image_bytes)
-                        content.append(types.TextContent(type='text', text=echo_caption(target['image_ref'], size)))
+                        content.append(types.TextContent(type='text', text=echo_caption(target['image_ref'], size)
+                                                         + (CROP_ONLY_NOTE if echo_full_frame else '')))
                         content.append(types.ImageContent(
                             type='image', data=base64.b64encode(echo).decode(), mimeType=echo_mime,
                             _meta={'codex/imageDetail': 'original'}))
@@ -445,11 +537,21 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         try:
                             after = await asyncio.to_thread(
                                 fetch, url.rstrip('/') + '/image/' + quote(same['image_ref'], safe=''))
+                            if echo_full_frame:
+                                full, full_mime = encode_within_byte_limit(
+                                    full_frame_marked([pre_source, after], target['point']), 'image/jpeg',
+                                    max_inline_image_bytes)
+                                content.append(types.TextContent(type='text', text=full_frame_caption(
+                                    'pair', [target['image_ref'], same['image_ref']], target['point'])))
+                                content.append(types.ImageContent(
+                                    type='image', data=base64.b64encode(full).decode(), mimeType=full_mime,
+                                    _meta={'codex/imageDetail': 'original'}))
                             for kind, data, size in look_again_images(
                                     pre_source, after, target['point'], close_already_shown=enable_click_echo):
                                 data, mime = encode_within_byte_limit(data, 'image/jpeg', max_inline_image_bytes)
                                 content.append(types.TextContent(type='text', text=look_again_caption(
-                                    kind, target['image_ref'], same['image_ref'], size)))
+                                    kind, target['image_ref'], same['image_ref'], size)
+                                    + (CROP_ONLY_NOTE if echo_full_frame else '')))
                                 content.append(types.ImageContent(
                                     type='image', data=base64.b64encode(data).decode(), mimeType=mime,
                                     _meta={'codex/imageDetail': 'original'}))
@@ -464,11 +566,21 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         try:
                             after = await asyncio.to_thread(
                                 fetch, url.rstrip('/') + '/image/' + quote(same['image_ref'], safe=''))
+                            if echo_full_frame:
+                                full, full_mime = encode_within_byte_limit(
+                                    full_frame_marked([pre_source, after], target['point']), 'image/jpeg',
+                                    max_inline_image_bytes)
+                                content.append(types.TextContent(type='text', text=full_frame_caption(
+                                    'pair', [target['image_ref'], same['image_ref']], target['point'])))
+                                content.append(types.ImageContent(
+                                    type='image', data=base64.b64encode(full).decode(), mimeType=full_mime,
+                                    _meta={'codex/imageDetail': 'original'}))
                             for kind, data, size in look_again_images(
                                     pre_source, after, target['point'], close_already_shown=False):
                                 data, mime = encode_within_byte_limit(data, 'image/jpeg', max_inline_image_bytes)
                                 content.append(types.TextContent(type='text', text=place_look_again_caption(
-                                    kind, target['image_ref'], same['image_ref'], size)))
+                                    kind, target['image_ref'], same['image_ref'], size)
+                                    + (CROP_ONLY_NOTE if echo_full_frame else '')))
                                 content.append(types.ImageContent(
                                     type='image', data=base64.b64encode(data).decode(), mimeType=mime,
                                     _meta={'codex/imageDetail': 'original'}))
@@ -493,6 +605,13 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                 # guard then keeps only its unresolved-records deferral for achieved (blocked/aborted unchanged).
                 deferred = (guard.deferral(arguments, evidence_mode=evidence is not None)
                             if guard is not None else None)
+                if (deferred is not None and stance is not None and stance.active
+                        and isinstance(arguments, dict) and arguments.get('outcome') in ('blocked', 'aborted')):
+                    # v12: the finish guard says the same thing as the stance-repeat advisory (no "keep trying here").
+                    receipts = deferred['error']['message'].split('\n', 1)
+                    deferred['error']['message'] = (
+                        f"finish(outcome={arguments['outcome']}) was not accepted yet. " + stance.message()
+                        + ('\n' + receipts[1] if len(receipts) > 1 else ''))
                 if deferred is not None:
                     return [types.TextContent(type='text', text=json.dumps(deferred, ensure_ascii=False))]
                 if evidence is not None:
@@ -514,13 +633,50 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                 return await call()
         return invoke
 
+    if two_step_select:
+        catalog = two_step_catalog(catalog)
     registered = [Tool(
         fn=wrap(spec['name']), name=spec['name'], description=spec.get('description', ''),
         parameters=deepcopy(spec['inputSchema']), is_async=True,
         fn_metadata=FuncMetadata(arg_model=BridgeArguments),
         annotations=types.ToolAnnotations(**spec['annotations']) if spec.get('annotations') else None,
         meta=deepcopy(spec.get('_meta')),
-    ) for spec in catalog]
+    ) for spec in catalog if spec['name'] != ZOOM_TOOL['name']]
+    if two_step_select:
+        async def invoke_zoom(**arguments):
+            async with lock:
+                ref, point = arguments.get('image_ref'), arguments.get('point')
+                error = None
+                if zoom_state['zoomed_since_step']:
+                    error = 'Only one zoom is allowed between two act/look calls. Act or look first.'
+                elif ref not in zoom_state['latest_refs']:
+                    error = 'image_ref must be one of the newest observation images.'
+                elif (not isinstance(point, list) or len(point) != 2
+                      or not all(isinstance(v, (int, float)) and 0 <= v <= 1 for v in point)):
+                    error = 'point must be [x, y] normalized to the full image (0..1).'
+                if error:
+                    payload = {'ok': False, 'error': {'code': 'invalid_arguments', 'action_step_used': False,
+                                                      'world_may_have_changed': False, 'message': error}}
+                    return [types.TextContent(type='text', text=json.dumps(without_wall_clock(payload), ensure_ascii=False))]
+                data = await asyncio.to_thread(fetch, url.rstrip('/') + '/image/' + quote(ref, safe=''))
+                jpeg, region = zoom_image(data, point)
+                zoom_state['count'] += 1
+                zoom_ref = f'zoom-{zoom_state["count"]:05d}'
+                zoom_state['zooms'] = {zoom_ref: {'image_ref': ref, 'region': region}}
+                zoom_state['zoomed_since_step'] = True
+                payload = {'ok': True, 'zoom_ref': zoom_ref, 'source_image_ref': ref, 'region': region,
+                           'message': ('Enlarged view of the region above (grid lines every 0.125 of the zoomed '
+                                       'image). To act on a point in it, use target {"zoom_ref": "' + zoom_ref
+                                       + '", "point": [u, v]} with u, v normalized to this zoomed image.')}
+                jpeg, mime = encode_within_byte_limit(jpeg, 'image/jpeg', max_inline_image_bytes)
+                return [types.TextContent(type='text', text=json.dumps(without_wall_clock(payload), ensure_ascii=False)),
+                        types.ImageContent(type='image', data=base64.b64encode(jpeg).decode(), mimeType=mime,
+                                           _meta={'codex/imageDetail': 'original'})]
+
+        registered.append(Tool(
+            fn=invoke_zoom, name=ZOOM_TOOL['name'], description=ZOOM_TOOL['description'],
+            parameters=deepcopy(ZOOM_TOOL['inputSchema']), is_async=True,
+            fn_metadata=FuncMetadata(arg_model=BridgeArguments)))
     if local_task_graph is not None:
         from .tools import tool_specs
         from .tools.intent import validate_intent
@@ -593,7 +749,8 @@ async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, fini
               enable_click_echo=False, max_inline_image_bytes=0, state_memory=False, rolling_handoff_steps=0,
               planning_mode='off', handoff_note=False, selection_assist=False, argument_tolerance=False,
               failure_look_again=False, failure_memory=False, place_look_again=False, finish_evidence=False,
-              finish_evidence_judge=None, finish_evidence_dir=None):
+              finish_evidence_judge=None, finish_evidence_dir=None, stance_repeat_guard=False,
+              stance_repeat_state=None, echo_full_frame=False, two_step_select=False):
     server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
                                  enable_click_echo=enable_click_echo,
                                  max_inline_image_bytes=max_inline_image_bytes,
@@ -604,7 +761,9 @@ async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, fini
                                  failure_look_again=failure_look_again, failure_memory=failure_memory,
                                  place_look_again=place_look_again, finish_evidence=finish_evidence,
                                  finish_evidence_judge=finish_evidence_judge,
-                                 finish_evidence_dir=finish_evidence_dir)
+                                 finish_evidence_dir=finish_evidence_dir,
+                                 stance_repeat_guard=stance_repeat_guard, stance_repeat_state=stance_repeat_state,
+                                 echo_full_frame=echo_full_frame, two_step_select=two_step_select)
     _startup('serving')
     if transport == 'stdio' and argument_tolerance:
         await run_stdio_parsing_string_arguments(server)
@@ -655,6 +814,15 @@ def main():
     parser.add_argument('--finish-evidence-judge', default=None,
                         help='JSON file {model, effort, provider, gateway, output} for the evidence judge (codex path)')
     parser.add_argument('--finish-evidence-dir', default=None, help='directory for finish_evidence.jsonl')
+    parser.add_argument('--stance-repeat-guard', choices=('off', 'on'), default='off',
+                        help='harness option (v12): after 3 failures in a row of one primitive at one stance, advise a '
+                             'new stance or look; the finish guard uses the same advice')
+    parser.add_argument('--stance-repeat-state', default=None,
+                        help='state file of the stance-repeat guard (read by the unfinished-turn nudge)')
+    parser.add_argument('--echo-full-frame', choices=('off', 'on'), default='off',
+                        help='harness option (v12): echoes and look-again show the full cited view with the point marked')
+    parser.add_argument('--two-step-select', choices=('off', 'on'), default='off',
+                        help='harness option (v12): zoom tool; act may target a point in the newest zoomed image')
     args = parser.parse_args()
     asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port,
                     finish_guard=args.finish_guard == 'on', guard_state=args.guard_state,
@@ -671,7 +839,11 @@ def main():
                     place_look_again=args.place_look_again == 'on',
                     finish_evidence=args.finish_evidence == 'on',
                     finish_evidence_judge=args.finish_evidence_judge,
-                    finish_evidence_dir=args.finish_evidence_dir))
+                    finish_evidence_dir=args.finish_evidence_dir,
+                    stance_repeat_guard=args.stance_repeat_guard == 'on',
+                    stance_repeat_state=args.stance_repeat_state,
+                    echo_full_frame=args.echo_full_frame == 'on',
+                    two_step_select=args.two_step_select == 'on'))
 
 
 if __name__ == '__main__':
