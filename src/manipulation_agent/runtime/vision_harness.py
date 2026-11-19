@@ -181,8 +181,12 @@ class VisionHarness:
             context=ToolContext(self, request_id=request_id, tool_name=name)
             result={'ok':True,**REGISTRY[name].handler(context,**execution_args)}
         except SkillError as exc:
-            result={'ok':False,'error':{'code':exc.code,'message':str(exc)}}
-            result['observation']=self.snapshot
+            if exc.code in {'episode_timeout', 'episode_cancelled'}:
+                result = {'ok': False, 'error': public_execution_error(exc)}
+            else:
+                result = {'ok': False, 'error': {'code': exc.code, 'message': str(exc)}}
+                if self.snapshot['revision'] == self.revision:
+                    result['observation'] = self.snapshot
         # Report the existing clock after execution/rendering, without arming,
         # extending or adding a limit. This is runtime metadata, never scene GT.
         remaining = self.deadline.remaining()
@@ -265,9 +269,10 @@ class VisionHarness:
         finally:
             self.backend._active_request_id=None
             self.revision+=1
-            # A timed-out action may have changed the world. Invalidate its RGB,
-            # but do not spend the expired task budget rendering another capture.
-            if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
+            # A stop can arrive after the last physical motion and before capture.
+            # In that case the previous snapshot cannot describe the end of this action.
+            self.deadline.check(changed=True)
+            self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
         if primitive=='open' and details.get('other_panels_not_operated') is True:

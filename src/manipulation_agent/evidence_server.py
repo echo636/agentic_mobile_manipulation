@@ -21,7 +21,7 @@ CAMERA_TOOLS = {'initialize', 'act', 'look'}
 BASIC_TOOLS = CAMERA_TOOLS | {'list_skills', 'read_skill', 'finish'}
 PROTOCOL_ERRORS = {'stale_observation', 'stale_image_ref', 'unknown_image_ref', 'invalid_arguments',
                    'invalid_target', 'invalid_request_id', 'episode_closed', 'budget_exhausted',
-                   'agent_step_budget_exhausted'}
+                   'agent_step_budget_exhausted', 'episode_cancelled', 'episode_timeout'}
 PANEL_LABEL = 'RGB selection history (derived, read-only). '
 
 
@@ -182,9 +182,21 @@ class Feedback:
             return reply({'ok': False, 'error': {'code': 'upstream_unavailable'}}, error=True)
         raw = json.loads(first.text)
         body = public_result(name, args, raw)
+        # Legacy motors can attach their pre-action image on interruption, including a
+        # nominally successful motor return that raced with a request to finish.
+        stopped = (raw.get('error') or {}).get('code') in {'episode_cancelled', 'episode_timeout', 'episode_closed'}
+        same_revision = (name in {'act', 'look'} and body['ok'] and
+                         isinstance(args.get('revision'), int) and
+                         (raw.get('observation') or {}).get('revision') == args['revision'])
+        missing = 'observation' not in raw and body['ok']
+        if name in CAMERA_TOOLS and (stopped or same_revision or missing):
+            self.current = {}
+            self.observation = None
+            self.memory = EvidenceMemory()
+            self.persist()
+            code = raw['error']['code'] if stopped else 'observation_unavailable'
+            return reply({'ok': False, 'error': {'code': code}}, error=True)
         if name not in CAMERA_TOOLS or 'observation' not in raw:
-            if name in CAMERA_TOOLS and body['ok']:
-                return reply({'ok': False, 'error': {'code': 'observation_unavailable'}}, error=True)
             return reply(body, error=not body['ok'])
         obs, current, reference, history = attachments(raw, upstream.content)
         if reference and (name != 'initialize' or reference['image']['image_ref'] != args.get('reference_image_ref')):

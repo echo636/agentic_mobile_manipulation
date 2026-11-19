@@ -143,7 +143,22 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.assertEqual(reply['error']['code'],'episode_timeout')
         self.assertTrue(reply['error']['world_may_have_changed'])
         self.assertEqual(self.backend.capture,before_capture)
+        self.assertNotIn('observation', reply)
         self.assertEqual(self.h.revision,1)
+
+    def test_finish_requested_after_motor_completion_does_not_return_old_pixels(self):
+        original = self.backend.execute_visual
+        def finish_during_motor(*args, **kwargs):
+            result = original(*args, **kwargs)
+            self.backend.deadline.request_stop()
+            return result
+        self.backend.execute_visual = finish_during_motor
+        before = self.backend.capture
+        reply = self.act()
+        self.assertEqual(reply['error']['code'], 'episode_cancelled')
+        self.assertTrue(reply['error']['world_may_have_changed'])
+        self.assertNotIn('observation', reply)
+        self.assertEqual(self.backend.capture, before)
 
     def test_evaluator_failure_is_missing_score_not_false_or_fabricated_q(self):
         self.backend.evaluate=Mock(side_effect=ValueError('invalid evaluator state'))

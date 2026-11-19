@@ -436,6 +436,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         from PIL import Image
         import numpy as np
         start_step = self.steps
+        sim = self.og.sim
+        physics_start = int(sim.current_time_step_index)
+        physics_time_start = float(sim.current_time)
         before_pos,before_quat = self.robot.get_position_orientation()
         before_joints = self.robot.get_joint_positions().clone()
         if self.video is not None and not self.video.closed:
@@ -477,19 +480,26 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             images.append({'image_ref':ref,'view':view,'width':pixels.shape[1],'height':pixels.shape[0],
                            'mime_type':'image/jpeg','sha256':digest})
             audit.append({'image_ref':ref,'file':str(path.relative_to(self.output)),'sha256':digest})
-        with (self.output/'captures.jsonl').open('a') as stream:
-            stream.write(json.dumps({'capture':self.capture_index,'env_steps':self.steps,
-                                     'synchronized_capture':capture,'images':audit})+'\n')
         after_pos,after_quat = self.robot.get_position_orientation()
         after_joints = self.robot.get_joint_positions()
+        physics_end = int(sim.current_time_step_index)
+        physics_time_end = float(sim.current_time)
+        frozen = physics_start == physics_end and physics_time_start == physics_time_end
         unchanged = self.steps == start_step and self.torch.equal(before_pos,after_pos) and self.torch.equal(before_quat,after_quat) and self.torch.equal(before_joints,after_joints)
         with (self.output/'observation_capture_audit.jsonl').open('a') as stream:
             stream.write(json.dumps({'capture':capture,'audience':'executor_private','no_robot_motion':bool(unchanged),
+                'physics_step_before':physics_start,'physics_step_after':physics_end,
+                'physics_time_before':physics_time_start,'physics_time_after':physics_time_end,
                 'start_step':start_step,'end_step':self.steps,'before_position':before_pos.tolist(),
                 'after_position':after_pos.tolist(),'before_orientation':before_quat.tolist(),
                 'after_orientation':after_quat.tolist(),'rig_sensor_names':[s.name for s in self.rig.values()],
                 'stock_sensor_names':list(self.robot.sensors)})+'\n')
+        if not frozen:
+            raise RuntimeError('Physics advanced during four-camera capture')
         if not unchanged: raise RuntimeError('Read-only camera capture changed robot state')
+        with (self.output/'captures.jsonl').open('a') as stream:
+            stream.write(json.dumps({'capture':self.capture_index,'env_steps':self.steps,
+                                     'synchronized_capture':capture,'images':audit})+'\n')
         self._video_frame('observation_boundary', rendered=rendered)
         return {'images':images,'observation_mode':self.mode,'capture':capture}
 

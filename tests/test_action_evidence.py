@@ -58,6 +58,22 @@ def body(result):
 
 @unittest.skipIf(types is None, 'requires MCP and Pillow')
 class EvidenceTests(unittest.IsolatedAsyncioTestCase):
+    def test_interrupted_or_unrefreshed_motor_cannot_publish_or_reinspect_its_pre_action_rgb(self):
+        for code in ('episode_cancelled', 'episode_timeout', None):
+            for mode in ('sensor_only', 'evidence'):
+                f = Feedback(mode)
+                f.receive('initialize', {}, packet(0))
+                upstream = packet(0)
+                if code:
+                    body = json.loads(upstream.content[0].text)
+                    body.update(ok=False, error={'code': code})
+                    upstream.content[0] = txt(body)
+                result = f.receive('act', cmd('grasp', 0), upstream)
+                self.assertTrue(result.isError)
+                self.assertEqual(len(result.content), 1)
+                self.assertEqual(json.loads(result.content[0].text)['error']['code'], code or 'observation_unavailable')
+                self.assertTrue(f.inspect({'revision': 0, 'image_ref': 'front-0', 'point': [.5,.5]}).isError)
+
     def test_motor_privacy_including_envelope(self):
         for mode in ('sensor_only','evidence'):
             for op in ('place_inside','cut','pour','toggle_on','open','grasp'):
@@ -171,4 +187,8 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
                 images=[p['image_url'].split(',',1)[1] for p in self.sent['input'][0]['content'] if p['type']=='input_image']
                 self.assertEqual(images,[p.data for p in inspect.content if p.type=='image'])
                 self.assertNotIn('PRIVATE',json.dumps(self.sent))
+                stopped = types.CallToolResult(content=[txt({'ok':False,'error':{'code':'episode_cancelled'}})], isError=True)
+                planner.observe('act', cmd('grasp',1), stopped)
+                self.assertFalse(planner.consult('after interruption')['ok'])
+                self.assertEqual(planner.images, [])
             finally:planner.events.close()
