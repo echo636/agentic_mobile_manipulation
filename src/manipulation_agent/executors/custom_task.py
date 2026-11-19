@@ -232,6 +232,17 @@ class CustomTaskBackend(RGBBackend):
                     row['links'][link_name] = [round(before, 3), float(link.mass)]
             applied.append(row)
         self.fixed_support_names = frozenset(names)
+        # v12 (benchmark side): a scene-authored movable support is not an obstacle in the baked traversability
+        # map, so navigation endpoints could land 0.35 m from its edge and the base pushed it (v11 T1 tier2note_r3).
+        # Block its footprint like a task-added fixture (native_astar.sync_added_fixture_map; erosion unchanged).
+        added = list(getattr(self, '_native_map_added_fixtures', None) or [])
+        for name in sorted(names):
+            if name not in added:
+                added.append(name)
+        self._native_map_added_fixtures = added
+        self._native_fixture_map_cache = None
+        for row in applied:
+            row['navigation_map_blocked'] = True
         if applied:
             write_json(self.output / 'fixed_supports.json', {'status': 'applied', 'audience': 'executor_private',
                                                              'supports': applied})

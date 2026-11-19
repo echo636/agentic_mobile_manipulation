@@ -16,10 +16,53 @@ from .types import ClientCapability, ClientRunResult, PreparedProject
 from .events import completed_robot_action_event, parse_events, successful_finish_event
 
 
+BWRAP_RETRY_ATTEMPTS = 3
+BWRAP_RETRY_WAIT_SECONDS = 10.0
+
+
+def _bwrap_start_failure(output: Path, returncode) -> bool:
+    """The sandbox wrapper failed before the client produced any model event (host autofs mount in transition)."""
+    if returncode in (0, None):
+        return False
+    events, err = output / 'model_events.jsonl', output / 'client.stderr.log'
+    if events.exists() and events.stat().st_size > 0:
+        return False
+    try:
+        text = err.read_text(errors='replace')[:4000]
+    except OSError:
+        return False
+    return text.lstrip().startswith('bwrap:') and ('mount' in text)
+
+
 def run_process(project: PreparedProject, output: Path, timeout: float | None,
                 on_start: Callable[[int], None] | None = None, *,
                 event_client: str = 'codex', finish_exit_grace: float = 5.0,
                 max_robot_calls: int = 0) -> ClientRunResult:
+    """v12 (facility, all methods): retry the client start when bwrap fails before any model event.
+
+    Only a start failure with an empty model event stream and a bwrap mount error is retried (at most
+    BWRAP_RETRY_ATTEMPTS starts); the failed stderr is kept as client.stderr.bwrap_attempt<k>.log and each retry is
+    listed in bwrap_retries.json. Nothing reached the model, so the episode is unchanged from its point of view.
+    """
+    retries = []
+    for attempt in range(1, BWRAP_RETRY_ATTEMPTS + 1):
+        result = _run_process_once(project, output, timeout, on_start, event_client=event_client,
+                                   finish_exit_grace=finish_exit_grace, max_robot_calls=max_robot_calls)
+        if attempt == BWRAP_RETRY_ATTEMPTS or not _bwrap_start_failure(output, result.returncode):
+            break
+        kept = output / f'client.stderr.bwrap_attempt{attempt}.log'
+        (output / 'client.stderr.log').replace(kept)
+        retries.append({'attempt': attempt, 'returncode': result.returncode, 'stderr': kept.name,
+                        'at_unix': time.time()})
+        (output / 'bwrap_retries.json').write_text(json.dumps(retries, indent=1) + '\n')
+        time.sleep(BWRAP_RETRY_WAIT_SECONDS)
+    return result
+
+
+def _run_process_once(project: PreparedProject, output: Path, timeout: float | None,
+                      on_start: Callable[[int], None] | None = None, *,
+                      event_client: str = 'codex', finish_exit_grace: float = 5.0,
+                      max_robot_calls: int = 0) -> ClientRunResult:
     started = time.monotonic()
     timed_out = False
     finish_at = finish_monotonic = None
