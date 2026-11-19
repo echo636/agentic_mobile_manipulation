@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+from manipulation_agent.executors.omnigibson_rgb import OBSERVATION_RENDER_PASSES, RGBBackend
 from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
 
 
@@ -119,7 +119,10 @@ class CameraReadiness(unittest.TestCase):
             self.assertEqual(len(record['retries']),3)
             barriers=[json.loads(line) for line in (Path(d)/'annotation_barriers.jsonl').read_text().splitlines()]
             self.assertEqual(len(barriers),4)
-            self.assertEqual(b.og.sim.editing_usd.call_count,4)
+            self.assertEqual([r['render_passes'] for r in barriers],
+                             [OBSERVATION_RENDER_PASSES, 1, 1, 1])
+            self.assertGreater(OBSERVATION_RENDER_PASSES, 1)
+            self.assertEqual(b.og.sim.editing_usd.call_count,OBSERVATION_RENDER_PASSES + 3)
             self.assertFalse(b._test_editing_usd)
             self.assertTrue(all(r['before']==r['after'] and r['status']=='passed' for r in barriers))
 

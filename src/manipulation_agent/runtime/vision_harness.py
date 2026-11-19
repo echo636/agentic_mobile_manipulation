@@ -175,7 +175,9 @@ class VisionHarness:
     def start_standalone_clock(self): return LegacyPlanHelpers.start_standalone_clock(self)
 
     def initialize(self, reference_image_ref=None):
-        """Deliver the ready episode snapshot without reset, physics or rendering."""
+        """Reuse the ready snapshot, or retry readback after a motor invalidated it."""
+        if self.snapshot['revision'] != self.revision:
+            self.refresh()
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
         if reference_image_ref is not None:
             reference = self._published_rgb.get(reference_image_ref)
@@ -315,8 +317,12 @@ class VisionHarness:
             if name in {'act', 'look'}:
                 self._consecutive_refunds = 0
         except SkillError as exc:
-            result={'ok':False,'error':{'code':exc.code,'message':str(exc)}}
-            result['observation']=self.snapshot
+            if exc.code in {'episode_timeout', 'episode_cancelled'}:
+                result = {'ok': False, 'error': public_execution_error(exc)}
+            else:
+                result = {'ok': False, 'error': {'code': exc.code, 'message': str(exc)}}
+                if self.snapshot['revision'] == self.revision:
+                    result['observation'] = self.snapshot
             if (self.auxiliary_feedback and name in {'act','look'} and exc.code in NO_WORLD_CHANGE_CODES
                     and self.agent_step_limit is not None and self.agent_steps>0 and not self.closed):
                 self._consecutive_refunds += 1
@@ -327,8 +333,9 @@ class VisionHarness:
                     self.recorder.event('agent_step_refunded',{'step':self.agent_steps+1,'tool':name,
                         'request_id':request_id,'code':exc.code})
                     result['error']['action_step_used']=False
-                    result['error']['current_image_refs']=[image['image_ref'] for image in self.snapshot['images']]
-                    result.pop('observation',None)
+                    current = result.pop('observation', None)
+                    if current is not None:
+                        result['error']['current_image_refs']=[image['image_ref'] for image in current['images']]
                 else:
                     result['error']['action_step_used']=True
                     result['error']['message'] = (
@@ -442,7 +449,8 @@ class VisionHarness:
 
     def perform(self,primitive,target,revision,*,_parent_request_id=None,**kwargs):
         self.deadline.check()
-        if revision!=self.revision: raise SkillError('stale_observation','Use the latest observation revision')
+        if revision != self.revision or self.snapshot['revision'] != self.revision:
+            raise SkillError('stale_observation','Initialize to obtain the latest observation revision')
         if self.legacy_limits_active and (
                 self.actions>=self.budget.max_actions or self.backend.steps>=self.budget.max_sim_steps):
             raise SkillError('budget_exhausted','Action/step budget exhausted')
@@ -466,9 +474,10 @@ class VisionHarness:
         finally:
             self.backend._active_request_id=None
             self.revision+=1
-            # A timed-out action may have changed the world. Invalidate its RGB,
-            # but do not spend the expired task budget rendering another capture.
-            if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
+            # A stop can arrive after the last physical motion and before capture.
+            # In that case the previous snapshot cannot describe the end of this action.
+            self.deadline.check(changed=True)
+            self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
         if primitive=='open' and details.get('other_panels_not_operated') is True:

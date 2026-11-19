@@ -61,7 +61,7 @@ class GTBackendTests(unittest.TestCase):
             get_position_orientation=lambda: (b._position, b._orientation),
             get_joint_positions=lambda: torch.tensor([0., 0.]), sensors={})
         b.torch = torch
-        b.og = SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda: 1/30))
+        b.og = SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda: 1/30, current_time_step_index=16, current_time=.125))
         occupancy = np.full((60, 60), 255, dtype=np.uint8)
         occupancy[:, 30] = 0
         if not blocked:
@@ -198,6 +198,19 @@ class GTBackendTests(unittest.TestCase):
         b._execute_base_path=Mock(return_value={'actual_path_distance_m':0.,'nav_status':'endpoint_applied'})
         target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([2.,0.,0.]),None))
         self.assertEqual(b._navigate(target,700)['nav_status'],'incomplete')
+
+    def test_capture_rejects_physics_tick_even_if_robot_and_env_counter_stand_still(self):
+        b = self.backend()
+        render = b._render_rgb_views.side_effect
+        def render_during_physics_tick(**kwargs):
+            b.og.sim.current_time_step_index += 1
+            return render(**kwargs)
+        b._render_rgb_views.side_effect = render_during_physics_tick
+        with self.assertRaisesRegex(RuntimeError, 'Physics advanced'):
+            b.observe()
+        self.assertFalse((self.output / 'captures.jsonl').exists())
+        row = json.loads((self.output / 'observation_capture_audit.jsonl').read_text())
+        self.assertEqual((row['physics_step_before'], row['physics_step_after']), (16, 17))
 
     def test_default_gt_action_keeps_initialize_four_rgb_and_private_boundary(self):
         recorder = Recorder(self.output, {'backend': 'cpu_gt_fixture', 'observation_mode': 'rgb_only'})

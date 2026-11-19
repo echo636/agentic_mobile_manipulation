@@ -143,7 +143,37 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.assertEqual(reply['error']['code'],'episode_timeout')
         self.assertTrue(reply['error']['world_may_have_changed'])
         self.assertEqual(self.backend.capture,before_capture)
+        self.assertNotIn('observation', reply)
         self.assertEqual(self.h.revision,1)
+
+    def test_finish_requested_after_motor_completion_does_not_return_old_pixels(self):
+        original = self.backend.execute_visual
+        def finish_during_motor(*args, **kwargs):
+            result = original(*args, **kwargs)
+            self.backend.deadline.request_stop()
+            return result
+        self.backend.execute_visual = finish_during_motor
+        before = self.backend.capture
+        reply = self.act()
+        self.assertEqual(reply['error']['code'], 'episode_cancelled')
+        self.assertTrue(reply['error']['world_may_have_changed'])
+        self.assertNotIn('observation', reply)
+        self.assertEqual(self.backend.capture, before)
+
+    def test_failed_camera_readback_cannot_republish_older_pixels_on_recovery(self):
+        prior = self.h.snapshot
+        with patch.object(self.backend, 'observe', side_effect=RuntimeError('camera readback failed')):
+            with self.assertRaisesRegex(RuntimeError, 'readback'):
+                self.act()
+        # A reconnecting caller can know the incremented revision but still has only old pixels.
+        rejected = self.act('before-reinitialize')
+        self.assertEqual(rejected['error']['code'], 'stale_observation')
+        self.assertNotIn('observation', rejected)
+        self.assertEqual(self.h.actions, 1)
+        recovered = self.h.call('initialize', {}, 'recover')['observation']
+        self.assertEqual(recovered['revision'], prior['revision'] + 1)
+        self.assertNotEqual(recovered['images'][0]['image_ref'], prior['images'][0]['image_ref'])
+        self.assertEqual(self.h.call('initialize', {}, 'reuse')['observation'], recovered)
 
     def test_evaluator_failure_is_missing_score_not_false_or_fabricated_q(self):
         self.backend.evaluate=Mock(side_effect=ValueError('invalid evaluator state'))
@@ -245,18 +275,20 @@ class ControllerDeadlineTests(unittest.TestCase):
                 pid=123456;returncode=0
                 def __init__(self,*args,**kwargs):self.stdout=kwargs['stdout']
                 def poll(self):return self.returncode
-                def communicate(self,text,timeout):
+                def wait(self,timeout):
                     self.stdout.write(json.dumps({'type':'item.completed','item':{
                         'type':'mcp_tool_call','server':'manipulation','tool':'finish',
                         'result':{'content':[{'type':'text','text':'{"ok":true,"closed":true}'}]}}})+'\n')
+                    self.stdout.flush()
                     clock[0]=149.0
-                    return None,None
-            def run(project, output, timeout, on_start):
+                    return self.returncode
+            def run(project, output, timeout, on_start, *, max_robot_calls=0):
                 observed['model_timeout']=timeout
-                return run_process(project, output, timeout, on_start)
+                return run_process(project, output, timeout, on_start, max_robot_calls=max_robot_calls)
             decode=json.loads
             def decode_after_policy(text,*args,**kwargs):
-                if text.startswith('{"type": "item.completed"'):clock[0]=151.0
+                # The runner tails bytes live, then parses saved text after the policy exits.
+                if isinstance(text, str) and text.startswith('{"type": "item.completed"'):clock[0]=151.0
                 return decode(text,*args,**kwargs)
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800','--deadline-unix','150']
@@ -283,14 +315,17 @@ class ControllerDeadlineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'controller';clock=[100.0]
             class Process:
-                pid=123456;returncode=-15
+                pid=123456;returncode=None
                 def __init__(self,*args,**kwargs):self.stdout=kwargs['stdout']
-                def poll(self):return None
-                def communicate(self,text,timeout):
-                    self.stdout.write('{"type":"unfinished')
-                    clock[0]=151
-                    raise controller.subprocess.TimeoutExpired('fixture',timeout)
-                def wait(self,timeout):return self.returncode
+                def poll(self):return self.returncode
+                def wait(self,timeout):
+                    if clock[0] < 151:
+                        self.stdout.write('{"type":"unfinished')
+                        self.stdout.flush()
+                        clock[0]=151
+                        raise controller.subprocess.TimeoutExpired('fixture',timeout)
+                    self.returncode=-15
+                    return self.returncode
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800','--deadline-unix','150']
             with patch('sys.argv',argv), patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:clock[0]), \
@@ -330,14 +365,15 @@ class ControllerDeadlineTests(unittest.TestCase):
                     assert clock_path.exists()
                     order.append('model');self.stdout=kwargs['stdout']
                 def poll(self):return self.returncode
-                def communicate(self,text,timeout):
+                def wait(self,timeout):
                     self.stdout.write(json.dumps({'type':'item.completed','item':{
                         'type':'mcp_tool_call','server':'manipulation','tool':'finish',
                         'result':{'content':[{'type':'text','text':'{"ok":true,"closed":true}'}]}}})+'\n')
-                    return None,None
-            def run(project, output, timeout, on_start):
+                    self.stdout.flush()
+                    return self.returncode
+            def run(project, output, timeout, on_start, *, max_robot_calls=0):
                 waits['model']=timeout
-                return run_process(project, output, timeout, on_start)
+                return run_process(project, output, timeout, on_start, max_robot_calls=max_robot_calls)
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800',
                   '--execution-clock-command-json','["fixture-clock"]']

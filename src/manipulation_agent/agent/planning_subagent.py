@@ -79,6 +79,8 @@ class PlanningSubagent:
         self.events = JsonlAppend(self.output / 'events.jsonl')
         plan_path = self.output / 'plan.json'
         self.plan = json.loads(plan_path.read_text()) if plan_path.exists() else None
+        self.selection_context = []
+        self.hand = None
         self.observation = None
         self.images = []
         self.labeled_frames = []
@@ -90,8 +92,22 @@ class PlanningSubagent:
         """Receive only the same MCP reply as the actor, including actual pixels."""
         body = next((json.loads(part.text) for part in result.content
                      if part.type == 'text' and part.text.startswith('{')), {})
+        if 'hand' in body:
+            self.hand = body['hand']
+        error = body.get('error')
+        unavailable = isinstance(error, dict) and error.get('code') in {
+            'episode_cancelled', 'episode_timeout', 'episode_closed', 'observation_unavailable'}
         observation = body.get('observation')
+        if body.get('closed') or unavailable:
+            self.observation, self.images, self.selection_context = None, [], []
+            self.labeled_frames = []
+            self.hand = None
+            observation = None
         if observation and observation.get('observation_mode') == 'rgb_only':
+            self.selection_context = []
+            if body.get('visual_evidence'):
+                from ..evidence_server import planner_parts
+                result, self.selection_context = planner_parts(result)
             images = [part for part in result.content if part.type == 'image']
             frames = list(labeled_rgb_images(observation, body.get('reference_image')))
             if len(images) != len(frames) or not images:
@@ -107,7 +123,7 @@ class PlanningSubagent:
         if self.observation is None:
             return {'ok': False, 'error': 'Initialize to obtain current RGB before consulting the planner.'}
         context = {'task': self.instruction, 'progress_from_actor': progress,
-            'previous_plan': self.plan, 'observation': self.observation,
+            'previous_plan': self.plan, 'observation': self.observation, 'hand': self.hand,
             'recent_action_feedback': list(self.feedback),
             'earlier_feedback_omitted': self.feedback_count - len(self.feedback),
             'actions_since_plan': self.feedback_count, 'action_seconds_since_plan': self.action_seconds}
@@ -116,6 +132,7 @@ class PlanningSubagent:
             content += [{'type': 'input_text', 'text': label},
                         {'type': 'input_image', 'image_url': f'data:{part.mimeType};base64,{part.data}',
                          'detail': 'original'}]
+        content.extend(self.selection_context)
         payload = {'model': self.model, 'instructions': PLANNER_INSTRUCTION + '\n\nRobot capabilities:\n' + self.capabilities,
                    'reasoning': {'effort': self.effort}, 'store': False,
                    'input': [{'role': 'user', 'content': content}],
@@ -125,7 +142,7 @@ class PlanningSubagent:
         started = time.monotonic()
         self.events.append({'at': now(), 'kind': 'planner_request', 'call_id': call_id,
             'model': self.model, 'effort': self.effort, 'context': context,
-            'instructions': payload['instructions'], 'image_count': len(self.images),
+            'instructions': payload['instructions'], 'image_count': len(self.images) + int(bool(self.selection_context)),
             'image_refs': [frame for frame, _ in self.labeled_frames],
             'request_sha256': hashlib.sha256(json.dumps(payload).encode()).hexdigest()})
         try:

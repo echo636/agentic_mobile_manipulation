@@ -23,6 +23,10 @@ from .demo_motion import DemoMotion
 from .local_rgb import LocalRGBManipulation
 from .local_manipulation import LocalLimits
 
+# A single completed RTX frame can still blend in the old material. The
+# fixed-pose switch test needs additional rendered frames at unchanged time.
+OBSERVATION_RENDER_PASSES = 64
+
 class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
@@ -84,7 +88,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if self.video_render_stride not in (1,2,3): raise ValueError("Video render stride must be 1, 2 or 3")
         self.video_render_flushes = int(os.environ.get('MAS_VIDEO_RENDER_FLUSHES', '4'))
         if self.video_render_flushes not in (2, 3, 4):
-            raise ValueError('Video render flushes must be 2, 3 or 4; observation barriers stay at 4')
+            raise ValueError('Video render flushes must be 2, 3 or 4')
         self._recorded_pixels = None
         self._recorded_capture_step = None
         self.spectator = None
@@ -92,6 +96,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         self._spectator_choice = None
         self._base_target = None
         self.image_size=int(os.environ.get('MAS_RGB_IMAGE_SIZE','512'))
+        self.hide_toggle_markers = os.environ.get('MAS_RGB_HIDE_TOGGLE_MARKERS', '0') == '1'
         if self.image_size not in (512,768,1024,2048):
             raise ValueError('RGB image size must be 512, 768, 1024 or 2048')
         self.rgb_jpeg_quality=int(os.environ.get('MAS_RGB_JPEG_QUALITY','92'))
@@ -110,6 +115,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
+        # The rig renders warmup frames before its first observation. A visible
+        # switch overlay in those frames can persist in the first RGB readbacks.
+        if self.hide_toggle_markers:
+            self._hide_toggle_markers()
         base_z = float(self.robot.get_position_orientation()[0][2])
         floor_z = min(self.env.scene.trav_map.floor_heights, key=lambda z: abs(z-base_z))
         self._base_floor_clearance = base_z-floor_z
@@ -288,7 +297,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                                   capture_env_step=self._recorded_capture_step,repeated=not fresh,
                                   check_active=lambda:self.deadline.check(changed=True))
 
-    def _wait_for_rgb_annotations(self):
+    def _wait_for_rgb_annotations(self, render_passes=1):
         """Finish Replicator capture at the current pose without advancing time.
 
         Shape-valid annotator buffers can still contain a previous camera pose.
@@ -315,9 +324,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             # Replicator updates SDGPipeline USD attributes while dispatching
             # the capture. OG requires these writes in its edit scope, whose
             # exit also synchronizes the changes to Fabric.
-            with self.og.sim.editing_usd():
-                lazy.omni.replicator.core.orchestrator.step(
-                    delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1)
+            for _ in range(render_passes):
+                with self.og.sim.editing_usd():
+                    lazy.omni.replicator.core.orchestrator.step(
+                        delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1)
         self._check_renderer_health()
         after = state()
         changed = [key for key in ('env_step', 'sim_step_index') if before[key] != after[key]]
@@ -329,9 +339,19 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             stream.write(json.dumps({'at': now(), 'audience': 'executor_private',
                 'status': 'failed' if changed else 'passed', 'api': 'replicator.orchestrator.step',
                 'delta_time': 0., 'pause_timeline': False, 'wait_for_render': True, 'rt_subframes': 1,
-                'before': before, 'after': after, 'changed_fields': changed}) + '\n')
+                'render_passes': render_passes, 'before': before, 'after': after, 'changed_fields': changed}) + '\n')
         if changed:
             raise RuntimeError('Replicator capture changed simulation state: ' + ', '.join(changed))
+
+    def _hide_toggle_markers(self):
+        from omnigibson.object_states import ToggledOn
+
+        # OG colors this particular visual mesh from the Boolean switch state.
+        # Its contact geometry and every regular appliance mesh stay in the scene.
+        for obj in self.env.scene.get_objects_with_state(ToggledOn):
+            marker = obj.states[ToggledOn].visual_marker
+            if marker is not None and marker.visible:
+                marker.visible = False
 
     def _render_rgb_views(self, include_spectator=False, flushes=4, require_calibration=False):
         """Render-product resizing can invalidate all cameras for several frames.
@@ -340,6 +360,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         """
         self._check_renderer_health()
         import numpy as np
+        if getattr(self, 'hide_toggle_markers', False):
+            self._hide_toggle_markers()
         self._position_rig()
         sensors = dict(self.rig)
         if include_spectator: sensors['spectator'] = self.spectator
@@ -352,7 +374,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             with component(self,'render'):self.og.sim.render()
             self._check_renderer_health()
             if require_calibration:
-                self._wait_for_rgb_annotations()
+                self._wait_for_rgb_annotations(OBSERVATION_RENDER_PASSES if attempt == 0 else 1)
             pixels = {}; packets = {}; intrinsics={}; pending={}
             for view,sensor in sensors.items():
                 with component(self,'sensor_readback'):data,info = sensor.get_obs()
@@ -537,12 +559,15 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         from PIL import Image
         import numpy as np
         start_step = self.steps
+        sim = self.og.sim
+        physics_start = int(sim.current_time_step_index)
+        physics_time_start = float(sim.current_time)
         before_pos,before_quat = self.robot.get_position_orientation()
         before_joints = self.robot.get_joint_positions().clone()
         if self.video is not None and not self.video.closed:
             self._prepare_spectator()
-        # The observation and its replay frame use identical RGB arrays, from
-        # one frozen simulation state and the unchanged four-tick barrier.
+        # The observation and its replay frame use identical RGB arrays from
+        # the last completed render of this frozen simulation state.
         rendered = self._render_rgb_views(include_spectator=self.video is not None and not self.video.closed,
                                           require_calibration=True)
         self.capture_index+=1
@@ -578,19 +603,26 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             images.append({'image_ref':ref,'view':view,'width':pixels.shape[1],'height':pixels.shape[0],
                            'mime_type':'image/jpeg','sha256':digest})
             audit.append({'image_ref':ref,'file':str(path.relative_to(self.output)),'sha256':digest})
-        with (self.output/'captures.jsonl').open('a') as stream:
-            stream.write(json.dumps({'capture':self.capture_index,'env_steps':self.steps,
-                                     'synchronized_capture':capture,'images':audit})+'\n')
         after_pos,after_quat = self.robot.get_position_orientation()
         after_joints = self.robot.get_joint_positions()
+        physics_end = int(sim.current_time_step_index)
+        physics_time_end = float(sim.current_time)
+        frozen = physics_start == physics_end and physics_time_start == physics_time_end
         unchanged = self.steps == start_step and self.torch.equal(before_pos,after_pos) and self.torch.equal(before_quat,after_quat) and self.torch.equal(before_joints,after_joints)
         with (self.output/'observation_capture_audit.jsonl').open('a') as stream:
             stream.write(json.dumps({'capture':capture,'audience':'executor_private','no_robot_motion':bool(unchanged),
+                'physics_step_before':physics_start,'physics_step_after':physics_end,
+                'physics_time_before':physics_time_start,'physics_time_after':physics_time_end,
                 'start_step':start_step,'end_step':self.steps,'before_position':before_pos.tolist(),
                 'after_position':after_pos.tolist(),'before_orientation':before_quat.tolist(),
                 'after_orientation':after_quat.tolist(),'rig_sensor_names':[s.name for s in self.rig.values()],
                 'stock_sensor_names':list(self.robot.sensors)})+'\n')
+        if not frozen:
+            raise RuntimeError('Physics advanced during four-camera capture')
         if not unchanged: raise RuntimeError('Read-only camera capture changed robot state')
+        with (self.output/'captures.jsonl').open('a') as stream:
+            stream.write(json.dumps({'capture':self.capture_index,'env_steps':self.steps,
+                                     'synchronized_capture':capture,'images':audit})+'\n')
         self._video_frame('observation_boundary', rendered=rendered)
         return {'images':images,'observation_mode':self.mode,'capture':capture}
 
@@ -1090,6 +1122,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'departure_certificate':False,'endpoint_settling_gate':False,
             'physics_steps_after_transfer':1,'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
+        result['native_toggle_markers'] = 'hidden' if getattr(self, 'hide_toggle_markers', False) else 'benchmark'
         result['private_grounding_provider']=('same-pixel visual ray at measured depth; same-capture private instance labels resolve numerical ties'
             if getattr(self,'renderer_pixel_owner',False) else
             'same-pixel visual ray at measured depth; no segmentation annotator')

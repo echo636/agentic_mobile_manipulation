@@ -83,7 +83,7 @@ def infrastructure_failure(row):
     return None
 
 
-def worker_configs(config):
+def worker_configs(config, *, action_feedback=None):
     """Resolve explicit host/GPU lanes; legacy single-host configs still work."""
     lanes = config.get('workers')
     if lanes is None:
@@ -107,6 +107,9 @@ def worker_configs(config):
         if type(gpu) is not int or gpu<0 or not 1024<=port<=65535: raise ValueError('Invalid GPU or port')
         if (host,gpu) in devices or (host,port) in ports: raise ValueError('Worker GPU or port collision')
         env=merged.get('simulator_env',{})
+        if action_feedback in ('sensor_only', 'evidence'):
+            env = {'MAS_RGB_HIDE_TOGGLE_MARKERS': '1', **env}
+            merged['simulator_env'] = env
         budget=merged.get('memory_budget_gib',28)
         if type(budget) is not int or budget<12: raise ValueError('Invalid memory budget')
         if merged.get('simulator_memory_max',str(budget)+'G')!=str(budget)+'G':
@@ -118,9 +121,9 @@ def worker_configs(config):
             if evidence.get('status')!='passed' or evidence.get('driver')!=merged['validated_driver_version']:
                 raise ValueError('Driver exception requires passed renderer evidence for that exact version')
         if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES','MAS_RGB_IMAGE_SIZE',
-                     'MAS_LOCAL_MANIPULATION','MAS_RENDERER_PIXEL_OWNER'}:
+                     'MAS_LOCAL_MANIPULATION','MAS_RENDERER_PIXEL_OWNER','MAS_RGB_HIDE_TOGGLE_MARKERS'}:
             raise ValueError('Only reviewed observation, recording, local manipulation and pixel ownership options may be worker environment overrides')
-        for flag in ('MAS_LOCAL_MANIPULATION', 'MAS_RENDERER_PIXEL_OWNER'):
+        for flag in ('MAS_LOCAL_MANIPULATION', 'MAS_RENDERER_PIXEL_OWNER', 'MAS_RGB_HIDE_TOGGLE_MARKERS'):
             if flag in env and env[flag] not in ('0','1'):
                 raise ValueError(flag+' must be an explicit string 0 or 1')
         if merged.get('simulator_appdata_path') and not Path(merged['simulator_appdata_path']).is_absolute():
@@ -311,10 +314,11 @@ class Batch:
         return Path(self.c.get('runtime_manifest_path', self.root / 'manifest.json'))
 
     def __init__(self, config):
-        self._config=config; self._worker_local=threading.local(); self.workers=worker_configs(config)
+        self._config=config; self._worker_local=threading.local()
         self.root=Path(config['batch']); self.scheduler_source=Path(__file__).resolve().parents[1]
         self.source=Path(config.get('source_path',self.scheduler_source)).resolve()
         self.manifest=json.loads((self.root/'manifest.json').read_text()); self.reports=Path(config['reports'])
+        self.workers = worker_configs(config, action_feedback=self.manifest.get('action_feedback'))
         self.lock=threading.RLock(); self.queue=queue.Queue(); self.rows=self.manifest['tasks']
         self.worker_states={};self._archive_pool=None
         self._draining=False
@@ -1187,6 +1191,10 @@ class Batch:
                  '--timeout',str(seconds if seconds is not None else 0),'--execution-clock-command-json',
                  json.dumps(self.execution_clock_command(clock_path,seconds,row=row)),
                  '--agent-profile',self.manifest['agent_profile'],'--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+            if self.manifest.get('action_feedback'):
+                cmd += ['--action-feedback', self.manifest['action_feedback']]
+                if not self.manifest.get('planner_model') and self.c.get('planner_python'):
+                    cmd += ['--planner-python', self.c['planner_python']]
             if self.manifest.get('require_tool_intent'):cmd.append('--require-tool-intent')
             if self.manifest.get('rgb_reference_review'):cmd.append('--rgb-reference-review')
             if self.manifest.get('model_reasoning_effort'):
@@ -1496,6 +1504,10 @@ class Batch:
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
              '--timeout',str(self.manifest['model_timeout_seconds'] or 0),'--agent-profile',self.manifest['agent_profile'],
              '--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+        if self.manifest.get('action_feedback'):
+            cmd += ['--action-feedback', self.manifest['action_feedback']]
+            if not self.manifest.get('planner_model') and self.c.get('planner_python'):
+                cmd += ['--planner-python', self.c['planner_python']]
         if self.manifest.get('require_tool_intent'):cmd.append('--require-tool-intent')
         if self.manifest.get('rgb_reference_review'):cmd.append('--rgb-reference-review')
         if self.manifest.get('model_reasoning_effort'):

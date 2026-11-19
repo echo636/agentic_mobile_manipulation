@@ -4,6 +4,8 @@ The skills profile exposes initialize, look, act, finish, list_skills, read_skil
 
 ## Three distinct layers
 
+OmniGibson draws a marker on switchable devices and colors it from the native switch state. New batch runs with `action_feedback` set to `sensor_only` or `evidence` hide this mesh before rendering all camera views. To reproduce the original benchmark images, set the worker's `simulator_env.MAS_RGB_HIDE_TOGGLE_MARKERS` to `"0"`. Direct simulator launches can select the sensor treatment with `MAS_RGB_HIDE_TOGGLE_MARKERS=1`. The episode's backend provenance records the effective setting under `native_toggle_markers`. Use the updated simulator and scheduler together for comparisons with this option.
+
 - `skills/*/SKILL.md`: agent workflow instructions, with references; no simulator code. Five packages: visual-manipulation, goal-decomposition, visual-exploration, pick-and-place, failure-recovery.
 - `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry. `minimal` exposes initialize/look/act/finish; `skills` adds list_skills/read_skill/task_notes. The optional historical `workflow` profile retains observe, asynchronous observation jobs, update_plan, remember and recall for compatibility.
 - `src/manipulation_agent/executors/`: the motor primitive catalog and OmniGibson adapter. Primitives are not the workflow skill packages.
@@ -38,6 +40,14 @@ that the explanation is accurate or the action is useful. Actual provider-side
 schema enforcement is still audited separately from local rejection.
 
 ## Observation and action contract
+
+The simulator captures the four current views after the motor call returns. At the
+chosen pose the rig completes 64 zero-time Replicator renders before reading the
+sensor buffers. Earlier frames can retain the previous color of a surface that
+changed abruptly. The simulator records the PhysX step, clock, and robot pose on
+both sides of capture. An object released in motion can keep moving on the next
+physics step. In sensor-only experiments the state-colored switch meshes are
+hidden before rig warmup and checked again before capture.
 
 Call initialize first, including intent when public_tool_intent_v1 is enabled (legacy calls use initialize({})). It returns the prepared episode's current snapshot without resetting the scene or performing an additional render. After inspecting the initial images, choose an act or look and inspect the next four-camera snapshot included in that same response. There is no observation-job submission or polling step in the default model loop.
 

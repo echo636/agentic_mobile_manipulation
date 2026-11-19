@@ -16,3 +16,5 @@ Choose an alternative that addresses the cause:
 - `navigation_invalid_start`: report the base-executor limitation; changing destinations cannot fix it. For `navigation_stalled`, try one materially different route or viewpoint before reassessing.
 
 Never repeat an unchanged failed action more than once. After two failed alternatives, reconsider the cause. Mark a blocked subgoal honestly and continue independent useful work. Finish blocked when no supported path remains; retain the original required result.
+
+Track the change you needed after each repeated access. If opening and closing restore the same two views, compare the open view with the preceding open view and locate the item or free space you were seeking. Obtain a different line of sight or revise the plan when the pair yields no new evidence.
