@@ -40,6 +40,28 @@ class ProviderGatewayTests(unittest.TestCase):
                            *[{'type': 'input_image', 'image_url': 'data:image/jpeg;base64,'+str(revision)+view,
                               'detail': 'original'} for view in ('front', 'back', 'left', 'right')]]}
 
+    def test_camera_closure_invalidates_the_last_image_bearing_item(self):
+        initial_call = dict(type='function_call', name='initialize', namespace='mcp__manipulation', call_id='call-1')
+        initial = self.observation(1)
+        for tool, result in [('finish', {'ok': True, 'closed': True}),
+                             ('act', {'ok': False, 'error': {'code': 'observation_unavailable'}}),
+                             ('look', {'ok': False, 'error': {'code': 'episode_cancelled'}})]:
+            call = dict(type='function_call', name='mcp__manipulation__' + tool, call_id='close')
+            output = dict(type='function_call_output', call_id='close',
+                          output=[dict(type='input_text', text='Wall time: 0.1 seconds\nOutput:'),
+                                  dict(type='input_text', text=json.dumps(result))])
+            before = {'input': [initial_call, initial, call, output]}
+            payload = copy.deepcopy(before)
+            stats = prune_stale_images(payload)
+            self.assertEqual(stats, {'image_items': 1, 'kept_images': 0, 'dropped_images': 4})
+            self.assertEqual(payload['input'][-1], output)
+            recovered = self.observation(2)
+            before['input'].extend([dict(initial_call, call_id='call-2'), recovered])
+            self.assertEqual(prune_stale_images(before, 2)['kept_images'], 4)
+            self.assertEqual(before['input'][-1], recovered)
+        foreign = {'input':[initial_call, initial, dict(call, name='finish', namespace='other'), output]}
+        self.assertEqual(prune_stale_images(foreign)['kept_images'], 4)
+
     def test_fixed_placeholders_preserve_prefix_until_previous_latest_images(self):
         payload = {'model': 'unchanged', 'input': [
             {'role': 'user', 'content': 'unchanged task'}, self.observation(1),
