@@ -34,10 +34,10 @@ if tool == "call_mcp_tool":
               f"Use ServerName='manipulation' with one of: {sorted(ALLOWED_TOOLS)}.")
     if "zoom" in ALLOWED_TOOLS and server == "manipulation" and target not in ALLOWED_TOOLS:
         # v12b, only with --two-step-select (keeps the switch-off text identical): show the correct call shape.
-        reason += (f" If {target!r} is an action, call ToolName='act' with Arguments "
-                   "{\"primitive\": \"" + str(target) + "\", \"revision\": <latest revision>, "
-                   "\"target\": {\"image_ref\": <newest image_ref>, \"point\": [x, y]} or {\"zoom_ref\": <latest zoom_ref>, \"point\": [x, y]}, "
-                   "\"placement_roll_degrees\": null, \"placement_yaw_degrees\": null, \"wait_seconds\": null}.")
+        reason += (" If " + repr(target) + " is an action, call ToolName='act' with Arguments "
+                   + '{"primitive": "' + str(target) + '", "revision": <latest revision>, '
+                   + '"target": {"image_ref": <newest image_ref>, "point": [x, y]} or {"zoom_ref": <latest zoom_ref>, "point": [x, y]}, '
+                   + '"placement_roll_degrees": null, "placement_yaw_degrees": null, "wait_seconds": null}.')
     print(json.dumps({"decision": "deny", "reason": reason}))
     sys.exit(0)
 

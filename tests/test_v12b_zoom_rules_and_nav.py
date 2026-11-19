@@ -147,3 +147,24 @@ def test_nav_receipt_is_fact_only():
     from manipulation_agent.runtime import vision_harness
     src = inspect.getsource(vision_harness)
     assert "'already_at_closest_approach':'The base did not move; it is already at the closest feasible standing point for the selected target. Inspect the updated RGB.'" in src
+
+
+def test_agy_hook_script_runs_and_switch_off_text_unchanged():
+    """Execute the generated hook (a syntax error there would silently break every agy run)."""
+    import subprocess, sys
+    from manipulation_agent.clients.agy import HOOK_SCRIPT
+    base = ['act', 'finish', 'initialize', 'list_skills', 'look', 'read_skill']
+
+    def run(tools, name, args):
+        script = HOOK_SCRIPT.replace('__ALLOWED_TOOLS_JSON__', json.dumps(tools))
+        out = subprocess.run([sys.executable, '-c', script], input=json.dumps({'toolCall': {'name': name, 'args': args}}),
+                             capture_output=True, text=True, check=True).stdout
+        return json.loads(out)
+    nav = {'ServerName': 'manipulation', 'ToolName': 'navigate_to'}
+    off = run(base, 'call_mcp_tool', nav)
+    assert off['decision'] == 'deny' and off['reason'] == (
+        "MCP call to ServerName='manipulation' ToolName='navigate_to' is not permitted. "
+        "Use ServerName='manipulation' with one of: ['act', 'finish', 'initialize', 'list_skills', 'look', 'read_skill'].")
+    on = run(base + ['zoom'], 'call_mcp_tool', nav)
+    assert '"primitive": "navigate_to"' in on['reason'] and "call ToolName='act'" in on['reason']
+    assert run(base, 'call_mcp_tool', {'ServerName': 'manipulation', 'ToolName': 'act'})['decision'] == 'allow'
