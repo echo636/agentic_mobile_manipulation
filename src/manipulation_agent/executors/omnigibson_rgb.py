@@ -91,6 +91,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         self._spectator_choice = None
         self._base_target = None
         self.image_size=int(os.environ.get('MAS_RGB_IMAGE_SIZE','512'))
+        self.hide_toggle_markers = os.environ.get('MAS_RGB_HIDE_TOGGLE_MARKERS', '0') == '1'
         if self.image_size not in (512,768,1024,2048):
             raise ValueError('RGB image size must be 512, 768, 1024 or 2048')
         self.rgb_jpeg_quality=int(os.environ.get('MAS_RGB_JPEG_QUALITY','92'))
@@ -321,6 +322,16 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if changed:
             raise RuntimeError('Replicator capture changed simulation state: ' + ', '.join(changed))
 
+    def _hide_toggle_markers(self):
+        from omnigibson.object_states import ToggledOn
+
+        # OG colors this particular visual mesh from the Boolean switch state.
+        # Its contact geometry and every regular appliance mesh stay in the scene.
+        for obj in self.env.scene.get_objects_with_state(ToggledOn):
+            marker = obj.states[ToggledOn].visual_marker
+            if marker is not None and marker.visible:
+                marker.visible = False
+
     def _render_rgb_views(self, include_spectator=False, flushes=4, require_calibration=False):
         """Render-product resizing can invalidate all cameras for several frames.
 
@@ -328,6 +339,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         """
         self._check_renderer_health()
         import numpy as np
+        if getattr(self, 'hide_toggle_markers', False):
+            self._hide_toggle_markers()
         self._position_rig()
         sensors = dict(self.rig)
         if include_spectator: sensors['spectator'] = self.spectator
@@ -946,6 +959,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'departure_certificate':False,'endpoint_settling_gate':False,
             'physics_steps_after_transfer':1,'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
+        result['native_toggle_markers'] = 'hidden' if getattr(self, 'hide_toggle_markers', False) else 'benchmark'
         result['private_grounding_provider']=('same-pixel visual ray at measured depth; same-capture private instance labels resolve numerical ties'
             if getattr(self,'renderer_pixel_owner',False) else
             'same-pixel visual ray at measured depth; no segmentation annotator')

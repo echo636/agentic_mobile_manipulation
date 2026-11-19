@@ -4,6 +4,8 @@ The current default exposes initialize, look, act, finish, list_skills and read_
 
 ## Three distinct layers
 
+OmniGibson draws a marker on switchable devices and colors it from the native switch state. New batch runs with `action_feedback` set to `sensor_only` or `evidence` hide this mesh before rendering all camera views. To reproduce the original benchmark images, set the worker's `simulator_env.MAS_RGB_HIDE_TOGGLE_MARKERS` to `"0"`. Direct simulator launches can select the sensor treatment with `MAS_RGB_HIDE_TOGGLE_MARKERS=1`. The episode's backend provenance records the effective setting under `native_toggle_markers`. Use the updated simulator and scheduler together for comparisons with this option.
+
 - `skills/*/SKILL.md`: agent workflow instructions, with references; no simulator code. Five packages: visual-manipulation, goal-decomposition, visual-exploration, pick-and-place, failure-recovery.
 - `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry. `minimal` exposes initialize/look/act/finish; `skills` adds list_skills/read_skill. The optional historical `workflow` profile retains observe, asynchronous observation jobs, update_plan, remember and recall for compatibility.
 - `src/manipulation_agent/executors/`: the motor primitive catalog and OmniGibson adapter. Primitives are not the workflow skill packages.

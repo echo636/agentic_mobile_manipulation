@@ -17,6 +17,20 @@ spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolv
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_camera_feedback_uses_hidden_toggle_markers_unless_benchmark_requested(self):
+        worker = {'id': 'local', 'gpu': 0, 'ssh': ['ssh', 'fixture'], 'base_port': 36000}
+        config = {'workers': [worker], 'simulator_env': {'MAS_RGB_IMAGE_SIZE': '1024'}}
+        key = 'MAS_RGB_HIDE_TOGGLE_MARKERS'
+        for mode in ('sensor_only', 'evidence'):
+            env = batch.worker_configs(config, action_feedback=mode)[0]['simulator_env']
+            self.assertEqual(env, {'MAS_RGB_IMAGE_SIZE': '1024', key: '1'})
+        self.assertNotIn(key, batch.worker_configs(config)[0]['simulator_env'])
+        worker['simulator_env'] = {key: '0'}
+        self.assertEqual(batch.worker_configs(config, action_feedback='evidence')[0]['simulator_env'][key], '0')
+        worker['simulator_env'][key] = 'false'
+        with self.assertRaises(ValueError):
+            batch.worker_configs(config, action_feedback='evidence')
+
     def test_local_manipulation_protocol_is_explicit_and_validated(self):
         config={'workers':[{'id':'local','gpu':0,'ssh':['ssh','fixture'],'base_port':36000}]}
         for value in ('0','1'):
