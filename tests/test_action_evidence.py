@@ -254,6 +254,33 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
                     [a,dict(b,scene=a['scene']),a,dict(b,scene=a['scene'])]):
             self.assertFalse(repeated_access(seq))
 
+    def test_repeated_open_requests_show_only_own_recent_selections(self):
+        f = Feedback('evidence')
+        f.receive('initialize', {}, packet(0, None))
+        ops = ['open', 'look', 'open', 'grasp', 'open']
+        for rev, op in enumerate(ops):
+            if op == 'look':
+                result = f.receive('look', {'revision':rev}, packet(rev + 1, None))
+            else:
+                args = cmd(op, rev, ((rev+1)/6,.5))
+                result = f.receive('act', args, packet(rev + 1, None, poison=True))
+            info = body(result).get('visual_evidence', {})
+            if rev < 4:
+                self.assertNotIn('recent_access_requests', info)
+        group = info['recent_access_requests']
+        self.assertEqual([s['image_ref'] for s in group['selections']], ['front-0','front-2','front-4'])
+        self.assertNotIn('repeated_access', info)
+        self.assertIn('Earlier access selection', [row['label'] for row in info['rows']])
+        self.assertNotIn('PRIVATE', result.content[0].text)
+        bright = Image.new('RGB', (120, 80), 'white')
+        f.receive('look', {'revision':5}, packet(6, None, front=bright))
+        other = body(f.receive('act', cmd('open',6), packet(7,None,front=bright)))
+        self.assertNotIn('recent_access_requests', other['visual_evidence'])
+        for rev in range(7,15):
+            f.receive('look', {'revision':rev}, packet(rev+1,None))
+        expired = body(f.receive('act',cmd('open',15),packet(16,None)))
+        self.assertNotIn('recent_access_requests', expired['visual_evidence'])
+
     def test_large_moving_panel_distinct_clicks_and_neighbour_negative(self):
         scene=[80]*256
         first=[125 if 36<=i<=68 else v for i,v in enumerate(scene)]

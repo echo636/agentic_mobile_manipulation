@@ -145,7 +145,7 @@ class EvidenceMemory:
         self.processed = deque(state.get('processed', []), maxlen=2)
         self.last = state.get('last')
         self.revision = state.get('revision', -1)
-        self.access = deque(state.get('access', []), maxlen=4)
+        self.access = deque(state.get('access', []), maxlen=8)
         self.occupancy = state.get('occupancy', 'unavailable')
         self.similar_command = state.get('similar_command')
         self.similar_count = state.get('similar_count', 0)
@@ -190,8 +190,6 @@ class EvidenceMemory:
             area, _, _ = crop_at(rgb, row['point'], side=256)
             self.access.append(dict(primitive=primitive, view=row['view'], point=row['point'],
                                     revision=revision, scene=signature(rgb), area=signature(area), selection=row))
-        else:
-            self.access.clear()
 
     def panel(self, current, inspection=None):
         rows = []
@@ -202,10 +200,21 @@ class EvidenceMemory:
         add('Earlier grasp request' if self.occupancy == 'unavailable' else 'Grasp selection', self.grasp)
         if self.last and self.last['primitive'] not in PROCESS:
             add('Last ' + self.last['primitive'] + ' selection', self.last)
-        cycling = repeated_access(self.access)
+        access = list(self.access)
+        current_access = bool(self.last and self.last['primitive'] in {'open', 'close'} and access)
+        recent = [r for r in access if self.revision - r['revision'] < 8] if current_access else []
+        cycling = (len(recent) >= 4 and recent[-1]['revision'] - recent[-4]['revision'] == 3
+                   and repeated_access(recent))
+        repeated = []
         if cycling:
             # The last opposite command began in the phase the current command tried to restore.
-            add('Earlier access selection', self.access[-2].get('selection'))
+            add('Earlier access selection', recent[-2].get('selection'))
+        elif recent:
+            last = recent[-1]
+            repeated = [r for r in recent if r.get('selection') and r['primitive'] == last['primitive']
+                        and r['view'] == last['view'] and distance(r['scene'], last['scene']) <= 4]
+            if len(repeated) >= 3:
+                add('Earlier access selection', repeated[0].get('selection'))
         for row in reversed(self.processed):
             if self.revision - row['revision'] <= 3:
                 add('Prior ' + row['primitive'] + ' selection', row)
@@ -252,6 +261,11 @@ class EvidenceMemory:
             info['repeated_similar_images'] = dict(command=self.similar_command, count=self.similar_count,
                 message='You made consecutive grasp requests with similar before and after images. Hand occupancy is unmeasured. Compare the earlier pickup selection with the current views before choosing your next action.')
         if cycling:
-            info['repeated_access'] = dict(revisions=[r['revision'] for r in self.access],
+            info['repeated_access'] = dict(revisions=[r['revision'] for r in recent[-4:]],
                 message='Your alternating access commands have revisited similar views twice. Compare the visible changes and the locations you tried. What changed toward the goal? Inspect from another view or revise the plan if more evidence is needed.')
+        elif len(repeated) >= 3:
+            info['recent_access_requests'] = dict(command=repeated[-1]['primitive'], view=repeated[-1]['view'],
+                selections=[{'revision': r['revision'], 'image_ref': r['selection']['image_ref'], 'point': r['point']}
+                            for r in repeated],
+                message='These requests used the same command from similar camera views. Compare your earlier selections and the visible effects before choosing the next action.')
         return info, data
