@@ -627,3 +627,22 @@ def test_compiler_repairs_unknown_order_ids_without_replacing_work_or_existing_c
     ]:
         with pytest.raises(ValueError):
             correct_order_references(raw, (1,), replacement)
+
+
+def test_order_repair_accepts_unchanged_duplicate_from_a_compound_phrase_but_requires_a_bound_relation():
+    from manipulation_agent.agent.temporal_graph import correct_order_references
+
+    retained = {"first": "wipe", "then": "on"}
+    raw = graph([work("off"), work("wipe"), work("on")])
+    raw["required_order"] = [
+        {"first": "off before wipe, then switch on", "then": "wipe"},
+        retained,
+    ]
+    first = {"first": "off", "then": "wipe"}
+    actual = correct_order_references(
+        raw, (0,), [{"entry": 0, "relations": [first, retained]}]
+    )
+    assert actual["required_order"] == [first, retained]
+    assert TemporalGraph.read(actual).dependencies("wipe") == {"off"}
+    with pytest.raises(ValueError, match="discarded"):
+        correct_order_references(raw, (0,), [{"entry": 0, "relations": [retained]}])

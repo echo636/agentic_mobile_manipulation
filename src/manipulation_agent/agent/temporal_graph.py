@@ -129,23 +129,37 @@ def correct_order_references(raw, positions, fixes):
     changes = unique(fixes, lambda r: r["entry"])
     if set(changes) != set(positions):
         raise ValueError("Each invalid precedence entry needs one correction")
+    retained = {
+        (r["first"], r["then"])
+        for r in raw["required_order"]
+        if r["first"] in nodes and r["then"] in nodes
+    }
     orders = []
     for index, original in enumerate(raw["required_order"]):
         if index not in changes:
             orders.append(original)
             continue
-        replacements = changes[index]["relations"]
-        if not replacements:
-            raise ValueError("An explicit precedence cannot be discarded")
-        for pair in replacements:
-            for side in ("first", "then"):
-                if pair[side] not in nodes or (
-                    original[side] in nodes and pair[side] != original[side]
-                ):
-                    raise ValueError(
-                        "Correct only unknown endpoints of the original precedence"
-                    )
+        represented = False
+        for pair in changes[index]["relations"]:
+            if pair["first"] not in nodes or pair["then"] not in nodes:
+                raise ValueError(
+                    "Unknown endpoint in an explicit precedence correction"
+                )
+            if any(
+                original[side] in nodes and pair[side] != original[side]
+                for side in ("first", "then")
+            ):
+                # A compound phrase may repeat a different edge already kept in
+                # the graph. It neither alters nor satisfies this obligation.
+                if (pair["first"], pair["then"]) in retained:
+                    continue
+                raise ValueError(
+                    "Correct only unknown endpoints of the original precedence"
+                )
             orders.append(pair)
+            represented = True
+        if not represented:
+            raise ValueError("An explicit precedence cannot be discarded")
     return {**raw, "required_order": orders}
 
 
