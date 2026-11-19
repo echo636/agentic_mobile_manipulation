@@ -151,6 +151,75 @@ def test_independent_process_and_transport_modes(
     assert prep_within_window == interleaved
 
 
+@pytest.mark.parametrize("policy", ["serial", "batch-only"])
+@pytest.mark.parametrize("budget", [1.0, 0.000001])
+def test_serial_process_allows_required_intermediate_work(policy, budget):
+    raw = graph(
+        [
+            work("start"),
+            work("prepare", after=["start"]),
+            work("transfer", after=["prepare"]),
+            work("visit", after=["transfer"]),
+            work("independent"),
+        ],
+        [window(earliest=35, latest=50)],
+    )
+    g = TemporalGraph.read(raw)
+    for done in ({}, {"start": 10}):
+        plan = schedule(
+            g,
+            done,
+            region="A",
+            now=max(done.values(), default=0),
+            solver_seconds=budget,
+            **DISPATCH_POLICIES[policy],
+        )
+        by_id = {k: slot for slot in plan.slots for k in slot.job.members}
+        start = done["start"] if done else by_id["start"].end
+        assert (
+            start
+            <= by_id["prepare"].start
+            < by_id["transfer"].start
+            < by_id["visit"].start
+        )
+        assert start + 35 <= by_id["visit"].start and by_id["visit"].end <= start + 50
+        assert (
+            not done
+            and by_id["independent"].end <= by_id["start"].start
+            or by_id["independent"].start >= by_id["visit"].end
+        )
+
+
+@pytest.mark.parametrize("budget", [1.0, 0.000001])
+def test_relative_deadlines_leave_resources_available_and_preserve_bounds(budget):
+    # Two running deadlines coexist. Independent work fits before the first check.
+    raw = graph(
+        [work("s1"), work("s2"), work("v1"), work("v2"), work("other")],
+        [
+            window("s1", "v1", 42, 54, resource=None),
+            window("s2", "v2", 55, 70, resource=None),
+        ],
+    )
+    g = TemporalGraph.read(raw)
+    done = {"s1": 10, "s2": 20}
+    plan = schedule(g, done, region="A", now=20, serial=True, solver_seconds=budget)
+    by_id = {k: slot for slot in plan.slots for k in slot.job.members}
+    assert by_id["other"].end <= by_id["v1"].start
+    assert by_id["v1"].start >= 52 and by_id["v1"].end <= 64
+    assert by_id["v2"].start >= 75 and by_id["v2"].end <= 90
+    assert schedule(g, done, region="A", now=65, serial=True).status == "infeasible"
+    with pytest.raises(ValueError, match="origin and resource"):
+        g.repair(
+            {
+                "upsert": [],
+                "remove": [],
+                "windows": [dict(raw["windows"][0], resource="station")],
+            },
+            {"v1"},
+            done,
+        )
+
+
 @pytest.mark.parametrize(
     ("cap", "loc", "handling", "expected"),
     [(2, "A", 2, True), (1, "A", 2, False), (2, "B", 2, False), (2, "A", 100, False)],

@@ -34,7 +34,7 @@ SOURCE = {"type": "string", "enum": ["instruction", "estimate"]}
 WINDOW = obj(
     start=S,
     check=S,
-    resource=S,
+    resource={"anyOf": [S, {"type": "null"}]},
     earliest=I,
     latest=I,
     margin=I,
@@ -137,7 +137,7 @@ required predecessor ids, active HANDLING seconds EXCLUDING travel and passive w
 name and an observable postcondition. A different camera direction is not a different region.
 Model each autonomous process by a short startup node releasing the robot and a separate return/check
 node. Give the relative earliest check-start and latest check-COMPLETION and return margin, in robot
-seconds from startup completion. Mark a bound as instruction only when explicitly stated by the user, otherwise estimate. Use the same resource name for jobs sharing a device. These windows
+seconds from startup completion. Mark a bound as instruction only when explicitly stated by the user, otherwise estimate. Name the exclusive resource occupied by a running process. For a relative timing requirement with no occupied equipment, use resource=null. These windows
 schedule observations; a timer by itself does not prove a physical outcome. Do not require work to wait
 unless the user or physical prerequisites require it. Retain uncertainty about occluded things; seeing
 an open container is a different assertion from finding a particular object in it.
@@ -166,7 +166,8 @@ def order_correction_schema(nodes, positions):
 REPAIR = """Return only local edits to the supplied unfinished scope. State what new observation changes
 the method. Preserve verified work, unchanged user goals and existing ids. Keep terminal assertions
 verbatim. You can insert a prerequisite, revise work, reassign a region, or revise a process check
-time based on public evidence. A past estimated deadline is a missed forecast: inspect the process
+time based on public evidence. A relative deadline with no occupied equipment has resource=null.
+A past estimated deadline is a missed forecast: inspect the process
 now; do not call it cooked, lost or otherwise resolved without evidence. Include unchanged full fields
 for upserted nodes. Substantive replacement nodes must connect to existing obligations. Never treat a
 failed placement as a delivered object. If trustworthy progress is impossible, explicitly return blocked.

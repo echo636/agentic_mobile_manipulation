@@ -69,7 +69,7 @@ class Work:
 class Window:
     start: str
     check: str
-    resource: str
+    resource: str | None
     earliest: int
     latest: int
     margin: int
@@ -81,7 +81,7 @@ class Window:
         w = cls(
             word(r["start"]),
             word(r["check"]),
-            word(r["resource"]),
+            None if r["resource"] is None else word(r["resource"]),
             number(r["earliest"]),
             number(r["latest"], minimum=1),
             number(r["margin"]),
@@ -233,6 +233,27 @@ class TemporalGraph:
         if key in self.windows:
             deps.add(self.windows[key].start)
         return deps
+
+    def serial_process_work(self):
+        """Work that a serial robot must be able to do between process endpoints."""
+        deps = {key: self.dependencies(key) for key in self.nodes}
+        ancestors = {}
+        for key in TopologicalSorter(deps).static_order():
+            parents = deps[key]
+            ancestors[key] = parents.union(*(ancestors[p] for p in parents))
+        allowed = {}
+        for window in self.windows.values():
+            if window.resource is None:
+                continue
+            # A dependent intermediate step cannot be moved outside this interval.
+            members = {
+                k for k in ancestors[window.check] if window.start in ancestors[k]
+            }
+            members.update(
+                w.check for w in self.windows.values() if w.start == window.start
+            )
+            allowed[window.check] = members | {window.start}
+        return allowed
 
     def validate(self):
         if not self.nodes:
@@ -434,7 +455,7 @@ def candidates(graph, done, locations, grouping):
     return jobs
 
 
-def feasible_incumbent(graph, jobs, completed, region, now, locations, serial):
+def feasible_incumbent(graph, jobs, completed, region, now, locations, serial_work):
     """Construct a full, timed route to retain if exact search exhausts its solve budget."""
     done = dict(completed)
     position = region
@@ -447,6 +468,8 @@ def feasible_incumbent(graph, jobs, completed, region, now, locations, serial):
         ]
         origins = {}
         for w in active:
+            if w.resource is None:
+                continue
             if w.resource in origins and origins[w.resource] != w.start:
                 return []
             origins[w.resource] = w.start
@@ -460,11 +483,17 @@ def feasible_incumbent(graph, jobs, completed, region, now, locations, serial):
                 continue
             if job.carrier and carriers.get(job.carrier) != job.origin:
                 continue
-            if serial and active and not all(k in checks for k in job.members):
+            if any(
+                w.check in serial_work
+                and not serial_work[w.check].issuperset(job.members)
+                for w in active
+            ):
                 continue
             starting = [w for w in graph.windows.values() if w.start in job.members]
             if any(
-                w.resource == other.resource and other.check not in job.members
+                w.resource is not None
+                and w.resource == other.resource
+                and other.check not in job.members
                 for w in starting
                 for other in active
             ):
@@ -545,9 +574,9 @@ def schedule(
     jobs = candidates(graph, completed, locations, grouping and not serial)
     if not jobs:
         return Schedule("complete", [], monotonic() - t0)
-    reserve_process_intervals = serial or not overlap
+    serial_work = graph.serial_process_work() if serial or not overlap else {}
     incumbent = feasible_incumbent(
-        graph, jobs, completed, region, now, locations, reserve_process_intervals
+        graph, jobs, completed, region, now, locations, serial_work
     )
     max_travel = max([graph.unknown_travel, *graph.travel.values()])
     horizon = (
@@ -590,13 +619,14 @@ def schedule(
         )
         model.Add(begin[w.check] >= lower)
         model.Add(end[w.check] <= upper)
+        if w.resource is None:
+            # A relative deadline can constrain delivery without occupying a device.
+            continue
         # Operation at the machine and subsequent background phase share one device.
         resource_uses.setdefault((w.resource, w.start), []).append(end[w.check])
-        if reserve_process_intervals:
+        if w.check in serial_work:
             for k in remaining:
-                if k not in (w.start, w.check) and not (
-                    k in graph.windows and graph.windows[k].start == w.start
-                ):
+                if k not in serial_work[w.check]:
                     before = model.NewBoolVar("serial_before")
                     if w.start in completed:
                         model.Add(begin[k] >= end[w.check])
