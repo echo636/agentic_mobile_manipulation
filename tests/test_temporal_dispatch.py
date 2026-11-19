@@ -122,7 +122,9 @@ def carrier(cap=2, loc="A", handling=2):
         ("temporal", 151, True, True),
     ],
 )
-def test_independent_process_and_transport_modes(policy, makespan, grouped, interleaved):
+def test_independent_process_and_transport_modes(
+    policy, makespan, grouped, interleaved
+):
     tasks = [work("start"), work("visit"), work("prep", seconds=35)]
     tasks += [work(k, "B", "A", after=["visit"], load=1) for k in ("p", "q")]
     raw = graph(tasks, [window(earliest=80, latest=90)], [carrier(loc="B", handling=1)])
@@ -851,6 +853,134 @@ def test_inspection_only_repair_can_ground_one_click_then_expires():
     assert "current_inspection" not in fast.calls[2]
 
 
+def method_patch(options, **kwargs):
+    return dict(
+        outcome="repair",
+        reason="inspect the visible object",
+        upsert=[],
+        remove=[],
+        windows=[],
+        motor_options=options,
+        **kwargs,
+    )
+
+
+def test_repaired_options_scope_only_the_interrupted_work_and_survive_a_new_frame():
+    slow = Role(graph([work("x"), work("next", after=["x"])]), method_patch(["look"]))
+    fast = Role(
+        decision("anomaly"),
+        dict(decision(op="look"), yaw=30),
+        decision("done", op="none"),
+        decision(op="open"),
+    )
+    c = DispatchController(
+        "inspect", ["open", "grasp"], slow, fast, repair_motor_options=True
+    )
+    c.observe(camera(0, 0))
+    assert c.next() == ("look", {"revision": 0, "yaw_degrees": 30})
+    assert slow.calls[-1]["method_for"] == ["x"]
+    assert set(slow.calls[-1]["available_motors"]) == {"open", "grasp", "look"}
+    assert "repaired_motor_options" not in fast.calls[0] and fast.calls[1][
+        "primitives"
+    ] == ["look"]
+    c.observe(camera(1, 2))
+    assert c.next()[1]["primitive"] == "open"
+    assert fast.calls[2]["repaired_motor_options"] == ["look"]
+    assert "repaired_motor_options" not in fast.calls[3] and not c.methods
+
+
+@pytest.mark.parametrize("options", [[], ["unknown"], "look"])
+def test_invalid_repair_options_are_retried_atomically(options):
+    patch = method_patch(options)
+    slow = Role(graph([work("x")]), patch, method_patch(["open"]))
+    fast = Role(decision("anomaly"), decision(op="open"))
+    c = DispatchController("inspect", ["open"], slow, fast, repair_motor_options=True)
+    c.observe(camera(0, 0))
+    assert c.next()[1]["primitive"] == "open" and not c.completed
+    assert "public commands" in slow.calls[-1]["edit_error"]
+    assert c.methods == {frozenset({"x"}): ("open",)}
+
+
+def test_out_of_method_action_cannot_apply_beliefs_or_issue_a_motor():
+    fact = dict(
+        subject="room",
+        relation="state",
+        value="changed",
+        certainty="seen",
+        view="front",
+    )
+    blocked = dict(method_patch(None), outcome="blocked")
+    slow = Role(graph([work("x")]), method_patch(["look"]), blocked)
+    fast = Role(decision("anomaly"), dict(decision(op="grasp"), changes=[fact]))
+    c = DispatchController("inspect", ["grasp"], slow, fast, repair_motor_options=True)
+    c.observe(camera(0, 0))
+    assert c.next()[1]["outcome"] == "blocked"
+    assert not c.completed and not c.memory.facts and c.pending is None
+
+
+def test_slow_model_can_reopen_motor_choice_without_changing_the_work():
+    slow = Role(graph([work("x")]), method_patch(["look"]), method_patch(None))
+    second = dict(decision("anomaly"), evidence="a different method is needed")
+    fast = Role(decision("anomaly"), second, decision(op="open"))
+    c = DispatchController("inspect", ["open"], slow, fast, repair_motor_options=True)
+    c.observe(camera(0, 0))
+    assert c.next()[1]["primitive"] == "open"
+    assert slow.calls[-1]["previous_motor_options"] == ("look",)
+    assert not c.methods and "repaired_motor_options" not in fast.calls[-1]
+
+
+def test_default_repair_does_not_change_fast_vocabulary():
+    patch = method_patch(
+        ["look"], inspection={"node": "x", "view": "front", "x": 0.4, "y": 0.5}
+    )
+    slow = Role(graph([work("x")]), patch)
+    fast = Role(decision("anomaly"), decision(op="open"))
+    c = DispatchController("inspect", ["open"], slow, fast)
+    c.observe(camera(0, 0))
+    assert c.next()[1]["primitive"] == "open"
+    assert (
+        "method_for" not in slow.calls[-1]
+        and "repaired_motor_options" not in fast.calls[-1]
+    )
+
+
+def test_a_group_method_neither_leaks_to_a_member_nor_suggests_an_incompatible_macro():
+    from manipulation_agent.agent.temporal_graph import Job
+    from manipulation_agent.agent.temporal_models import INSPECT_DECISION, method_schema
+    from manipulation_agent.clients.visual_coordinates import pixel_request
+
+    c = DispatchController("inspect", ["grasp"], None, None, repair_motor_options=True)
+    c.observe(camera(0, 0))
+    c.graph = TemporalGraph.read(graph([work("a"), work("b")]))
+    c.methods = {frozenset({"a", "b"}): ("look",)}
+    c.memory.macros["transfer"] = ("grasp",)
+    c.active = Job(("a",), "A", "A", 10)
+    single = c.context([c.graph.nodes["a"]], "transfer", [])
+    assert (
+        "repaired_motor_options" not in single
+        and single["macro_next_primitive"] == "grasp"
+    )
+    c.active = Job(("b", "a"), "A", "A", 20)
+    multi = c.context(list(c.graph.nodes.values()), "transfer", [])
+    assert (
+        multi["repaired_motor_options"] == ["look"]
+        and multi["macro_next_primitive"] is None
+    )
+    constrained = method_schema(
+        INSPECT_DECISION, multi["repaired_motor_options"], repair=False
+    )
+    parts = c.camera.parts() + [
+        dict(type="input_text", text="Current RGB inspection"),
+        c.camera.image("front"),
+    ]
+    packet, views = pixel_request(
+        {"instructions": "observe", "images": parts, "schema": constrained}, 512 * 512
+    )
+    assert "inspection" in views and packet["schema"]["properties"]["primitive"][
+        "enum"
+    ] == ["look", "none"]
+
+
 def test_declared_precedence_is_enforced_even_if_successor_omits_redundant_after_edge():
     raw = graph([work("wipe", "B"), work("place", "A")])
     raw["required_order"] = [{"first": "wipe", "then": "place"}]
@@ -933,7 +1063,7 @@ def test_existing_batch_entry_point_initializes_the_temporal_client(
     cmd = runpy.run_path(
         str(Path(__file__).resolve().parents[1] / "scripts/run_codex_controller.py")
     )
-    flags = ["--no-repair-inspection"] if disabled else []
+    flags = ["--no-repair-inspection", "--repair-motor-options"] if disabled else []
     assert (
         cmd["main"](
             [
@@ -961,4 +1091,5 @@ def test_existing_batch_entry_point_initializes_the_temporal_client(
     args = seen[0]
     assert args.dispatch_policy == policy
     assert args.no_repair_inspection == disabled and args.timeout == 0
+    assert args.repair_motor_options == disabled
     assert args.reasoning_effort == "low" and args.fast_vision_port == 18087

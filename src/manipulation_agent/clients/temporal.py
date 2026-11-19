@@ -77,6 +77,7 @@ def run(args):
         "fast_effort": None if args.fast_vision_port else args.reasoning_effort,
         "fast_backend": "local_qwen" if args.fast_vision_port else "codex",
         "repair_inspection": not args.no_repair_inspection,
+        "repair_motor_options": getattr(args, "repair_motor_options", False),
         "host": os.uname().nodename,
         "pid": os.getpid(),
         "interpreter": sys.executable,
@@ -139,6 +140,7 @@ def run(args):
             native("slow", args.planner_model, args.planner_reasoning_effort),
             fast,
             repair_inspection=not args.no_repair_inspection,
+            repair_motor_options=meta["repair_motor_options"],
             log=log,
             **DISPATCH_POLICIES[args.dispatch_policy],
         )
@@ -210,6 +212,11 @@ def main():
         help="Ablate optional current-camera crops proposed by local repairs",
     )
     p.add_argument("--model-provider-profile")
+    p.add_argument(
+        "--repair-motor-options",
+        action="store_true",
+        help="Allow a local repair to bind the motor vocabulary for the interrupted work",
+    )
     p.add_argument("--model-provider-gateway")
     p.add_argument("--execution-clock-command-json")
     p.set_defaults(timeout=0, deadline_unix=None)

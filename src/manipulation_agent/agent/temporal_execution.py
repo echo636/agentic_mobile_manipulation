@@ -20,9 +20,11 @@ from .temporal_models import (
     INSPECT_GROUND,
     INSPECT_PATCH,
     INSPECT_REPAIR,
+    METHOD_REPAIR,
     ORDER_CORRECTION,
     PATCH,
     REPAIR,
+    method_schema,
     order_correction_schema,
 )
 
@@ -40,6 +42,7 @@ class DispatchController:
         overlap=True,
         log=None,
         repair_inspection=True,
+        repair_motor_options=False,
     ):
         self.instruction = instruction
         self.catalog = tuple(catalog)
@@ -50,6 +53,8 @@ class DispatchController:
         self.log = log or (lambda kind, **row: None)
         self.memory = DeltaMemory()
         self.repair_inspection = repair_inspection
+        self.repair_motor_options = repair_motor_options
+        self.methods = {}
         self.inspection = None
         self.completed = {}
         self.carriers = {}
@@ -141,6 +146,14 @@ class DispatchController:
                 )
         if focus:
             images += focus.parts(self.camera)
+        options = context.get("repaired_motor_options") if role == "fast" else None
+        if options:
+            schema = method_schema(schema, options, repair=False)
+            instructions += (
+                "\nThe local repair specified motor options for this work. Choose one for act. "
+                "Use primitive=none for done or anomaly. Report an anomaly if the method needs "
+                "a different action. Completion still requires current visual evidence."
+            )
         self.log(
             "model_call",
             role=role,
@@ -240,15 +253,49 @@ class DispatchController:
             "memory": self.memory.context(reason),
         }
         self.memory.remember_frame(("anomaly", reason[:60]), self.camera, "front")
+        members = frozenset(keys)
+        bind_method = (
+            self.repair_motor_options
+            and self.active is not None
+            and members == set(self.active.members)
+        )
+        instructions = REPAIR + INSPECT_REPAIR if self.repair_inspection else REPAIR
+        schema = INSPECT_PATCH if self.repair_inspection else PATCH
+        if bind_method:
+            catalog = list(dict.fromkeys((*self.catalog, "look")))
+            context.update(
+                method_for=sorted(members),
+                available_motors=catalog,
+                previous_motor_options=self.methods.get(members),
+            )
+            instructions += METHOD_REPAIR
+            schema = method_schema(schema, catalog, repair=True)
         for _ in range(2):
-            instructions = REPAIR + INSPECT_REPAIR if self.repair_inspection else REPAIR
-            schema = INSPECT_PATCH if self.repair_inspection else PATCH
             patch = self.ask("repair", instructions, schema, context, history=reason)
             if patch["outcome"] == "blocked":
                 self.log("reported_blocked", reason=patch["reason"])
                 return False
             try:
                 graph = self.graph.repair(patch, scope, self.completed)
+                methods = {
+                    group: options
+                    for group, options in self.methods.items()
+                    if all(graph.nodes.get(k) == self.graph.nodes[k] for k in group)
+                }
+                if bind_method:
+                    options = patch["motor_options"]
+                    methods.pop(members, None)
+                    if options is not None:
+                        if (
+                            not isinstance(options, list)
+                            or not options
+                            or any(op not in catalog for op in options)
+                            or not members <= graph.nodes.keys()
+                        ):
+                            raise ValueError(
+                                "Motor options require public commands and surviving interrupted work"
+                            )
+                        methods[members] = tuple(op for op in catalog if op in options)
                 proposed = patch.get("inspection") if self.repair_inspection else None
                 eligible = (
                     scope | (graph.nodes.keys() - self.graph.nodes.keys())
@@ -258,12 +305,17 @@ class DispatchController:
                     if proposed is not None
                     else None
                 )
-                if graph == self.graph and (focus is None or focus == self.inspection):
+                if (
+                    graph == self.graph
+                    and methods == self.methods
+                    and (focus is None or focus == self.inspection)
+                ):
                     raise ValueError("The repair did not change the failed method")
             except (TypeError, ValueError, KeyError) as exc:
                 context["edit_error"] = str(exc)[:400]
                 continue
             self.graph = graph
+            self.methods = methods
             self.inspection = focus
             self.active = None
             self.previous_selection = None
@@ -409,9 +461,12 @@ class DispatchController:
             if cursor < len(macro) and tuple(performed) == macro[:cursor]
             else None
         )
+        options = self.methods.get(frozenset(self.active.members))
+        if options and next_primitive not in options:
+            next_primitive = None
         if next_primitive:
             self.log("macro_step", skill=skill, index=cursor, primitive=next_primitive)
-        return {
+        context = {
             "task": self.instruction,
             "selected": [
                 {"id": n.id, "work": n.work, "assertion": n.assertion} for n in nodes
@@ -428,12 +483,25 @@ class DispatchController:
             "macro_next_primitive": next_primitive,
             "actions_on_this_work": self.operations.get(self.active.members, [])[-8:],
         }
+        if options:
+            context["primitives"] = list(options)
+            context["repaired_motor_options"] = list(options)
+        return context
 
     def ground(self, nodes, skill, windows):
         context = self.context(nodes, skill, windows)
         work = " ".join(n.work for n in nodes)
         for _ in range(2):
             answer = self.ask("fast", GROUND, DECISION, context, history=work)
+            options = context.get("repaired_motor_options")
+            if (
+                options
+                and answer["decision"] == "act"
+                and answer["primitive"] not in options
+            ):
+                raise ValueError(
+                    "Proposed motor action is outside the selected work's repaired method"
+                )
             if answer["decision"] != "act" or not answer["verified"]:
                 return answer
             self.log(
@@ -464,6 +532,11 @@ class DispatchController:
                 "Each dispatched obligation needs its own current visual evidence"
             )
         self.completed.update(dict.fromkeys(job.members, self.clock))
+        self.methods = {
+            group: value
+            for group, value in self.methods.items()
+            if group.isdisjoint(job.members)
+        }
         trip = self.travel_sample
         if trip and trip["count"]:
             metres = (

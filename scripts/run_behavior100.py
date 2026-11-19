@@ -1195,6 +1195,8 @@ class Batch:
                 cmd += ['--dispatch-policy',self.manifest['dispatch_policy']]
                 if self.manifest.get('repair_inspection') is False:
                     cmd.append('--no-repair-inspection')
+                if self.manifest.get('repair_motor_options') is True:
+                    cmd.append('--repair-motor-options')
                 if self.c.get('fast_vision_port'):
                     cmd += ['--fast-vision-port',str(self.c['fast_vision_port'])]
             if self.manifest.get('action_feedback'):
@@ -1514,6 +1516,8 @@ class Batch:
             cmd += ['--dispatch-policy',self.manifest['dispatch_policy']]
             if self.manifest.get('repair_inspection') is False:
                 cmd.append('--no-repair-inspection')
+            if self.manifest.get('repair_motor_options') is True:
+                cmd.append('--repair-motor-options')
             if self.c.get('fast_vision_port'):
                 cmd += ['--fast-vision-port',str(self.c['fast_vision_port'])]
         if self.manifest.get('action_feedback'):

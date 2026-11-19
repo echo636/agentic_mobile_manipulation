@@ -111,6 +111,23 @@ proposed by the local repair. Inspect its contents yourself. To point inside thi
 and report coordinates relative to the entire crop. To point in a full current view, choose that view instead.
 A proposed crop alone cannot establish identity or success."""
 
+METHOD_REPAIR = """ You may specify motor_options for the exact interrupted work in method_for.
+Choose the public motor primitives needed to carry out or inspect the revised method, including any
+needed observation and movement. Use null to leave the choice open. Options bind only if the same
+work is dispatched again. They do not execute a command or certify a result."""
+
+
+def method_schema(schema, catalog, *, repair):
+    choice = {"type": "string", "enum": list(catalog)}
+    if repair:
+        return obj(
+            **schema["properties"],
+            motor_options={"anyOf": [arr(choice), {"type": "null"}]},
+        )
+    return obj(
+        **{**schema["properties"], "primitive": {**choice, "enum": [*catalog, "none"]}}
+    )
+
 
 COMPILE = """Compile the user's request into a single mobile robot's remaining work, using only the
 current RGB and user information. Include one required_outcomes node id for every explicit user outcome, even when other work depends on it. List explicit user order relations in required_order. Both first and then must contain a single exact node id; split multi-node conditions into individual pairs. Preserve required order and terminal outcomes. Unobserved facts,
