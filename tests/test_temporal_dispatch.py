@@ -472,3 +472,26 @@ def test_time_limited_search_can_dispatch_a_complete_feasible_route():
         a.end + g.distance(a.job.destination, b.job.origin) <= b.start
         for a, b in zip(res.slots, res.slots[1:])
     )
+
+
+def test_qwen_declared_pixels_map_to_the_original_view_and_reject_padding():
+    from manipulation_agent.agent.temporal_models import GROUND, DECISION
+    from manipulation_agent.clients.visual_coordinates import (
+        pixel_request,
+        motor_decision,
+    )
+
+    obs = camera(0, 0)
+    req, views = pixel_request(
+        dict(instructions=GROUND, schema=DECISION, images=obs.parts()), 512 * 512
+    )
+    assert (
+        "x_pixel" in req["schema"]["properties"]
+        and "x" not in req["schema"]["properties"]
+    )
+    left, top, w, h = views["front"]
+    raw = {**decision(), "x_pixel": left + w - 1, "y_pixel": top + h - 1}
+    assert motor_decision(raw, views)["x"] == 1 and motor_decision(raw, views)["y"] == 1
+    assert top > 0
+    with pytest.raises(ValueError):
+        motor_decision({**raw, "y_pixel": 0}, views)

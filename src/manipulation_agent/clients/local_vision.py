@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.request import ProxyHandler, Request, build_opener
 
 from ..mcp_server import loopback_host
+from .visual_coordinates import pixel_request, motor_decision
 
 
 class LocalVisualRole:
@@ -32,6 +33,7 @@ class LocalInference:
         from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
         import torch
 
+        self.pixels = pixels
         self.processor = AutoProcessor.from_pretrained(
             path, local_files_only=True, min_pixels=4 * 28 * 28, max_pixels=pixels
         )
@@ -48,6 +50,7 @@ class LocalInference:
         from PIL import Image
         from jsonschema import validate, ValidationError
 
+        data, views = pixel_request(data, self.pixels)
         photos = []
         content = [
             {"type": "text", "text": json.dumps(data["context"], ensure_ascii=False)}
@@ -89,7 +92,7 @@ class LocalInference:
                     answer.strip().removeprefix("```json").removesuffix("```").strip()
                 )
                 validate(result, data["schema"])
-                return result
+                return motor_decision(result, views)
             except (ValueError, ValidationError) as exc:
                 if attempt:
                     raise ValueError(
