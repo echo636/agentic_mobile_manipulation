@@ -88,6 +88,22 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(y.structuredContent)
                 self.assertEqual(planner_parts(x)[1],planner_parts(y)[1])
 
+    async def test_transport_failure_leaves_no_pre_action_image_to_inspect_after_reconnect(self):
+        for broken in (RuntimeError('lost camera reply'), types.CallToolResult(content=[txt('motor unavailable')])):
+            with tempfile.TemporaryDirectory() as tmp:
+                upstream = SimpleNamespace(list_tools=AsyncMock(return_value=types.ListToolsResult(
+                    tools=[types.Tool(**s) for s in tool_specs('basic-skills')])),
+                    call_tool=AsyncMock(side_effect=[packet(0),broken]))
+                path = Path(tmp) / 'state.json'
+                server = await create_server(upstream, dict(mode='evidence', state=str(path)))
+                await server.call_tool('initialize', {})
+                result = await server.call_tool('act', cmd('grasp', 0))
+                self.assertEqual(body(result)['error']['code'], 'observation_unavailable')
+                self.assertEqual(len(result.content), 1)
+                f = Feedback('evidence', path)
+                self.assertIsNone(f.observation)
+                self.assertTrue(f.inspect(dict(revision=0,image_ref='front-0',point=[.5,.5])).isError)
+
     def test_unlabelled_simulator_attachment_is_not_a_gripper_measurement(self):
         for mode in ('sensor_only', 'evidence'):
             for state in ('empty', 'holding'):

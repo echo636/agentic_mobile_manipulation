@@ -98,7 +98,9 @@ class VisionHarness:
     def start_standalone_clock(self): return LegacyPlanHelpers.start_standalone_clock(self)
 
     def initialize(self):
-        """Deliver the ready episode snapshot without reset, physics or rendering."""
+        """Reuse the ready snapshot, or retry readback after a motor invalidated it."""
+        if self.snapshot['revision'] != self.revision:
+            self.refresh()
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
         if hasattr(self.backend,'local_manipulation'):
             result['control']={'manipulation':
@@ -245,7 +247,8 @@ class VisionHarness:
 
     def perform(self,primitive,target,revision,*,_parent_request_id=None,**kwargs):
         self.deadline.check()
-        if revision!=self.revision: raise SkillError('stale_observation','Use the latest observation revision')
+        if revision != self.revision or self.snapshot['revision'] != self.revision:
+            raise SkillError('stale_observation','Initialize to obtain the latest observation revision')
         if self.legacy_limits_active and (
                 self.actions>=self.budget.max_actions or self.backend.steps>=self.budget.max_sim_steps):
             raise SkillError('budget_exhausted','Action/step budget exhausted')

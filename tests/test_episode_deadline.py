@@ -160,6 +160,21 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.assertNotIn('observation', reply)
         self.assertEqual(self.backend.capture, before)
 
+    def test_failed_camera_readback_cannot_republish_older_pixels_on_recovery(self):
+        prior = self.h.snapshot
+        with patch.object(self.backend, 'observe', side_effect=RuntimeError('camera readback failed')):
+            with self.assertRaisesRegex(RuntimeError, 'readback'):
+                self.act()
+        # A reconnecting caller can know the incremented revision but still has only old pixels.
+        rejected = self.act('before-reinitialize')
+        self.assertEqual(rejected['error']['code'], 'stale_observation')
+        self.assertNotIn('observation', rejected)
+        self.assertEqual(self.h.actions, 1)
+        recovered = self.h.call('initialize', {}, 'recover')['observation']
+        self.assertEqual(recovered['revision'], prior['revision'] + 1)
+        self.assertNotEqual(recovered['images'][0]['image_ref'], prior['images'][0]['image_ref'])
+        self.assertEqual(self.h.call('initialize', {}, 'reuse')['observation'], recovered)
+
     def test_evaluator_failure_is_missing_score_not_false_or_fabricated_q(self):
         self.backend.evaluate=Mock(side_effect=ValueError('invalid evaluator state'))
         reply=self.h.call('finish',{'outcome':'blocked','reason':'fixture'},'finish')

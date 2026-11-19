@@ -6,6 +6,7 @@ import asyncio
 import base64
 import io
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -181,9 +182,18 @@ class Feedback:
         return self.render({'ok': True, 'observation': self.observation,
                             'evidence_id': receipt_id('inspect_target', args, self.observation), 'hand': {'state': self.memory.occupancy}}, inspection=crop)
 
+    def invalidate(self, code='observation_unavailable'):
+        self.current = {}
+        self.observation = None
+        self.memory = EvidenceMemory()
+        self.persist()
+        return reply({'ok': False, 'error': {'code': code}}, error=True)
+
     def receive(self, name, args, upstream):
         first = upstream.content[0] if upstream.content else None
         if first is None or first.type != 'text' or not first.text.startswith('{'):
+            if name in CAMERA_TOOLS:
+                return self.invalidate()
             return reply({'ok': False, 'error': {'code': 'upstream_unavailable'}}, error=True)
         raw = json.loads(first.text)
         body = public_result(name, args, raw)
@@ -195,12 +205,8 @@ class Feedback:
                          (raw.get('observation') or {}).get('revision') == args['revision'])
         missing = 'observation' not in raw and body['ok']
         if name in CAMERA_TOOLS and (stopped or same_revision or missing):
-            self.current = {}
-            self.observation = None
-            self.memory = EvidenceMemory()
-            self.persist()
             code = raw['error']['code'] if stopped else 'observation_unavailable'
-            return reply({'ok': False, 'error': {'code': code}}, error=True)
+            return self.invalidate(code)
         if name not in CAMERA_TOOLS or 'observation' not in raw:
             return reply(body, error=not body['ok'])
         obs, current, reference, history = attachments(raw, upstream.content)
@@ -259,8 +265,16 @@ async def create_server(session, config):
                     feedback = Feedback(config['mode'], state)
                     if name == 'inspect_target':
                         return feedback.inspect(args)
-                    upstream = await session.call_tool(name, args)
-                    return feedback.receive(name, args, upstream)
+                    try:
+                        upstream = await session.call_tool(name, args)
+                        return feedback.receive(name, args, upstream)
+                    except asyncio.CancelledError:
+                        feedback.invalidate()
+                        raise
+                    except Exception as exc:
+                        # The motor may have moved before the transport or image check failed.
+                        logging.getLogger(__name__).warning('Camera reply unavailable (%s)', type(exc).__name__)
+                        return feedback.invalidate()
         return invoke
     return FastMCP('robot-rgb-feedback', log_level='WARNING', tools=[
         Tool(name=t.name, description=t.description or '', parameters=t.inputSchema,
