@@ -43,7 +43,12 @@ def receipt_id(name, args, observation):
 
 
 def public_hand(raw):
-    value = (raw.get('hand') or {}).get('state')
+    hand = raw.get('hand') or {}
+    # Older simulated grippers report their attachment constraint as occupancy.
+    # A measured gripper reading must identify its source before it can cross this boundary.
+    if hand.get('source') != 'gripper_sensor':
+        return 'unavailable'
+    value = hand.get('state')
     return value if value in ('holding', 'empty') else 'unavailable'
 
 

@@ -32,7 +32,7 @@ def packet(rev, hand='empty', *, ref=False, poison=False):
         parts.append(types.ImageContent(type='image', mimeType='image/png', data=base64.b64encode(raw).decode()))
     body = dict(ok=True, initialized=True, observation=dict(observation_mode='rgb_only', revision=rev, images=images))
     if hand is not None:
-        body['hand'] = dict(state=hand)
+        body['hand'] = dict(state=hand, source='gripper_sensor')
     if ref:
         body['reference_image'] = dict(revision=0, image={**images[0], 'image_ref': 'old-front'})
         parts.append(parts[0])
@@ -86,6 +86,18 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn('PRIVATE',y.model_dump_json())
                 self.assertIsNone(y.structuredContent)
                 self.assertEqual(planner_parts(x)[1],planner_parts(y)[1])
+
+    def test_unlabelled_simulator_attachment_is_not_a_gripper_measurement(self):
+        for mode in ('sensor_only', 'evidence'):
+            for state in ('empty', 'holding'):
+                original = packet(0, state)
+                raw = json.loads(original.content[0].text)
+                del raw['hand']['source']
+                raw['hand']['grasp_source'] = {'private_object': 'fixture'}
+                original.content[0] = txt(raw)
+                result = Feedback(mode).receive('initialize', {}, original)
+                self.assertEqual(body(result)['hand'], {'state':'unavailable'})
+                self.assertNotIn('private_object', result.content[0].text)
 
     def test_grasp_occupancy_is_separate_from_selection(self):
         with tempfile.TemporaryDirectory() as root:
