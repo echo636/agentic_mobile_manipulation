@@ -250,6 +250,57 @@ def test_normal_episode_once_compiled_current_pixels_and_no_slow_repair():
     assert len(slow.calls) == 1 and len(fast.calls) == 2
 
 
+@pytest.mark.parametrize("resolution", ["done", "act", "conflict"])
+def test_contradictory_grounding_is_clarified_before_any_effect(resolution):
+    claimed = decision("done")
+    conflict = {
+        **claimed,
+        "decision": "act",
+        "changes": [
+            {
+                "subject": "object",
+                "relation": "state",
+                "value": "unconfirmed",
+                "view": "front",
+                "certainty": "seen",
+            }
+        ],
+    }
+    reply = {"done": claimed, "act": decision(op="look"), "conflict": conflict}[
+        resolution
+    ]
+    if resolution == "act":
+        reply = {**reply, "yaw": 30}
+    slow = Role(graph([work("x")]), {"outcome": "blocked", "reason": "State unclear"})
+    fast = Role(conflict, reply)
+    events = []
+    controller = DispatchController(
+        "task",
+        ["open"],
+        slow,
+        fast,
+        log=lambda kind, **data: events.append((kind, data)),
+    )
+    controller.observe(camera(0, 0))
+
+    tool, args = controller.next()
+    assert len(fast.calls) == 2 and "response_conflict" in fast.calls[1]
+    requests = [e for k, e in events if k == "model_call" and e["role"] == "fast"]
+    assert [(e["revision"], e["image_count"]) for e in requests] == [(0, 4), (0, 4)]
+    assert not controller.memory.facts and controller.clock == 0
+    motors = [e["op"] for k, e in events if k == "motor_request"]
+    if resolution == "done":
+        assert (tool, args["outcome"]) == ("finish", "achieved")
+        assert controller.completed == {"x": 0} and not motors and len(slow.calls) == 1
+    elif resolution == "act":
+        assert tool == "look" and args["yaw_degrees"] == 30 and motors == ["look"]
+        assert not controller.completed and len(slow.calls) == 1
+    else:
+        assert (tool, args["outcome"]) == ("finish", "blocked")
+        assert not controller.completed and not motors and len(slow.calls) == 2
+        assert "twice" in slow.calls[-1]["event"]
+
+
 def test_timer_preempts_slow_work_but_early_check_cannot_stop_process():
     g = kitchen(1, 40)
     g["windows"] = [window(earliest=40, latest=51, margin=1)]

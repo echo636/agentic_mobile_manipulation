@@ -415,6 +415,33 @@ class DispatchController:
             "actions_on_this_work": self.operations.get(self.active.members, [])[-8:],
         }
 
+    def ground(self, nodes, skill, windows):
+        context = self.context(nodes, skill, windows)
+        work = " ".join(n.work for n in nodes)
+        for _ in range(2):
+            answer = self.ask("fast", GROUND, DECISION, context, history=work)
+            if answer["decision"] != "act" or not answer["verified"]:
+                return answer
+            self.log(
+                "grounding_conflict",
+                revision=self.camera.revision,
+                primitive=answer["primitive"],
+                claimed=[item["id"] for item in answer["verified"]],
+            )
+            context = {
+                **context,
+                "response_conflict": (
+                    "Your response both requested an action and marked work verified. "
+                    "Reassess the same current images. Use done only with visible evidence "
+                    "for each selected assertion. An action requires an empty verified list. "
+                    "If the required state cannot be distinguished, seek an informative "
+                    "observation or report an anomaly."
+                ),
+            }
+        raise ValueError(
+            "Grounder twice requested action and verification on the same frame"
+        )
+
     def complete(self, decision, skill):
         job = self.active
         evidence = {row["id"]: row["evidence"].strip() for row in decision["verified"]}
@@ -581,15 +608,8 @@ class DispatchController:
                 return "finish", {"outcome": "blocked", "reason": event}
             nodes = [self.graph.nodes[k] for k in job.members]
             skill = ("batch " if job.carrier else "") + nodes[0].skill
-            context = self.context(nodes, skill, windows)
             try:
-                decision = self.ask(
-                    "fast",
-                    GROUND,
-                    DECISION,
-                    context,
-                    history=" ".join(n.work for n in nodes),
-                )
+                decision = self.ground(nodes, skill, windows)
                 request = self.advance(decision, skill, windows)
             except (ValueError, KeyError, TypeError) as exc:
                 reason = str(exc)[:600]
