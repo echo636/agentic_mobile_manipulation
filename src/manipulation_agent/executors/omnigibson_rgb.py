@@ -24,7 +24,7 @@ from .local_manipulation import LocalLimits
 
 # A single completed RTX frame can still blend in the old material. The
 # fixed-pose switch test needs additional rendered frames at unchanged time.
-OBSERVATION_RENDER_PASSES = 13
+OBSERVATION_RENDER_PASSES = 64
 
 class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
@@ -87,7 +87,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if self.video_render_stride not in (1,2,3): raise ValueError("Video render stride must be 1, 2 or 3")
         self.video_render_flushes = int(os.environ.get('MAS_VIDEO_RENDER_FLUSHES', '4'))
         if self.video_render_flushes not in (2, 3, 4):
-            raise ValueError('Video render flushes must be 2, 3 or 4; observation barriers stay at 4')
+            raise ValueError('Video render flushes must be 2, 3 or 4')
         self._recorded_pixels = None
         self._recorded_capture_step = None
         self.spectator = None

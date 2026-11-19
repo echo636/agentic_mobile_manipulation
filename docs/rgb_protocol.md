@@ -15,7 +15,7 @@ OmniGibson draws a marker on switchable devices and colors it from the native sw
 ## Observation and action contract
 
 The simulator captures the four current views after the motor call returns. At the
-chosen pose the rig completes 13 zero-time Replicator renders before reading the
+chosen pose the rig completes 64 zero-time Replicator renders before reading the
 sensor buffers. Earlier frames can retain the previous color of a surface that
 changed abruptly. The simulator records the PhysX step, clock, and robot pose on
 both sides of capture. An object released in motion can keep moving on the next
