@@ -214,7 +214,7 @@ class Feedback:
         if rev != prev:
             if (name in ('act', 'look') and self.enabled and prev is not None and
                     args.get('revision') == prev and rev == prev + 1 and body['ok']):
-                self.memory.action(args.get('primitive', name), args.get('target'), self.current, prev, hand)
+                self.memory.action(args.get('primitive', name), args.get('target'), self.current, current, prev, hand)
             else:
                 self.memory = EvidenceMemory()
         self.memory.observation(hand)

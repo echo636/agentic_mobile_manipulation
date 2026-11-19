@@ -21,14 +21,15 @@ from manipulation_agent.agent.planning_subagent import PlanningSubagent
 from manipulation_agent.tools import tool_specs
 
 
-def packet(rev, hand='empty', *, ref=False, poison=False):
+def packet(rev, hand='empty', *, ref=False, poison=False, front=None):
     images, parts = [], []
     for view in ('front', 'back', 'left', 'right'):
         buf = io.BytesIO()
-        Image.new('RGB', (120, 80), (33, 60, rev)).save(buf, format='PNG')
+        image = front if view == 'front' and front is not None else Image.new('RGB', (120, 80), (33, 60, rev))
+        image.save(buf, format='PNG')
         raw = buf.getvalue()
-        images.append(dict(view=view, image_ref=f'{view}-{rev}', mime_type='image/png', width=120,
-                           height=80, sha256=digest(raw)))
+        images.append(dict(view=view, image_ref=f'{view}-{rev}', mime_type='image/png', width=image.width,
+                           height=image.height, sha256=digest(raw)))
         parts.append(types.ImageContent(type='image', mimeType='image/png', data=base64.b64encode(raw).decode()))
     body = dict(ok=True, initialized=True, observation=dict(observation_mode='rgb_only', revision=rev, images=images))
     if hand is not None:
@@ -124,8 +125,31 @@ class EvidenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(a,b)
         f.receive('act',cmd('place_inside',1),packet(2,None))
         f.receive('initialize',{},packet(0,None))
-        self.assertIsNone(f.memory.grasp)
+        self.assertEqual(f.memory.grasp['image_ref'], 'front-0')
         self.assertEqual(f.observation['revision'],2)
+
+    def test_visually_unchanged_unmeasured_grasps_preserve_earlier_selection(self):
+        original = Image.new('RGB', (512, 512), 'black')
+        moved = original.copy()
+        moved.paste('white', (244, 244, 268, 268))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'state.json'
+            f = Feedback('evidence', path)
+            f.receive('initialize', {}, packet(0, None, front=original))
+            f.receive('act', cmd('grasp', 0, (.5,.5)), packet(1, None, front=moved))
+            f.receive('act', cmd('grasp', 1), packet(2, None, front=moved))
+            f = Feedback('evidence', path)
+            result = body(f.receive('act', cmd('grasp', 2), packet(3, None, front=moved, poison=True)))
+            info = result['visual_evidence']
+            self.assertEqual(info['repeated_similar_images']['count'], 2)
+            self.assertEqual([r['original']['image_ref'] for r in info['rows']], ['front-0','front-2'])
+            self.assertEqual(result['hand']['state'], 'unavailable')
+            # A subsequent small local change is visible even with a nearly identical full-view average.
+            result = body(f.receive('act', cmd('grasp', 3, (.5,.5)), packet(4, None, front=original)))
+            self.assertNotIn('repeated_similar_images', result['visual_evidence'])
+            self.assertEqual(f.memory.grasp['image_ref'], 'front-3')
+            f.receive('act', cmd('place_inside', 4, (.5,.5)), packet(5, None, front=moved))
+            self.assertIsNone(f.memory.grasp)
 
     def test_only_selected_geometry_and_readonly(self):
         f=Feedback('evidence')

@@ -5,7 +5,7 @@ import hashlib
 import io
 import math
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageStat
 
 INSPECT_TOOL = {
     'name': 'inspect_target',
@@ -76,6 +76,28 @@ def distance(left, right):
     return sum(abs(a-b) for a, b in zip(left, right)) / len(left)
 
 
+def similar_action_views(previous, current, selection):
+    """Compare delivered pixels, including a small target that disappears in a full-view average."""
+    old = {frame['view']: frame for frame in previous.values()}
+    if not old or set(old) != {frame['view'] for frame in current}:
+        return False
+
+    def similar(left, right, size):
+        a = left.convert('L').resize(size, Image.Resampling.BOX)
+        b = right.convert('L').resize(size, Image.Resampling.BOX)
+        return ImageStat.Stat(ImageChops.difference(a, b)).mean[0] <= 2
+
+    for frame in current:
+        before, after = load_rgb(old[frame['view']]), load_rgb(frame)
+        if before.size != after.size or not similar(before, after, (32, 32)):
+            return False
+        if selection and frame['view'] == selection['view']:
+            box = tuple(selection['box'])
+            if not similar(before.crop(box), after.crop(box), (24, 24)):
+                return False
+    return True
+
+
 def repeated_access(history):
     if len(history) < 4:
         return False
@@ -119,25 +141,35 @@ class EvidenceMemory:
         self.revision = state.get('revision', -1)
         self.access = deque(state.get('access', []), maxlen=4)
         self.occupancy = state.get('occupancy', 'unavailable')
+        self.similar_command = state.get('similar_command')
+        self.similar_count = state.get('similar_count', 0)
 
     def state(self):
         return dict(grasp=self.grasp, processed=list(self.processed), last=self.last,
-                    access=list(self.access), occupancy=self.occupancy, revision=self.revision)
+                    access=list(self.access), occupancy=self.occupancy, revision=self.revision,
+                    similar_command=self.similar_command, similar_count=self.similar_count)
 
     def observation(self, hand):
         self.occupancy = hand
         if hand == 'empty':
             self.grasp = None
 
-    def action(self, primitive, target, previous, revision, hand):
+    def action(self, primitive, target, previous, current, revision, hand):
         src = previous.get((target or {}).get('image_ref'))
         row = None
         if src and valid_point(target.get('point')):
             row = sample(src, target['point'], primitive, revision)
-        if primitive == 'grasp' and row and hand != 'empty' and self.occupancy != 'holding':
-            # With no contact reading, this remains the last request, never a confirmed pickup.
+        similar = similar_action_views(previous, current, row)
+        if similar:
+            self.similar_count = self.similar_count + 1 if self.similar_command == primitive else 1
+            self.similar_command = primitive
+        else:
+            self.similar_command, self.similar_count = None, 0
+        if (primitive == 'grasp' and row and hand != 'empty' and self.occupancy != 'holding'
+                and (hand == 'holding' or not self.grasp or not similar)):
+            # Keep the previous selection available when another unmeasured attempt barely changed the images.
             self.grasp = row
-        if hand == 'unavailable' and primitive in RELEASE:
+        if hand == 'unavailable' and primitive in RELEASE and not similar:
             self.grasp = None
         self.observation(hand)
         if row and primitive in PROCESS:
@@ -158,7 +190,7 @@ class EvidenceMemory:
             if row and not any(row['image_ref'] == r['image_ref'] and row['point'] == r['point'] for _, r in rows):
                 rows.append((role, row))
         add('Your inspection point', inspection)
-        add('Grasp selection', self.grasp)
+        add('Earlier grasp request' if self.occupancy == 'unavailable' else 'Grasp selection', self.grasp)
         if self.last and self.last['primitive'] not in PROCESS:
             add('Last ' + self.last['primitive'] + ' selection', self.last)
         cycling = repeated_access(self.access)
@@ -207,6 +239,9 @@ class EvidenceMemory:
         data = png(panel)
         info = dict(rows=descriptors, sha256=digest(data),
                     interpretation='Ticks mark your selected image location. Camera and objects may move. Use current full views for action coordinates.')
+        if self.similar_count >= 2:
+            info['repeated_similar_images'] = dict(command=self.similar_command, count=self.similar_count,
+                message='The four camera views changed very little after each of these consecutive commands, including the selected patch when there was a target. The physical effect is uncertain. Check the earlier selection and consider a different observation or recovery action.')
         if cycling:
             info['repeated_access'] = dict(revisions=[r['revision'] for r in self.access],
                 message='Your alternating access commands have revisited similar views twice. Compare the visible changes and the locations you tried. What changed toward the goal? Inspect from another view or revise the plan if more evidence is needed.')
