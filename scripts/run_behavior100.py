@@ -1193,6 +1193,8 @@ class Batch:
                  '--agent-profile',self.manifest['agent_profile'],'--goal-skill',self.manifest.get('goal_skill','hierarchical')]
             if self.manifest.get('dispatch_policy'):
                 cmd += ['--dispatch-policy',self.manifest['dispatch_policy']]
+                if self.manifest.get('repair_inspection') is False:
+                    cmd.append('--no-repair-inspection')
                 if self.c.get('fast_vision_port'):
                     cmd += ['--fast-vision-port',str(self.c['fast_vision_port'])]
             if self.manifest.get('action_feedback'):
@@ -1510,6 +1512,8 @@ class Batch:
              '--goal-skill',self.manifest.get('goal_skill','hierarchical')]
         if self.manifest.get('dispatch_policy'):
             cmd += ['--dispatch-policy',self.manifest['dispatch_policy']]
+            if self.manifest.get('repair_inspection') is False:
+                cmd.append('--no-repair-inspection')
             if self.c.get('fast_vision_port'):
                 cmd += ['--fast-vision-port',str(self.c['fast_vision_port'])]
         if self.manifest.get('action_feedback'):

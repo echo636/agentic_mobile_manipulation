@@ -646,3 +646,47 @@ def test_order_repair_accepts_unchanged_duplicate_from_a_compound_phrase_but_req
     assert TemporalGraph.read(actual).dependencies("wipe") == {"off"}
     with pytest.raises(ValueError, match="discarded"):
         correct_order_references(raw, (0,), [{"entry": 0, "relations": [retained]}])
+
+
+@pytest.mark.parametrize("disabled", [True, False])
+def test_existing_batch_entry_point_initializes_the_temporal_client(
+    tmp_path, monkeypatch, disabled
+):
+    import runpy
+    from pathlib import Path
+
+    from manipulation_agent.clients import temporal
+
+    seen = []
+    monkeypatch.setattr(temporal, "run", lambda options: seen.append(options) or 0)
+    cmd = runpy.run_path(
+        str(Path(__file__).resolve().parents[1] / "scripts/run_codex_controller.py")
+    )
+    flags = ["--no-repair-inspection"] if disabled else []
+    assert (
+        cmd["main"](
+            [
+                "--instruction",
+                "operate from the images",
+                "--output",
+                str(tmp_path),
+                "--mcp-command",
+                "python",
+                "--mcp-args-json",
+                "[]",
+                "--timeout",
+                "0",
+                "--dispatch-policy",
+                "temporal",
+                "--planner-model",
+                "planner",
+                "--fast-vision-port",
+                "18087",
+                *flags,
+            ]
+        )
+        == 0
+    )
+    args = seen[0]
+    assert args.no_repair_inspection == disabled and args.timeout == 0
+    assert args.reasoning_effort == "low" and args.fast_vision_port == 18087

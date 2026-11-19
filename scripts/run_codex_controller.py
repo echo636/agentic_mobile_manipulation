@@ -303,10 +303,13 @@ def main(argv=None, *, allow_client=False):
                    help='Select the RGB feedback contract for a minimal/basic-skills episode')
     p.add_argument('--dispatch-policy', choices=['serial','temporal'], help='Use the event-driven ST-DAG controller')
     p.add_argument('--fast-vision-port', type=int, help='Use the local Qwen2.5-VL inference server')
+    p.add_argument('--no-repair-inspection', action='store_true', help='Disable the current-RGB local repair crop')
     args = p.parse_args(argv)
     if args.dispatch_policy:
         if not args.planner_model:
             p.error('--dispatch-policy requires --planner-model')
+        if args.reasoning_effort is None:
+            args.reasoning_effort = 'low'
         from manipulation_agent.clients.temporal import run
         return run(args)
     feedback_mode = args.action_feedback
