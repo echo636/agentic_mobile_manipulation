@@ -23,6 +23,11 @@ from .demo_motion import DemoMotion
 from .local_rgb import LocalRGBManipulation
 from .local_manipulation import LocalLimits
 
+
+def fixed_for_grasp(backend,obj):
+    # Fixed in the scene, or declared a fixed support by the task input (v11; see CustomTaskBackend).
+    return bool(getattr(obj,'fixed_base',False)) or getattr(obj,'name',None) in getattr(backend,'fixed_support_names',())
+
 class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
@@ -865,9 +870,12 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                     self._last_action_point=where.detach().cpu().clone() if hasattr(where,'detach') else where
                 except Exception:self._last_action_point=None
 
+    def _fixed_for_grasp(self,obj):
+        return fixed_for_grasp(self,obj)
+
     def _snap_suits(self,primitive,obj):
         if obj is None or obj is self.robot or not hasattr(obj,'states'):return False
-        if primitive=='grasp':return not bool(getattr(obj,'fixed_base',False))
+        if primitive=='grasp':return not fixed_for_grasp(self,obj)
         from omnigibson.object_states import Open,ToggledOn
         if primitive in {'open','close'}:return Open in obj.states
         if primitive in {'toggle_on','toggle_off'}:return ToggledOn in obj.states
@@ -1005,7 +1013,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
         held=self._get_held()
         if primitive=='fold':self._fold_preconditions(obj)
-        if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
+        if primitive=='grasp' and fixed_for_grasp(self,obj): raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
         if primitive in {'attach','hang','place_inside','place_on_top','place_under','place_next_to','wipe','sweep','vacuum',
                          'spray','spread','soak','cut','pour','scoop'} and held is None: raise SkillError('empty_hand','Empty hand')

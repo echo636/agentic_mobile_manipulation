@@ -558,7 +558,7 @@ class OmniGibsonBackend:
                     relations[label] = [other_key for other_key, other in objects.items()
                                         if other is not obj and obj.states[cls].get_value(other)]
             result.append({"id": key, "category": obj.category, "name": obj.name,
-                           "graspable": not obj.fixed_base,
+                           "graspable": not (obj.fixed_base or obj.name in getattr(self, "fixed_support_names", ())),
                            "distance_m": round(float(self.torch.linalg.norm(base[:2] - nearest)), 3),
                            "states": values, "relations": relations})
         return {"objects": result, "held_object": next((k for k, v in objects.items() if v is held), None),

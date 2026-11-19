@@ -192,6 +192,7 @@ class CustomTaskBackend(RGBBackend):
         for role, name in spec['roles'].items():
             if name not in self.custom_objects and role not in spec.get('future_roles', []):
                 raise ValueError('Missing custom role: ' + role)
+        self._apply_fixed_supports(spec)
         self.custom_tracker = TemporalGoalEvaluator(spec['evaluation'])
         initial = self._predicate_values()
         self.custom_tracker.observe(initial, 0, env_step=0, initial=True)
@@ -208,6 +209,32 @@ class CustomTaskBackend(RGBBackend):
             'role_poses':self._role_poses()})
         # Construction is outside policy time and outside the agent/video trace.
         self.steps = 0; self.frames_revision = -1
+
+    # v11 (benchmark side, 2026-11-19): task inputs may declare large support furniture as fixed supports
+    # (`fixed_supports`: role names). A one-armed robot cannot lift or shove such furniture in reality, so a
+    # declared support refuses grasping through the existing fixed-furniture path (same receipt as any fixed
+    # furniture) and gets a large link mass so contacts from placing or driving do not push it.
+    FIXED_SUPPORT_MASS_KG = 1000.0
+
+    def _apply_fixed_supports(self, spec):
+        names, applied = set(), []
+        for role in spec.get('fixed_supports', []):
+            name = spec['roles'][role]
+            obj = self.custom_objects.get(name)
+            if obj is None:
+                raise ValueError('Missing fixed support role: ' + role)
+            names.add(name)
+            row = {'role': role, 'name': name, 'fixed_base': bool(getattr(obj, 'fixed_base', False)), 'links': {}}
+            if not row['fixed_base']:
+                for link_name, link in obj.links.items():
+                    before = float(link.mass)
+                    link.mass = max(before, self.FIXED_SUPPORT_MASS_KG)
+                    row['links'][link_name] = [round(before, 3), float(link.mass)]
+            applied.append(row)
+        self.fixed_support_names = frozenset(names)
+        if applied:
+            write_json(self.output / 'fixed_supports.json', {'status': 'applied', 'audience': 'executor_private',
+                                                             'supports': applied})
 
     def _role_poses(self):
         live = {o.name:o for o in self.env.scene.objects}
