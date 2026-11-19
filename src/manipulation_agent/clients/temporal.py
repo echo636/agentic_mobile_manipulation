@@ -166,7 +166,7 @@ def run(args):
         try:
             outcome = asyncio.run(connect())
             meta.update(
-                status="completed",
+                status="passed",
                 agent_outcome=outcome,
                 formal_finish_observed=True,
                 exit_code=0,

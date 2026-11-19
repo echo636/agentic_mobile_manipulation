@@ -30,16 +30,29 @@ NODE = obj(
     skill=S,
     load=I,
 )
-WINDOW = obj(start=S, check=S, resource=S, earliest=I, latest=I, margin=I)
+SOURCE = {"type": "string", "enum": ["instruction", "estimate"]}
+WINDOW = obj(
+    start=S,
+    check=S,
+    resource=S,
+    earliest=I,
+    latest=I,
+    margin=I,
+    earliest_source=SOURCE,
+    latest_source=SOURCE,
+)
 CARRIER = obj(name=S, location=S, capacity=I, handling=I)
-TRIP = obj(origin=S, destination=S, seconds=I)
+TRIP = obj(origin=S, destination=S, seconds=I, metres=F)
 GRAPH = obj(
     region=S,
     nodes=arr(NODE),
+    required_outcomes=arr(S),
+    required_order=arr(obj(first=S, then=S)),
     windows=arr(WINDOW),
     carriers=arr(CARRIER),
     travel=arr(TRIP),
     unknown_travel=I,
+    unknown_metres=F,
 )
 PATCH = obj(
     outcome={"type": "string", "enum": ["repair", "blocked"]},
@@ -70,21 +83,21 @@ DECISION = obj(
 )
 
 COMPILE = """Compile the user's request into a single mobile robot's remaining work, using only the
-current RGB and user information. Preserve required order and terminal outcomes. Unobserved facts,
+current RGB and user information. Include one required_outcomes node id for every explicit user outcome, even when other work depends on it. List explicit user order relations in required_order. Preserve required order and terminal outcomes. Unobserved facts,
 durations, distances and usable carrier capacity are estimates. Name compact stable semantic ids and
 regions. Each node is an independently verifiable piece of work: indicate source and ending region,
 required predecessor ids, active HANDLING seconds EXCLUDING travel and passive work, a reusable skill
 name and an observable postcondition. A different camera direction is not a different region.
 Model each autonomous process by a short startup node releasing the robot and a separate return/check
 node. Give the relative earliest check-start and latest check-COMPLETION and return margin, in robot
-seconds from startup completion. Use the same resource name for jobs sharing a device. These windows
+seconds from startup completion. Mark a bound as instruction only when explicitly stated by the user, otherwise estimate. Use the same resource name for jobs sharing a device. These windows
 schedule observations; a timer by itself does not prove a physical outcome. Do not require work to wait
 unless the user or physical prerequisites require it. Retain uncertainty about occluded things; seeing
 an open container is a different assertion from finding a particular object in it.
 Use one node per individually transportable item on a common route so the scheduler can compare batching.
 load is estimated size units for such a delivery, zero otherwise. Introduce a carrier only if supported
 by the user's information or visible evidence; name its probable current region, conservative capacity
-in those units, and added handling cost in seconds. Include directed inter-region transit estimates.
+in those units, and added handling cost in seconds. Include directed inter-region transit estimates in seconds and route metres.
 Choose a compact graph with a checkable final outcome. Do not supply pixels or a simulator identifier."""
 REPAIR = """Return only local edits to the supplied unfinished scope. State what new observation changes
 the method. Preserve verified work, unchanged user goals and existing ids. Keep terminal assertions
@@ -103,7 +116,7 @@ Irrelevant numeric fields can be zero. Never click a historical image. Inspect a
 contents. Select a current view/approach with a clear target when the target is obscured. Maintaining a
 grasp, a successful command, or the mere passage of time does not establish identity, delivery, or
 doneness. Before lifting a group verify it is supported, and inspect again after transfer. Use the recent
-event, keyframes and the semantic macro if applicable. Report only changed observed object relations as
+event and keyframes. When a cached macro_next_primitive is available, ground that step on the current image if its prerequisites hold and it serves the selected work. Otherwise choose a new action or report an anomaly. Report only changed observed object relations as
 changes, with view and certainty. If the evidence is insufficient prefer another observation over a guess.
 If the same evidence contradicts the current method, report anomaly with your observation."""
 

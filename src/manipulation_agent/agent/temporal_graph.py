@@ -65,6 +65,8 @@ class Window:
     earliest: int
     latest: int
     margin: int
+    earliest_source: str = "estimate"
+    latest_source: str = "estimate"
 
     @classmethod
     def read(cls, r):
@@ -75,7 +77,11 @@ class Window:
             number(r["earliest"]),
             number(r["latest"], minimum=1),
             number(r["margin"]),
+            r.get("earliest_source", "estimate"),
+            r.get("latest_source", "estimate"),
         )
+        if {w.earliest_source, w.latest_source} - {"instruction", "estimate"}:
+            raise ValueError("Unknown time-bound source")
         if w.start == w.check or w.latest - w.margin < w.earliest:
             raise ValueError("Inconsistent process window")
         return w
@@ -116,6 +122,10 @@ class TemporalGraph:
     carriers: dict[str, Carrier]
     travel: dict[tuple[str, str], int]
     unknown_travel: int
+    required_outcomes: frozenset[str]
+    route_metres: dict[tuple[str, str], float]
+    unknown_metres: float | None
+    required_order: tuple[tuple[str, str], ...]
 
     @classmethod
     def read(cls, raw):
@@ -132,6 +142,17 @@ class TemporalGraph:
                 lambda r: r[:2],
             ),
             number(raw["unknown_travel"], minimum=1),
+            frozenset(word(k) for k in raw.get("required_outcomes", ())),
+            {
+                (word(t["origin"]), word(t["destination"])): t["metres"]
+                for t in raw["travel"]
+                if "metres" in t
+            },
+            raw.get("unknown_metres"),
+            tuple(
+                (word(pair["first"]), word(pair["then"]))
+                for pair in raw.get("required_order", ())
+            ),
         )
         graph.travel = {k: v[2] for k, v in graph.travel.items()}
         graph.validate()
@@ -146,6 +167,13 @@ class TemporalGraph:
     def validate(self):
         if not self.nodes:
             raise ValueError("A task requires at least one observable outcome")
+        for metres in [
+            *self.route_metres.values(),
+            *([self.unknown_metres] if self.unknown_metres is not None else []),
+        ]:
+            number(metres)
+        if self.required_outcomes - self.nodes.keys():
+            raise ValueError("Unknown required outcome")
         for w in self.windows.values():
             if w.check not in self.nodes or w.start not in self.nodes:
                 raise ValueError("Unknown process endpoint")
@@ -153,9 +181,18 @@ class TemporalGraph:
         if any(d - self.nodes.keys() for d in deps.values()):
             raise ValueError("Unknown prerequisite")
         tuple(TopologicalSorter(deps).static_order())
+        for a, b in self.required_order:
+            if a == b or a not in self.nodes or b not in self.affected({a}):
+                raise ValueError("Explicit user precedence was lost")
 
     def distance(self, a, b):
         return 0 if a == b else self.travel.get((a, b), self.unknown_travel)
+
+    def route_decimetres(self, a, b):
+        if a == b:
+            return 0
+        estimate = self.route_metres.get((a, b), self.unknown_metres)
+        return round(10 * estimate) if estimate is not None else 0
 
     def affected(self, keys):
         result = set(keys)
@@ -177,9 +214,9 @@ class TemporalGraph:
             or (updated.keys() & self.nodes.keys()) - scope
         ):
             raise ValueError("Repair outside the affected unfinished subgraph")
-        goals = self.nodes.keys() - {
-            k for n in self.nodes for k in self.dependencies(n)
-        }
+        goals = self.required_outcomes | (
+            self.nodes.keys() - {k for n in self.nodes for k in self.dependencies(n)}
+        )
         if removed & goals:
             raise ValueError("A terminal obligation cannot be deleted")
         for key in goals & updated.keys():
@@ -198,6 +235,15 @@ class TemporalGraph:
                 )
             ):
                 raise ValueError("A running process must keep its origin and resource")
+            previous = windows.get(w.check)
+            if previous:
+                for bound in ("earliest", "latest"):
+                    if getattr(previous, bound + "_source") == "instruction" and (
+                        getattr(w, bound) != getattr(previous, bound)
+                        or getattr(w, bound + "_source") != "instruction"
+                        or w.start != previous.start
+                    ):
+                        raise ValueError("Explicit user time bounds must be preserved")
             windows[w.check] = w
         nodes = {k: v for k, v in self.nodes.items() if k not in removed}
         nodes.update(updated)
@@ -289,6 +335,83 @@ def candidates(graph, done, locations, grouping):
     return jobs
 
 
+def feasible_incumbent(graph, jobs, completed, region, now, locations, serial):
+    """Construct a full, timed route to retain if exact search exhausts its solve budget."""
+    done = dict(completed)
+    position = region
+    clock = now
+    carriers = {k: locations.get(k, c.location) for k, c in graph.carriers.items()}
+    slots = []
+    while len(done) < len(graph.nodes):
+        active = [
+            w for w in graph.windows.values() if w.start in done and w.check not in done
+        ]
+        origins = {}
+        for w in active:
+            if w.resource in origins and origins[w.resource] != w.start:
+                return []
+            origins[w.resource] = w.start
+        checks = {w.check: w for w in active}
+        choices = []
+        for job in jobs:
+            if any(
+                k in done or not graph.dependencies(k) <= done.keys()
+                for k in job.members
+            ):
+                continue
+            if job.carrier and carriers.get(job.carrier) != job.origin:
+                continue
+            if serial and active and not all(k in checks for k in job.members):
+                continue
+            starting = [w for w in graph.windows.values() if w.start in job.members]
+            if any(w.resource == other.resource for w in starting for other in active):
+                continue
+            trip = graph.distance(position, job.origin)
+            arrival = clock + trip
+            start = max(
+                [arrival]
+                + [
+                    ceil(done[checks[k].start]) + checks[k].earliest
+                    for k in job.members
+                    if k in checks
+                ]
+            )
+            end = start + job.duration
+
+            # Account for the return trip AND mandatory check handling before committing.
+            def misses(w):
+                node = graph.nodes[w.check]
+                return_time = (
+                    0
+                    if w.check in job.members
+                    else graph.distance(job.destination, node.origin)
+                    + node.seconds
+                    + graph.distance(node.origin, node.destination)
+                )
+                return end + return_time > floor(done[w.start]) + w.latest - w.margin
+
+            if any(misses(w) for w in active):
+                continue
+            # Prefer work that can start now and, among those, lower active time per item.
+            # Tie-breaks are deterministic; the CP solver remains free to change the route.
+            rank = (
+                start - arrival,
+                0 if starting or any(k in checks for k in job.members) else 1,
+                (trip + job.duration) / len(job.members),
+                job.members,
+            )
+            choices.append((rank, Slot(job, start - trip, start, end)))
+        if not choices:
+            return []
+        _, slot = min(choices, key=lambda c: c[0])
+        slots.append(slot)
+        done.update(dict.fromkeys(slot.job.members, slot.end))
+        clock, position = slot.end, slot.job.destination
+        if slot.job.carrier:
+            carriers[slot.job.carrier] = position
+    return slots
+
+
 def schedule(
     graph,
     completed,
@@ -313,12 +436,16 @@ def schedule(
             or t < 0
             or t > now
             or not graph.dependencies(k) <= completed.keys()
+            or any(completed[dep] > t for dep in graph.dependencies(k))
         ):
             raise ValueError("Inconsistent completion history")
     locations = carrier_locations or {}
     jobs = candidates(graph, completed, locations, grouping and not serial)
     if not jobs:
         return Schedule("complete", [], monotonic() - t0)
+    incumbent = feasible_incumbent(
+        graph, jobs, completed, region, now, locations, serial
+    )
     max_travel = max([graph.unknown_travel, *graph.travel.values()])
     horizon = (
         now
@@ -387,12 +514,17 @@ def schedule(
         model.AddNoOverlap(group)
     # One mobile manipulator. Transit depends on both jobs in the selected sequence.
     arcs = []
+    route_terms = [
+        graph.route_decimetres(j.origin, j.destination) * on[i]
+        for i, j in enumerate(jobs)
+    ]
     for i, j in enumerate(jobs):
         ix = i + 1
         arcs.append((ix, ix, on[i].Not()))
         first = model.NewBoolVar(f"first_{ix}")
         last = model.NewBoolVar(f"last_{ix}")
         arcs.extend(((0, ix, first), (ix, 0, last)))
+        route_terms.append(graph.route_decimetres(region, j.origin) * first)
         model.Add(starts[i] >= now + graph.distance(region, j.origin)).OnlyEnforceIf(
             first
         )
@@ -401,6 +533,9 @@ def schedule(
                 continue
             edge = model.NewBoolVar(f"path_{ix}_{m + 1}")
             arcs.append((ix, m + 1, edge))
+            route_terms.append(
+                graph.route_decimetres(j.destination, other.origin) * edge
+            )
             model.Add(
                 starts[m] >= ends[i] + graph.distance(j.destination, other.origin)
             ).OnlyEnforceIf(edge)
@@ -428,13 +563,34 @@ def schedule(
         model.AddCircuit(edges)
     makespan = model.NewIntVar(now, horizon, "makespan")
     model.AddMaxEquality(makespan, list(end.values()))
-    model.Minimize(
-        (len(remaining) * (horizon - now) + 1) * makespan + sum(begin.values())
-    )
+    if graph.unknown_metres is not None:
+        # Each selected job contributes at most an approach and a loaded leg.
+        largest_leg = ceil(
+            10 * max([graph.unknown_metres, *graph.route_metres.values()])
+        )
+        distance_bound = 2 * len(remaining) * largest_leg
+        model.Minimize((distance_bound + 1) * (makespan - now) + sum(route_terms))
+    else:
+        # Compatible with older graphs that supplied transit seconds alone.
+        model.Minimize(
+            (len(remaining) * (horizon - now) + 1) * (makespan - now)
+            + sum(begin.values())
+        )
+    if incumbent:
+        chosen = {slot.job: slot for slot in incumbent}
+        for i, job in enumerate(jobs):
+            model.AddHint(on[i], int(job in chosen))
+        for slot in incumbent:
+            for key in slot.job.members:
+                model.AddHint(begin[key], slot.start)
+                model.AddHint(end[key], slot.end)
+        model.Add(makespan <= incumbent[-1].end)
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = solver_seconds
     solver.parameters.num_search_workers = 1
     status = solver.Solve(model)
+    if status == cp_model.UNKNOWN and incumbent:
+        return Schedule("heuristic_feasible", incumbent, monotonic() - t0)
     if status not in (cp_model.FEASIBLE, cp_model.OPTIMAL):
         return Schedule(solver.StatusName(status).lower(), [], monotonic() - t0)
     slots = []

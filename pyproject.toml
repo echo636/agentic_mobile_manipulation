@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
+dispatch-vision = ["transformers>=4.57,<4.58", "accelerate>=1,<2", "torch>=2.5", "torchvision>=0.20", "Pillow>=10", "jsonschema>=4"]
 dispatch = ["ortools>=9.10,<9.15", "mcp==1.28.1", "Pillow>=10"]
 mcp = ["mcp==1.28.1", "Pillow>=10"]
 navigation = ["numpy>=1.26,<3", "scipy>=1.11,<2"]

@@ -181,7 +181,7 @@ class VisionHarness:
             self.refresh()
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
         if self.public_robot_clock:
-            result['robot_time'] = {'total_s': getattr(getattr(self.backend, 'robot_clock', None), 'total_s', None)}
+            result['robot_time'] = self._public_odometry()
         if reference_image_ref is not None:
             reference = self._published_rgb.get(reference_image_ref)
             if reference is None:
@@ -235,6 +235,10 @@ class VisionHarness:
             return 'holding_item' if getter() is not None else 'empty'
         except Exception:
             return None
+
+    def _public_odometry(self):
+        clock = getattr(self.backend, 'robot_clock', None)
+        return {'total_s': getattr(clock, 'total_s', None), 'odometer_m': getattr(clock, 'travel_m', None)}
 
     def _public_robot_time(self):
         """Public robot_clock accounting entry for the action that just executed, if available."""
@@ -365,7 +369,7 @@ class VisionHarness:
                 if rt_public is not None:
                     result['robot_time'] = rt_public
             elif self.public_robot_clock:
-                result['robot_time'] = {'total_s': getattr(getattr(self.backend, 'robot_clock', None), 'total_s', None)}
+                result['robot_time'] = self._public_odometry()
             if self.scheduling_mode == 'program':
                 rt_for_ledger = result.get('robot_time') or self._public_robot_time()
                 ledger_input = result if 'robot_time' in result else {**result, **({'robot_time': rt_for_ledger} if rt_for_ledger else {})}

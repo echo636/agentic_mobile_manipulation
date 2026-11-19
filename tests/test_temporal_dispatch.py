@@ -1,6 +1,7 @@
 """Policy-side tests have no simulator, layout or task evaluator."""
 
 from itertools import permutations
+import json
 import pytest
 
 from manipulation_agent.agent.temporal_graph import TemporalGraph, schedule
@@ -73,6 +74,7 @@ def brute(graph_data, serial):
         if a >= b or (serial and b != a + 1):
             continue
         t = 0
+        start = 0
         pos = graph_data["region"]
         for key in order:
             n = tasks[key]
@@ -95,7 +97,9 @@ def brute(graph_data, serial):
 @pytest.mark.parametrize("serial", [False, True])
 def test_calendar_against_independent_enumeration(distance, length, serial):
     g = kitchen(distance, length)
-    result = schedule(TemporalGraph.read(g), {}, now=0, region="B", serial=serial)
+    result = schedule(
+        TemporalGraph.read(g), {}, now=0, region="B", serial=serial, solver_seconds=5
+    )
     assert result.status == "optimal"
     assert result.slots[-1].end == brute(g, serial)
 
@@ -181,20 +185,10 @@ def test_atomic_local_edit_protects_completed_work_and_distant_goal():
 
 
 def camera(rev, t):
-    return Camera(
-        rev,
-        {
-            view: dict(
-                image_ref=f"{rev}_{view}",
-                sha256="example",
-                data="",
-                mime_type="image/png",
-            )
-            for view in ("front", "left", "back", "right")
-        },
-        t,
-        "unavailable",
-    )
+    from test_action_evidence import packet
+
+    observed = Camera.read(packet(rev))
+    return Camera(rev, observed.frames, t, "unavailable")
 
 
 def test_only_changes_take_storage_and_history_has_no_current_pixel_ref():
@@ -241,7 +235,7 @@ def test_normal_episode_once_compiled_current_pixels_and_no_slow_repair():
     c = DispatchController("user request", ["open"], slow, fast)
     c.observe(camera(0, 0))
     tool, args = c.next()
-    assert tool == "act" and args["target"]["image_ref"] == "0_front"
+    assert tool == "act" and args["target"]["image_ref"] == "front-0"
     with pytest.raises(RuntimeError):
         c.next()
     with pytest.raises(ValueError):
@@ -285,3 +279,196 @@ def test_batch_completion_needs_item_specific_evidence():
     )
     c.observe(camera(0, 0))
     assert c.next()[1]["outcome"] == "blocked" and c.completed == {}
+
+
+def test_user_requirement_survives_nonterminal_edits_and_explicit_time_is_frozen():
+    raw = graph(
+        [work("on"), work("v"), work("end", after=["v"])],
+        [dict(window("on", "v", 3, 100), earliest_source="instruction")],
+    )
+    raw["required_outcomes"] = ["v"]
+    g = TemporalGraph.read(raw)
+    patch = dict(remove=[], upsert=[], windows=[])
+    with pytest.raises(ValueError, match="assertions"):
+        g.repair(
+            {**patch, "upsert": [dict(work("v"), assertion="assumed")]},
+            {"v"},
+            {"on": 2},
+        )
+    with pytest.raises(ValueError, match="time bounds"):
+        g.repair({**patch, "windows": [window("on", "v", 1, 100)]}, {"v"}, {"on": 2})
+    revised = dict(raw["windows"][0], latest=130)
+    assert (
+        g.repair({**patch, "windows": [revised]}, {"v"}, {"on": 2}).windows["v"].latest
+        == 130
+    )
+
+
+def test_public_camera_is_invariant_to_private_errors_scores_and_attachment_state():
+    from test_action_evidence import packet
+
+    a = packet(1, hand="holding")
+    b = packet(1, hand="holding", poison=True)
+    for v in (a, b):
+        raw = json.loads(v.content[0].text)
+        raw["robot_time"] = {"total_s": 15.2, "private": "hidden"}
+        raw["hand"]["source"] = "attachment_constraint"
+        v.content[0].text = json.dumps(raw)
+    assert Camera.read(a) == Camera.read(b)
+    assert Camera.read(b).hand == "unavailable" and Camera.read(b).clock == 15.2
+    b.content[1].data += "###"
+    with pytest.raises(ValueError):
+        Camera.read(b)
+
+
+def test_mcp_session_consumes_current_images_once_and_keeps_finish_separate_from_score():
+    from types import SimpleNamespace
+    import asyncio
+    from test_action_evidence import packet, txt, types
+    from manipulation_agent.clients.temporal import episode
+    from manipulation_agent.tools import tool_specs
+
+    class Session:
+        def __init__(self):
+            self.calls = []
+
+        async def initialize(self):
+            pass
+
+        async def list_tools(self):
+            return SimpleNamespace(
+                tools=[
+                    SimpleNamespace(name=t["name"], inputSchema=t["inputSchema"])
+                    for t in tool_specs("basic-skills")
+                ]
+            )
+
+        async def call_tool(self, name, args):
+            self.calls.append((name, args))
+            if name == "finish":
+                return types.CallToolResult(
+                    content=[txt({"closed": True, "score": "secret"})]
+                )
+            response = packet(int(name == "act"), poison=name == "act")
+            body = json.loads(response.content[0].text)
+            body["robot_time"] = {"total_s": 10 * int(name == "act")}
+            response.content[0].text = json.dumps(body)
+            return response
+
+    s = Session()
+    fast = Role(decision(), decision("done"))
+    controller = DispatchController("visible task", [], Role(graph([work("x")])), fast)
+    assert asyncio.run(episode(s, controller, lambda: None)) == "achieved"
+    assert [n for n, _ in s.calls] == ["initialize", "act", "finish"]
+    assert "PRIVATE" not in json.dumps(fast.calls)
+    assert s.calls[1][1]["target"]["image_ref"] == "front-0"
+
+
+def test_due_forecast_prevents_starting_a_long_atom_before_return():
+    from manipulation_agent.agent.temporal_graph import Job
+
+    g = graph(
+        [work("start"), work("visit"), work("other", seconds=30)],
+        [window(earliest=30, latest=60)],
+    )
+    c = DispatchController(
+        "task", ["open", "wait"], Role(g), Role(decision(), decision(op="open"))
+    )
+    c.observe(camera(0, 0))
+    c.compile()
+    c.completed["start"] = 0
+    c.active = Job(("other",), "A", "A", 30)
+    c.observe(camera(1, 21))
+    name, args = c.next()
+    assert name == "act" and args["primitive"] == "wait" and args["wait_seconds"] == 9
+    assert c.active.members == ("visit",)
+
+
+def test_resource_shared_by_checkpoints_is_kept_until_last_check():
+    g = TemporalGraph.read(
+        graph(
+            [work("on"), work("v1"), work("v2", after=["v1"]), work("s2"), work("v3")],
+            [
+                window("on", "v1", 10, 50),
+                window("on", "v2", 30, 65),
+                window("s2", "v3", 10, 40),
+            ],
+        )
+    )
+    res = schedule(g, {"on": 10}, region="A", now=10)
+    by_id = {s.job.members[0]: s for s in res.slots}
+    assert by_id["s2"].start >= by_id["v2"].end
+
+
+def test_route_length_breaks_equal_makespan_ties_and_required_order_is_immutable():
+    g = graph([work("a", "A"), work("b", "B")], region="S", travel=5)
+    g.update(
+        unknown_metres=12,
+        travel=[
+            dict(origin=a, destination=b, seconds=5, metres=m)
+            for a, b, m in [("S", "A", 5), ("A", "B", 4), ("S", "B", 1), ("B", "A", 1)]
+        ],
+    )
+    assert schedule(TemporalGraph.read(g), {}, region="S", now=0).slots[
+        0
+    ].job.members == ("b",)
+    g["nodes"][1]["after"] = ["a"]
+    g["required_order"] = [dict(first="a", then="b")]
+    with pytest.raises(ValueError, match="precedence"):
+        TemporalGraph.read(g).repair(
+            dict(upsert=[work("b", "B")], remove=[], windows=[]), {"b"}, {}
+        )
+
+
+def test_macro_prefix_is_rebound_to_current_images_after_verified_success():
+    g = graph([work("one"), work("two", after=["one"])])
+    fast = Role(
+        decision(op="grasp"),
+        decision("done", key="one"),
+        dict(decision(op="grasp"), x=0.72),
+        decision("done", key="two"),
+    )
+    slow = Role(g)
+    c = DispatchController("move both", ["grasp"], slow, fast)
+    c.observe(camera(0, 0))
+    c.next()
+    c.observe(camera(1, 10))
+    _, args = c.next()
+    assert fast.calls[-1]["macro_next_primitive"] == "grasp"
+    assert args["target"] == dict(image_ref="front-1", point=[0.72, 0.5])
+    c.observe(camera(2, 20))
+    assert c.next()[1]["outcome"] == "achieved"
+    assert len(slow.calls) == 1
+
+
+def test_visual_navigation_calibrates_only_a_pure_confirmed_trip():
+    c = DispatchController(
+        "go",
+        ["navigate_to"],
+        Role(graph([work("trip", "A", "B")])),
+        Role(decision(op="navigate_to"), decision("done", key="trip")),
+    )
+    a, b = camera(0, 0), camera(1, 11)
+    a.odometer_m = 3
+    b.odometer_m = 7
+    c.observe(a)
+    c.next()
+    c.observe(b)
+    c.next()
+    assert c.memory.travel == {("A", "B"): 11} and c.memory.metres == {("A", "B"): 4}
+
+
+def test_time_limited_search_can_dispatch_a_complete_feasible_route():
+    g = TemporalGraph.read(kitchen(15, 120))
+    res = schedule(g, {}, region="B", now=0, solver_seconds=0.000001)
+    assert res.status in ("heuristic_feasible", "optimal", "feasible")
+    slots = {k: s for s in res.slots for k in s.job.members}
+    assert (
+        set(slots) == g.nodes.keys()
+        and slots["visit"].start >= slots["start"].end + 180
+    )
+    assert slots["visit"].end <= slots["start"].end + 500
+    assert all(
+        a.end + g.distance(a.job.destination, b.job.origin) <= b.start
+        for a, b in zip(res.slots, res.slots[1:])
+    )
