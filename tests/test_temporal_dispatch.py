@@ -312,6 +312,71 @@ def test_normal_episode_once_compiled_current_pixels_and_no_slow_repair():
     assert len(slow.calls) == 1 and len(fast.calls) == 2
 
 
+@pytest.mark.parametrize("op", ["grasp", "place_on_top"])
+def test_similar_hand_views_trigger_one_local_review_despite_pixel_jitter(op):
+    base = work("x")
+    slow = Role(
+        graph([base]),
+        {
+            "outcome": "repair",
+            "reason": "Use the alternative visible side",
+            "remove": [],
+            "windows": [],
+            "upsert": [{**base, "work": "use alternative side"}],
+        },
+    )
+    fast = Role(*[{**decision(op=op), "x": 0.31 + i * 0.02} for i in range(5)])
+    logs = []
+    c = DispatchController(
+        "task", [op], slow, fast, log=lambda kind, **kw: logs.append((kind, kw))
+    )
+    c.observe(camera(0, 0))
+    for rev in range(1, 4):
+        assert c.next()[1]["primitive"] == op
+        c.observe(camera(rev, rev))
+    assert c.next()[1]["primitive"] == op
+    assert [(x["revision"], x["op"]) for k, x in logs if k == "motor_request"] == [
+        (r, op) for r in range(4)
+    ]
+    assert len([k for k, _ in logs if k == "hand_visual_review"]) == 1
+    compared = [
+        r
+        for r in fast.calls[3]["memory"]["recent_events"]
+        if r.get("four_views_and_target_similar")
+    ]
+    assert len(compared) == 3 and all(r["work"] == ["x"] for r in compared)
+    assert "Gripper occupancy is unmeasured" in slow.calls[-1]["event"]
+    assert not c.completed and len(fast.calls) == 5
+
+
+@pytest.mark.parametrize(
+    "op,hand,changed,expected",
+    [
+        ("grasp", "holding", False, None),
+        ("cut", "unavailable", False, None),
+        ("place_inside", "unavailable", True, False),
+        ("grasp", "unavailable", False, True),
+    ],
+)
+def test_appearance_comparison_describes_only_an_unmeasured_targeted_handoff(
+    op, hand, changed, expected
+):
+    from PIL import Image
+    from test_action_evidence import packet
+
+    before_img = Image.new("RGB", (512, 512), "black")
+    after_img = before_img.copy()
+    if changed:
+        after_img.paste("white", (244, 244, 268, 268))
+    before = Camera.read(packet(0, front=before_img))
+    seen = Camera.read(packet(1, front=after_img))
+    after = Camera(1, seen.frames, 1, hand)
+    result = DeltaMemory().motor_readback(
+        op, {"image_ref": "front-0", "point": [0.5, 0.5]}, before, after
+    )
+    assert result is expected
+
+
 @pytest.mark.parametrize("resolution", ["done", "act", "conflict"])
 def test_contradictory_grounding_is_clarified_before_any_effect(resolution):
     claimed = decision("done")

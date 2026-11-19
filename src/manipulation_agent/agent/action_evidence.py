@@ -190,6 +190,8 @@ class EvidenceMemory:
             area, _, _ = crop_at(rgb, row['point'], side=256)
             self.access.append(dict(primitive=primitive, view=row['view'], point=row['point'],
                                     revision=revision, scene=signature(rgb), area=signature(area), selection=row))
+        # A comparison describes the four delivered views and target patch only.
+        return similar if compare_hand and row is not None else None
 
     def panel(self, current, inspection=None):
         rows = []

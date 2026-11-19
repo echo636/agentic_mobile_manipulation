@@ -162,12 +162,12 @@ class DeltaMemory:
             return
         previous = {f["image_ref"]: f for f in before.frames.values()}
         current = {f["image_ref"]: f for f in after.frames.values()}
-        self.selections.action(
+        similar = self.selections.action(
             op, target, previous, list(current.values()), before.revision, after.hand
         )
         info, data = self.selections.panel(current)
         if not data:
-            return
+            return similar
         self.access_cycle = bool(info.get("repeated_access"))
         self.panel_parts = [
             {
@@ -181,6 +181,16 @@ class DeltaMemory:
                 "detail": "original",
             },
         ]
+        return similar
+
+    def repeated_hand_request(self, op, members):
+        last = list(self.recent)[-3:]
+        return len(last) == 3 and all(
+            event.get("op") == op
+            and event.get("work") == list(members)
+            and event.get("four_views_and_target_similar") is True
+            for event in last
+        )
 
     def observe(self, changes, camera):
         changed = []

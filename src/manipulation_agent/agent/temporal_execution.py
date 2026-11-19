@@ -82,7 +82,7 @@ class DispatchController:
         self.camera = camera
         if self.pending:
             op, prior, target = self.pending
-            self.memory.motor_readback(op, target, before, camera)
+            similar = self.memory.motor_readback(op, target, before, camera)
             elapsed = self.clock - prior
             self.motor_seconds[op] = max(elapsed, self.motor_seconds.get(op, 0))
             if op == "navigate_to" and self.travel_sample is not None:
@@ -93,9 +93,15 @@ class DispatchController:
             self.log(
                 "action_observed", op=op, revision=camera.revision, robot_s=self.clock
             )
-            self.memory.recent.append(
-                {"op": op, "revision": camera.revision, "elapsed_s": round(elapsed, 1)}
-            )
+            event = {
+                "op": op,
+                "revision": camera.revision,
+                "elapsed_s": round(elapsed, 1),
+            }
+            if similar is not None and self.active:
+                event["four_views_and_target_similar"] = similar
+                event["work"] = list(self.active.members)
+            self.memory.recent.append(event)
             self.pending = None
             self.repair_events.clear()
 
@@ -501,6 +507,20 @@ class DispatchController:
         if decision["decision"] != "act":
             raise ValueError("Unknown grounding decision")
         op, args = self.arguments(decision)
+        if self.memory.repeated_hand_request(op, job.members):
+            # A revised method may retry even on this same camera frame.
+            self.memory.recent.append({"hand_visual_review": self.camera.revision})
+            self.log(
+                "hand_visual_review",
+                op=op,
+                selected=list(job.members),
+                revision=self.camera.revision,
+            )
+            raise ValueError(
+                f"Three preceding {op} requests on this work left similar RGB in all four "
+                "views and at their selected patches. Gripper occupancy is unmeasured. "
+                "The fast model requests the same hand command again."
+            )
         signature = (
             op,
             decision["view"],
