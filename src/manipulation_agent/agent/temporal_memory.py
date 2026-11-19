@@ -1,9 +1,9 @@
 """A bounded view of observations. Beliefs come from visible evidence, never a scene graph."""
 
+import base64
+import math
 from collections import OrderedDict, deque
 from dataclasses import dataclass
-import math
-import base64
 
 
 @dataclass
@@ -17,6 +17,7 @@ class Camera:
     @classmethod
     def read(cls, result):
         import json
+
         from ..evidence_server import attachments, planner_parts, public_hand
 
         stripped, _ = planner_parts(result)
@@ -129,15 +130,15 @@ class DeltaMemory:
                 entry["certainty"],
             ):
                 continue
-            fact = dict(
-                subject=key[0],
-                relation=key[1],
-                value=value,
-                certainty=entry["certainty"],
-                revision=camera.revision,
-                view=view,
-                image_ref=camera.frames[view]["image_ref"],
-            )
+            fact = {
+                "subject": key[0],
+                "relation": key[1],
+                "value": value,
+                "certainty": entry["certainty"],
+                "revision": camera.revision,
+                "view": view,
+                "image_ref": camera.frames[view]["image_ref"],
+            }
             self.facts[key] = fact
             self.facts.move_to_end(key)
             changed.append(fact)

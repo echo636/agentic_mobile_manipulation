@@ -2,13 +2,13 @@
 
 import argparse
 import asyncio
-from collections import Counter
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import time
+from collections import Counter
+from pathlib import Path
 
 from ..agent.temporal_execution import DispatchController
 from ..agent.temporal_memory import Camera
@@ -171,7 +171,7 @@ def run(args):
                 formal_finish_observed=True,
                 exit_code=0,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- retain transport failures from the async MCP SDK.
             error = exc
             while isinstance(error, BaseExceptionGroup):
                 error = error.exceptions[0]

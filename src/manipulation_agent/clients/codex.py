@@ -129,6 +129,7 @@ class CodexAdapter(ClientAdapter):
             command += ["-c", "developer_instructions=" + json.dumps(instructions)]
         if config.reasoning_effort is not None:
             command += ['-c', 'model_reasoning_effort=' + json.dumps(config.reasoning_effort)]
+        env_overlay = {}
         if config.model_provider_profile is not None:
             profile = config.model_provider_profile
             if not re.fullmatch(r'[A-Za-z0-9_-]+', profile):
@@ -169,6 +170,13 @@ class CodexAdapter(ClientAdapter):
                         or gateway.path not in {'', '/'}):
                     raise ValueError('Provider gateway must be a loopback HTTP base URL without credentials or path')
                 provider['base_url'] = config.model_provider_gateway.rstrip('/')
+                # Rust and Python clients may prefer different casings. Preserve the
+                # host's existing exclusions and keep this local hop on loopback.
+                exclusions = [entry.strip() for variable in ('no_proxy', 'NO_PROXY')
+                              for entry in os.environ.get(variable, '').split(',') if entry.strip()]
+                exclusions.append(gateway.hostname)
+                bypass = ','.join(dict.fromkeys(exclusions))
+                env_overlay.update(no_proxy=bypass, NO_PROXY=bypass)
             command += ['-c', 'model_provider=' + json.dumps(profile)]
             for key in ('name', 'base_url', 'requires_openai_auth', 'wire_api'):
                 command += ['-c', f'model_providers.{profile}.{key}=' + json.dumps(provider[key])]
@@ -225,5 +233,5 @@ class CodexAdapter(ClientAdapter):
             if pythonpath := os.environ.get('PYTHONPATH'):
                 command += ["-c", 'mcp_servers.manipulation.env.PYTHONPATH=' + json.dumps(pythonpath)]
         command += ["-"]
-        return PreparedProject(command, None, config.prompt, native_sessions=native_sessions,
+        return PreparedProject(command, None, config.prompt, env_overlay=env_overlay, native_sessions=native_sessions,
                                client_storage=storage, mcp_prefix=prefix)

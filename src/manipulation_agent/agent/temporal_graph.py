@@ -378,8 +378,7 @@ def feasible_incumbent(graph, jobs, completed, region, now, locations, serial):
             )
             end = start + job.duration
 
-            # Account for the return trip AND mandatory check handling before committing.
-            def misses(w):
+            for w in active:
                 node = graph.nodes[w.check]
                 return_time = (
                     0
@@ -388,19 +387,18 @@ def feasible_incumbent(graph, jobs, completed, region, now, locations, serial):
                     + node.seconds
                     + graph.distance(node.origin, node.destination)
                 )
-                return end + return_time > floor(done[w.start]) + w.latest - w.margin
-
-            if any(misses(w) for w in active):
-                continue
-            # Prefer work that can start now and, among those, lower active time per item.
-            # Tie-breaks are deterministic; the CP solver remains free to change the route.
-            rank = (
-                start - arrival,
-                0 if starting or any(k in checks for k in job.members) else 1,
-                (trip + job.duration) / len(job.members),
-                job.members,
-            )
-            choices.append((rank, Slot(job, start - trip, start, end)))
+                if end + return_time > floor(done[w.start]) + w.latest - w.margin:
+                    break
+            else:
+                # Prefer work that can start now and, among those, lower active time per item.
+                # Tie-breaks are deterministic; the CP solver remains free to change the route.
+                rank = (
+                    start - arrival,
+                    0 if starting or any(k in checks for k in job.members) else 1,
+                    (trip + job.duration) / len(job.members),
+                    job.members,
+                )
+                choices.append((rank, Slot(job, start - trip, start, end)))
         if not choices:
             return []
         _, slot = min(choices, key=lambda c: c[0])

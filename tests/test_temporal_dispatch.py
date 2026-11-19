@@ -1,28 +1,29 @@
 """Policy-side tests have no simulator, layout or task evaluator."""
 
-from itertools import permutations
 import json
+from itertools import permutations
+
 import pytest
 
-from manipulation_agent.agent.temporal_graph import TemporalGraph, schedule
 from manipulation_agent.agent.temporal_execution import DispatchController
+from manipulation_agent.agent.temporal_graph import TemporalGraph, schedule
 from manipulation_agent.agent.temporal_memory import Camera, DeltaMemory
 
 ortools = pytest.importorskip("ortools")
 
 
 def work(key, src="A", dst=None, seconds=10, after=(), load=0):
-    return dict(
-        id=key,
-        work=key,
-        origin=src,
-        destination=dst or src,
-        seconds=seconds,
-        after=list(after),
-        assertion=key + " visible",
-        skill="transfer",
-        load=load,
-    )
+    return {
+        "id": key,
+        "work": key,
+        "origin": src,
+        "destination": dst or src,
+        "seconds": seconds,
+        "after": list(after),
+        "assertion": key + " visible",
+        "skill": "transfer",
+        "load": load,
+    }
 
 
 def window(
@@ -33,25 +34,25 @@ def window(
     resource="appliance",
     margin=0,
 ):
-    return dict(
-        start=start,
-        check=check,
-        resource=resource,
-        earliest=earliest,
-        latest=latest,
-        margin=margin,
-    )
+    return {
+        "start": start,
+        "check": check,
+        "resource": resource,
+        "earliest": earliest,
+        "latest": latest,
+        "margin": margin,
+    }
 
 
 def graph(nodes, windows=(), carriers=(), travel=15, region="A"):
-    return dict(
-        region=region,
-        nodes=nodes,
-        windows=list(windows),
-        carriers=list(carriers),
-        travel=[],
-        unknown_travel=travel,
-    )
+    return {
+        "region": region,
+        "nodes": nodes,
+        "windows": list(windows),
+        "carriers": list(carriers),
+        "travel": [],
+        "unknown_travel": travel,
+    }
 
 
 def kitchen(distance, length):
@@ -105,7 +106,7 @@ def test_calendar_against_independent_enumeration(distance, length, serial):
 
 
 def carrier(cap=2, loc="A", handling=2):
-    return dict(name="tray", location=loc, capacity=cap, handling=handling)
+    return {"name": "tray", "location": loc, "capacity": cap, "handling": handling}
 
 
 @pytest.mark.parametrize(
@@ -166,19 +167,19 @@ def test_atomic_local_edit_protects_completed_work_and_distant_goal():
             [window("used", "serve", 10, 100)],
         )
     )
-    patch = dict(
-        upsert=[work("look", after=["used"]), work("open", after=["look"])],
-        remove=[],
-        windows=[],
-    )
+    patch = {
+        "upsert": [work("look", after=["used"]), work("open", after=["look"])],
+        "remove": [],
+        "windows": [],
+    }
     fixed = g.repair(patch, {"open"}, {"used": 10})
     assert fixed.nodes["open"].after == ("look",) and "look" not in g.nodes
     for invalid in [
-        dict(upsert=[work("used")]),
-        dict(remove=["serve"]),
-        dict(upsert=[work("other")]),
-        dict(windows=[window("open", "serve", 10, 100)]),
-        dict(upsert=[work("orphan")]),
+        {"upsert": [work("used")]},
+        {"remove": ["serve"]},
+        {"upsert": [work("other")]},
+        {"windows": [window("open", "serve", 10, 100)]},
+        {"upsert": [work("orphan")]},
     ]:
         with pytest.raises(ValueError):
             g.repair({**patch, **invalid}, {"open"}, {"used": 10})
@@ -193,9 +194,13 @@ def camera(rev, t):
 
 def test_only_changes_take_storage_and_history_has_no_current_pixel_ref():
     m = DeltaMemory(keyframe_limit=2)
-    fact = dict(
-        subject="board", relation="on", value="surface", certainty="seen", view="front"
-    )
+    fact = {
+        "subject": "board",
+        "relation": "on",
+        "value": "surface",
+        "certainty": "seen",
+        "view": "front",
+    }
     assert m.observe([fact], camera(0, 0)) and not m.observe([fact], camera(1, 0))
     for i in range(6):
         m.observe([{**fact, "subject": "tool" + str(i)}], camera(i + 2, i))
@@ -215,18 +220,18 @@ class Role:
 
 
 def decision(kind="act", op="open", key="x"):
-    return dict(
-        decision=kind,
-        primitive=op,
-        view="front",
-        x=0.4,
-        y=0.5,
-        seconds=0,
-        yaw=0,
-        evidence="front view changed",
-        changes=[],
-        verified=[dict(id=key, evidence="front view")] if kind == "done" else [],
-    )
+    return {
+        "decision": kind,
+        "primitive": op,
+        "view": "front",
+        "x": 0.4,
+        "y": 0.5,
+        "seconds": 0,
+        "yaw": 0,
+        "evidence": "front view changed",
+        "changes": [],
+        "verified": [{"id": key, "evidence": "front view"}] if kind == "done" else [],
+    }
 
 
 def test_normal_episode_once_compiled_current_pixels_and_no_slow_repair():
@@ -274,7 +279,7 @@ def test_batch_completion_needs_item_specific_evidence():
     c = DispatchController(
         "test",
         ["release"],
-        Role(g, dict(outcome="blocked", reason="one item unverified")),
+        Role(g, {"outcome": "blocked", "reason": "one item unverified"}),
         Role(decision("done", key="a")),
     )
     c.observe(camera(0, 0))
@@ -288,7 +293,7 @@ def test_user_requirement_survives_nonterminal_edits_and_explicit_time_is_frozen
     )
     raw["required_outcomes"] = ["v"]
     g = TemporalGraph.read(raw)
-    patch = dict(remove=[], upsert=[], windows=[])
+    patch = {"remove": [], "upsert": [], "windows": []}
     with pytest.raises(ValueError, match="assertions"):
         g.repair(
             {**patch, "upsert": [dict(work("v"), assertion="assumed")]},
@@ -322,9 +327,11 @@ def test_public_camera_is_invariant_to_private_errors_scores_and_attachment_stat
 
 
 def test_mcp_session_consumes_current_images_once_and_keeps_finish_separate_from_score():
-    from types import SimpleNamespace
     import asyncio
+    from types import SimpleNamespace
+
     from test_action_evidence import packet, txt, types
+
     from manipulation_agent.clients.temporal import episode
     from manipulation_agent.tools import tool_specs
 
@@ -405,7 +412,7 @@ def test_route_length_breaks_equal_makespan_ties_and_required_order_is_immutable
     g.update(
         unknown_metres=12,
         travel=[
-            dict(origin=a, destination=b, seconds=5, metres=m)
+            {"origin": a, "destination": b, "seconds": 5, "metres": m}
             for a, b, m in [("S", "A", 5), ("A", "B", 4), ("S", "B", 1), ("B", "A", 1)]
         ],
     )
@@ -413,10 +420,10 @@ def test_route_length_breaks_equal_makespan_ties_and_required_order_is_immutable
         0
     ].job.members == ("b",)
     g["nodes"][1]["after"] = ["a"]
-    g["required_order"] = [dict(first="a", then="b")]
+    g["required_order"] = [{"first": "a", "then": "b"}]
     with pytest.raises(ValueError, match="precedence"):
         TemporalGraph.read(g).repair(
-            dict(upsert=[work("b", "B")], remove=[], windows=[]), {"b"}, {}
+            {"upsert": [work("b", "B")], "remove": [], "windows": []}, {"b"}, {}
         )
 
 
@@ -435,7 +442,7 @@ def test_macro_prefix_is_rebound_to_current_images_after_verified_success():
     c.observe(camera(1, 10))
     _, args = c.next()
     assert fast.calls[-1]["macro_next_primitive"] == "grasp"
-    assert args["target"] == dict(image_ref="front-1", point=[0.72, 0.5])
+    assert args["target"] == {"image_ref": "front-1", "point": [0.72, 0.5]}
     c.observe(camera(2, 20))
     assert c.next()[1]["outcome"] == "achieved"
     assert len(slow.calls) == 1
@@ -475,15 +482,15 @@ def test_time_limited_search_can_dispatch_a_complete_feasible_route():
 
 
 def test_qwen_declared_pixels_map_to_the_original_view_and_reject_padding():
-    from manipulation_agent.agent.temporal_models import GROUND, DECISION
+    from manipulation_agent.agent.temporal_models import DECISION, GROUND
     from manipulation_agent.clients.visual_coordinates import (
-        pixel_request,
         motor_decision,
+        pixel_request,
     )
 
     obs = camera(0, 0)
     req, views = pixel_request(
-        dict(instructions=GROUND, schema=DECISION, images=obs.parts()), 512 * 512
+        {"instructions": GROUND, "schema": DECISION, "images": obs.parts()}, 512 * 512
     )
     assert (
         "x_pixel" in req["schema"]["properties"]
@@ -495,3 +502,18 @@ def test_qwen_declared_pixels_map_to_the_original_view_and_reject_padding():
     assert top > 0
     with pytest.raises(ValueError):
         motor_decision({**raw, "y_pixel": 0}, views)
+
+
+def test_invalid_fast_decision_reaches_local_repair_without_motor_action():
+    class BadVisualRole:
+        def ask(self, *args):
+            raise ValueError("The visual grounder could not return a valid decision")
+
+    slow = Role(
+        graph([work("x")]), {"outcome": "blocked", "reason": "No visual alternative"}
+    )
+    controller = DispatchController("task", ["open"], slow, BadVisualRole())
+    controller.observe(camera(0, 0))
+    tool, args = controller.next()
+    assert tool == "finish" and args["outcome"] == "blocked"
+    assert "visual grounder" in slow.calls[-1]["event"] and controller.clock == 0

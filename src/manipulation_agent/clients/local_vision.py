@@ -2,14 +2,15 @@
 
 import argparse
 import base64
+import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import BytesIO
-import json
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
 from ..mcp_server import loopback_host
-from .visual_coordinates import pixel_request, motor_decision
+from .visual_coordinates import motor_decision, pixel_request
 
 
 class LocalVisualRole:
@@ -19,19 +20,29 @@ class LocalVisualRole:
 
     def ask(self, instructions, schema, context, images):
         data = json.dumps(
-            dict(
-                instructions=instructions, schema=schema, context=context, images=images
-            )
+            {
+                "instructions": instructions,
+                "schema": schema,
+                "context": context,
+                "images": images,
+            }
         ).encode()
         req = Request(self.url, data=data, headers={"Content-Type": "application/json"})
-        with self.opener.open(req, timeout=600) as response:
-            return json.load(response)
+        try:
+            with self.opener.open(req, timeout=600) as response:
+                return json.load(response)
+        except HTTPError as exc:
+            if exc.code == 422:
+                raise ValueError(
+                    "The visual grounder could not return a valid decision for the current views"
+                ) from exc
+            raise
 
 
 class LocalInference:
     def __init__(self, path, pixels):
-        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
         import torch
+        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
         self.pixels = pixels
         self.processor = AutoProcessor.from_pretrained(
@@ -47,8 +58,8 @@ class LocalInference:
 
     def __call__(self, data):
         import torch
+        from jsonschema import ValidationError, validate
         from PIL import Image
-        from jsonschema import validate, ValidationError
 
         data, views = pixel_request(data, self.pixels)
         photos = []
@@ -125,9 +136,12 @@ def main():
                 if not 0 < size <= 64 * 1024**2:
                     return self.send_error(413)
                 answer = infer(json.loads(self.rfile.read(size)))
-            except Exception as exc:
+            except (ValueError, TypeError, KeyError, OSError) as exc:
                 print(type(exc).__name__, str(exc)[:320], flush=True)
                 return self.send_error(422)
+            except RuntimeError as exc:
+                print(type(exc).__name__, str(exc)[:320], flush=True)
+                return self.send_error(503)
             body = json.dumps(answer).encode()
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))

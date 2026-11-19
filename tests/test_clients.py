@@ -228,7 +228,7 @@ command = "ignored"
             self.assertEqual(resumed.cwd, Path(folder, 'empty_workspace'))
 
     def test_provider_gateway_changes_transport_only(self):
-        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {}, clear=True), \
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'no_proxy': 'private.example', 'NO_PROXY': 'other.example'}, clear=True), \
                 patch('pathlib.Path.home', return_value=Path(folder)):
             root = Path(folder, '.codex'); root.mkdir()
             (root/'config.toml').write_text('[model_providers.relay]\nname="Relay"\n'
@@ -237,6 +237,8 @@ command = "ignored"
                 model_provider_profile='relay', model_provider_gateway='http://127.0.0.1:18081'), 'Policy', ['act'])
             self.assertIn('model_providers.relay.base_url="http://127.0.0.1:18081"', prepared.argv)
             self.assertIn('model_providers.relay.stream_max_retries=8', prepared.argv)
+            self.assertEqual(prepared.env_overlay['no_proxy'], 'private.example,other.example,127.0.0.1')
+            self.assertEqual(prepared.env_overlay['NO_PROXY'], prepared.env_overlay['no_proxy'])
             self.assertIn('provider/model', prepared.argv)
             self.assertEqual(prepared.stdin, self.config(Path(folder)).prompt)
 

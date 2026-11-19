@@ -1,11 +1,11 @@
 """Closed-loop dispatch. Only a motor response can advance the robot clock."""
 
-from dataclasses import asdict
 import math
+from dataclasses import asdict
 
 from .temporal_graph import Job, TemporalGraph, schedule
 from .temporal_memory import DeltaMemory
-from .temporal_models import COMPILE, DECISION, GROUND, GRAPH, PATCH, REPAIR
+from .temporal_models import COMPILE, DECISION, GRAPH, GROUND, PATCH, REPAIR
 
 
 class DispatchController:
@@ -482,14 +482,14 @@ class DispatchController:
             nodes = [self.graph.nodes[k] for k in job.members]
             skill = ("batch " if job.carrier else "") + nodes[0].skill
             context = self.context(nodes, skill, windows)
-            decision = self.ask(
-                "fast",
-                GROUND,
-                DECISION,
-                context,
-                history=" ".join(n.work for n in nodes),
-            )
             try:
+                decision = self.ask(
+                    "fast",
+                    GROUND,
+                    DECISION,
+                    context,
+                    history=" ".join(n.work for n in nodes),
+                )
                 request = self.advance(decision, skill, windows)
             except (ValueError, KeyError, TypeError) as exc:
                 reason = str(exc)[:600]
