@@ -3,7 +3,13 @@
 import math
 from dataclasses import asdict
 
-from .temporal_graph import Job, TemporalGraph, schedule
+from .temporal_graph import (
+    InvalidOrderReferences,
+    Job,
+    TemporalGraph,
+    correct_order_references,
+    schedule,
+)
 from .temporal_memory import CurrentInspection, DeltaMemory
 from .temporal_models import (
     COMPILE,
@@ -14,8 +20,10 @@ from .temporal_models import (
     INSPECT_GROUND,
     INSPECT_PATCH,
     INSPECT_REPAIR,
+    ORDER_CORRECTION,
     PATCH,
     REPAIR,
+    order_correction_schema,
 )
 
 
@@ -154,7 +162,29 @@ class DispatchController:
         for _ in range(2):
             raw = self.ask("compile", COMPILE, GRAPH, context)
             try:
-                self.graph = TemporalGraph.read(raw)
+                try:
+                    self.graph = TemporalGraph.read(raw)
+                except InvalidOrderReferences as invalid:
+                    nodes = {n["id"]: n["work"] for n in raw["nodes"]}
+                    entries = [
+                        {"entry": i, **raw["required_order"][i]}
+                        for i in invalid.positions
+                    ]
+                    correction = self.ask(
+                        "compile_order",
+                        ORDER_CORRECTION,
+                        order_correction_schema(nodes, invalid.positions),
+                        {"task": self.instruction, "nodes": nodes, "entries": entries},
+                    )
+                    if correction["status"] != "corrected":
+                        raise ValueError(
+                            "Named nodes cannot represent the declared explicit order"
+                        ) from invalid
+                    raw = correct_order_references(
+                        raw, invalid.positions, correction["fixes"]
+                    )
+                    self.graph = TemporalGraph.read(raw)
+                    self.log("order_corrected", entries=list(invalid.positions))
             except (ValueError, TypeError, KeyError) as exc:
                 context["schema_error"] = str(exc)[:400]
                 self.log("invalid_graph", reason=context["schema_error"])

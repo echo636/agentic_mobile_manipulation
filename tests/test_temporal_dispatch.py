@@ -586,3 +586,44 @@ def test_inspection_only_repair_can_ground_one_click_then_expires():
     controller.observe(camera(1, 4))
     assert controller.next()[1]["outcome"] == "achieved"
     assert "current_inspection" not in fast.calls[2]
+
+
+def test_declared_precedence_is_enforced_even_if_successor_omits_redundant_after_edge():
+    raw = graph([work("wipe", "B"), work("place", "A")])
+    raw["required_order"] = [{"first": "wipe", "then": "place"}]
+    g = TemporalGraph.read(raw)
+    s = schedule(g, {}, region="A", now=0)
+    assert [slot.job.members for slot in s.slots] == [("wipe",), ("place",)]
+
+
+def test_compiler_repairs_unknown_order_ids_without_replacing_work_or_existing_constraints():
+    from manipulation_agent.agent.temporal_graph import correct_order_references
+
+    raw = graph([work("one"), work("two"), work("stow")])
+    raw["required_order"] = [
+        {"first": "one", "then": "two"},
+        {"first": "both jobs before storage", "then": "stow"},
+    ]
+    fix = {
+        "entry": 1,
+        "relations": [
+            {"first": "one", "then": "stow"},
+            {"first": "two", "then": "stow"},
+        ],
+    }
+    slow = Role(raw, {"status": "corrected", "fixes": [fix]})
+    c = DispatchController("finish the work before stowing", [], slow, Role())
+    c.observe(camera(0, 0))
+    assert c.compile() and c.graph.dependencies("stow") == {"one", "two"}
+    assert c.graph.dependencies("two") == {"one"} and set(c.graph.nodes) == {
+        "one",
+        "two",
+        "stow",
+    }
+    for replacement in [
+        [],
+        [{"entry": 1, "relations": []}],
+        [{"entry": 1, "relations": [{"first": "one", "then": "two"}]}],
+    ]:
+        with pytest.raises(ValueError):
+            correct_order_references(raw, (1,), replacement)

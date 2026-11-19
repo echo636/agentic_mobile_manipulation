@@ -114,6 +114,41 @@ def unique(rows, key):
     return result
 
 
+class InvalidOrderReferences(ValueError):
+    def __init__(self, positions):
+        self.positions = tuple(positions)
+        super().__init__(
+            "Explicit precedence endpoints must name existing node ids at entries "
+            + ", ".join(map(str, positions))
+        )
+
+
+def correct_order_references(raw, positions, fixes):
+    """Only repair invalid references. Every original relation keeps its known endpoints."""
+    nodes = {n["id"] for n in raw["nodes"]}
+    changes = unique(fixes, lambda r: r["entry"])
+    if set(changes) != set(positions):
+        raise ValueError("Each invalid precedence entry needs one correction")
+    orders = []
+    for index, original in enumerate(raw["required_order"]):
+        if index not in changes:
+            orders.append(original)
+            continue
+        replacements = changes[index]["relations"]
+        if not replacements:
+            raise ValueError("An explicit precedence cannot be discarded")
+        for pair in replacements:
+            for side in ("first", "then"):
+                if pair[side] not in nodes or (
+                    original[side] in nodes and pair[side] != original[side]
+                ):
+                    raise ValueError(
+                        "Correct only unknown endpoints of the original precedence"
+                    )
+            orders.append(pair)
+    return {**raw, "required_order": orders}
+
+
 @dataclass
 class TemporalGraph:
     region: str
@@ -155,6 +190,19 @@ class TemporalGraph:
             ),
         )
         graph.travel = {k: v[2] for k, v in graph.travel.items()}
+        unresolved = [
+            i
+            for i, (a, b) in enumerate(graph.required_order)
+            if a not in graph.nodes or b not in graph.nodes
+        ]
+        if unresolved:
+            raise InvalidOrderReferences(unresolved)
+        # Explicit order is itself a constraint. Do not require the compiler to
+        # redundantly spell every edge in the successor's regular prerequisites.
+        for predecessor, successor in graph.required_order:
+            node = graph.nodes[successor]
+            if predecessor not in node.after:
+                graph.nodes[successor] = replace(node, after=(*node.after, predecessor))
         graph.validate()
         return graph
 

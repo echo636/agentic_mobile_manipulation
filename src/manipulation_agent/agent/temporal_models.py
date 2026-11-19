@@ -113,7 +113,7 @@ A proposed crop alone cannot establish identity or success."""
 
 
 COMPILE = """Compile the user's request into a single mobile robot's remaining work, using only the
-current RGB and user information. Include one required_outcomes node id for every explicit user outcome, even when other work depends on it. List explicit user order relations in required_order. Preserve required order and terminal outcomes. Unobserved facts,
+current RGB and user information. Include one required_outcomes node id for every explicit user outcome, even when other work depends on it. List explicit user order relations in required_order. Both first and then must contain a single exact node id; split multi-node conditions into individual pairs. Preserve required order and terminal outcomes. Unobserved facts,
 durations, distances and usable carrier capacity are estimates. Name compact stable semantic ids and
 regions. Each node is an independently verifiable piece of work: indicate source and ending region,
 required predecessor ids, active HANDLING seconds EXCLUDING travel and passive work, a reusable skill
@@ -129,6 +129,23 @@ load is estimated size units for such a delivery, zero otherwise. Introduce a ca
 by the user's information or visible evidence; name its probable current region, conservative capacity
 in those units, and added handling cost in seconds. Include directed inter-region transit estimates in seconds and route metres.
 Choose a compact graph with a checkable final outcome. Do not supply pixels or a simulator identifier."""
+ORDER_CORRECTION = """Repair references in the indicated precedence entries of this existing graph.
+Choose exact node ids and preserve every original temporal obligation. If a phrase represents multiple
+nodes, enumerate the necessary pairs. Keep endpoints that already match an id. Use the public user instruction
+and node descriptions to disambiguate. Return status=needs_revision with an empty list if this is impossible."""
+
+
+def order_correction_schema(nodes, positions):
+    ref = {"type": "string", "enum": list(nodes)}
+    pair = obj(first=ref, then=ref)
+    return obj(
+        status={"type": "string", "enum": ["corrected", "needs_revision"]},
+        fixes=arr(
+            obj(entry={"type": "integer", "enum": list(positions)}, relations=arr(pair))
+        ),
+    )
+
+
 REPAIR = """Return only local edits to the supplied unfinished scope. State what new observation changes
 the method. Preserve verified work, unchanged user goals and existing ids. Keep terminal assertions
 verbatim. You can insert a prerequisite, revise work, reassign a region, or revise a process check
