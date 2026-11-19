@@ -14,6 +14,14 @@ OmniGibson draws a marker on switchable devices and colors it from the native sw
 
 ## Observation and action contract
 
+The simulator captures the four current views after the motor call returns. At the
+chosen pose the rig completes 13 zero-time Replicator renders before reading the
+sensor buffers. Earlier frames can retain the previous color of a surface that
+changed abruptly. The simulator records the PhysX step, clock, and robot pose on
+both sides of capture. An object released in motion can keep moving on the next
+physics step. In sensor-only experiments the state-colored switch meshes are
+hidden before rig warmup and checked again before capture.
+
 Call initialize({}) first. It returns the prepared episode's current snapshot without resetting the scene or performing an additional render. After inspecting the initial images, choose an act or look and inspect the next four-camera snapshot included in that same response. There is no observation-job submission or polling step in the default model loop.
 
 Once the execution clock is armed, tool replies also report `execution_budget.remaining_seconds`, sampled after the tool finishes. This is runtime metadata, not simulator state. It excludes initialization, includes model/tool waiting, and does not add or extend any limit. Before the clock is armed, the field is absent. The goal-decomposition skill uses it to prioritize remaining work and leave time for an honest finish.

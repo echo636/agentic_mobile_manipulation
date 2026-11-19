@@ -22,6 +22,10 @@ from .demo_motion import DemoMotion
 from .local_rgb import LocalRGBManipulation
 from .local_manipulation import LocalLimits
 
+# A single completed RTX frame can still blend in the old material. The
+# fixed-pose switch test needs additional rendered frames at unchanged time.
+OBSERVATION_RENDER_PASSES = 13
+
 class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
@@ -110,6 +114,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
+        # The rig renders warmup frames before its first observation. A visible
+        # switch overlay in those frames can persist in the first RGB readbacks.
+        if self.hide_toggle_markers:
+            self._hide_toggle_markers()
         base_z = float(self.robot.get_position_orientation()[0][2])
         floor_z = min(self.env.scene.trav_map.floor_heights, key=lambda z: abs(z-base_z))
         self._base_floor_clearance = base_z-floor_z
@@ -277,7 +285,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                                   capture_env_step=self._recorded_capture_step,repeated=not fresh,
                                   check_active=lambda:self.deadline.check(changed=True))
 
-    def _wait_for_rgb_annotations(self):
+    def _wait_for_rgb_annotations(self, render_passes=1):
         """Finish Replicator capture at the current pose without advancing time.
 
         Shape-valid annotator buffers can still contain a previous camera pose.
@@ -304,9 +312,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             # Replicator updates SDGPipeline USD attributes while dispatching
             # the capture. OG requires these writes in its edit scope, whose
             # exit also synchronizes the changes to Fabric.
-            with self.og.sim.editing_usd():
-                lazy.omni.replicator.core.orchestrator.step(
-                    delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1)
+            for _ in range(render_passes):
+                with self.og.sim.editing_usd():
+                    lazy.omni.replicator.core.orchestrator.step(
+                        delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1)
         self._check_renderer_health()
         after = state()
         changed = [key for key in ('env_step', 'sim_step_index') if before[key] != after[key]]
@@ -318,7 +327,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             stream.write(json.dumps({'at': now(), 'audience': 'executor_private',
                 'status': 'failed' if changed else 'passed', 'api': 'replicator.orchestrator.step',
                 'delta_time': 0., 'pause_timeline': False, 'wait_for_render': True, 'rt_subframes': 1,
-                'before': before, 'after': after, 'changed_fields': changed}) + '\n')
+                'render_passes': render_passes, 'before': before, 'after': after, 'changed_fields': changed}) + '\n')
         if changed:
             raise RuntimeError('Replicator capture changed simulation state: ' + ', '.join(changed))
 
@@ -353,7 +362,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             with component(self,'render'):self.og.sim.render()
             self._check_renderer_health()
             if require_calibration:
-                self._wait_for_rgb_annotations()
+                self._wait_for_rgb_annotations(OBSERVATION_RENDER_PASSES if attempt == 0 else 1)
             pixels = {}; packets = {}; intrinsics={}; pending={}
             for view,sensor in sensors.items():
                 with component(self,'sensor_readback'):data,info = sensor.get_obs()
@@ -456,8 +465,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         before_joints = self.robot.get_joint_positions().clone()
         if self.video is not None and not self.video.closed:
             self._prepare_spectator()
-        # The observation and its replay frame use identical RGB arrays, from
-        # one frozen simulation state and the unchanged four-tick barrier.
+        # The observation and its replay frame use identical RGB arrays from
+        # the last completed render of this frozen simulation state.
         rendered = self._render_rgb_views(include_spectator=self.video is not None and not self.video.closed,
                                           require_calibration=True)
         self.capture_index+=1
