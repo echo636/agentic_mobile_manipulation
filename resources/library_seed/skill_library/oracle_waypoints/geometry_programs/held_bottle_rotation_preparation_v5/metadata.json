@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_rotation_preparation_v5",
+  "source_sha256": "f368450da89cc85b07753e852b798fdb5898976a74c07d9397675e1c7d031e15",
+  "description": "Model adaptation of own segmented alignment: five sequential rotations about measured held bottle origin, maintaining rim clearance; no translation toward mouth yet.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_rotation_preparation_v5/f368450da89cc85b07753e852b798fdb5898976a74c07d9397675e1c7d031e15/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:26.468468+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_rotation_preparation_v5/v000001",
+  "library_parent_commit": "4d5a81eb6e8c998edc881144d521f7f422eff102"
+}

@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_mouth_alignment_timed_v3",
+  "source_sha256": "fa62d7720240543beb1e563be02a6b93e04fa9760fd5b05febc6b34e4ce78d4b",
+  "description": "Model-authored mesh-mouth alignment using explicitly selected geometry_pick_v1 validated full timing after EEF-only rate rejections; no collision/retention relaxation. Holds bottle above mouth.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_mouth_alignment_timed_v3/fa62d7720240543beb1e563be02a6b93e04fa9760fd5b05febc6b34e4ce78d4b/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:16.923630+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_mouth_alignment_timed_v3/v000001",
+  "library_parent_commit": "a7d3ceeb6c4da1fd35c3009b6a41eafdee45191e"
+}

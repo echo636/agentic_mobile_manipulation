@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "oracle-press",
+  "kind": "action",
+  "key": "press",
+  "protocol": "oracle_waypoints",
+  "revision": 1,
+  "previous_active_revision": 0,
+  "description": "Activate a device through current toggle geometry, measured finger offsets and contact/state checks.",
+  "action_keys": [],
+  "updated_at": "2026-10-29T14:06:12.623886+00:00",
+  "document_sha256": "a50d370d5842f6b420960296bbd5920c003a895738e476ce62a938d809ad1318",
+  "record_sha256": "c024f43979ef05d39b9ba9af48d0f0db6537514a0af8c25eca2b528810bc9975"
+}

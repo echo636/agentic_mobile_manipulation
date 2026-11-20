@@ -1,0 +1,44 @@
+{
+  "name": "place-held-object",
+  "description": "Locally place an already retained object inside a calibrated container mouth; release, retreat and measure settling.",
+  "robot": "R1Pro",
+  "protocol": "oracle_waypoints",
+  "uses": [],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "arm": {
+        "type": "string",
+        "enum": [
+          "left",
+          "right"
+        ]
+      },
+      "target_object_id": {
+        "type": "string"
+      },
+      "allow_trunk": {
+        "type": "boolean"
+      },
+      "destination_object_id": {
+        "type": "string"
+      },
+      "release_position_in_destination_m": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "items": {
+          "type": "number"
+        }
+      }
+    },
+    "required": [
+      "arm",
+      "target_object_id",
+      "allow_trunk",
+      "destination_object_id",
+      "release_position_in_destination_m"
+    ],
+    "additionalProperties": false
+  }
+}

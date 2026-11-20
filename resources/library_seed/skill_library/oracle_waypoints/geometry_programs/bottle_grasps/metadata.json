@@ -1,0 +1,16 @@
+{
+  "program": "bottle_grasps",
+  "source_sha256": "16788d226ef78f5666712ab3d38f09d29e2eea417899c938a2514d31d06a3b0d",
+  "description": "Existing upright elongated-object mesh-section grasp program. Select directly with parameters.object_id and arm after get_manip_geometry. Optional parameters.control_steps={pregrasp: estimated steps, contact_close: estimated steps}. Uses the original bottle_grasps sampler and native measured contact offset/aperture; returns ranked pregrasp/contact candidates. Hand must already be open. Reuse as-is, adapt it or write another program when task/shape differs.",
+  "author": "harness_reference",
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:26:54.008142+00:00",
+  "release_tag": "oracle_waypoints/geometry-bottle_grasps/v000001",
+  "library_parent_commit": "e91b257682d3efc4d385a845a2ac8376df623e48"
+}

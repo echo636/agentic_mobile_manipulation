@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_mouth_alignment_v1",
+  "source_sha256": "7399a3c609e23c3f31018b92ad0a328853798689261957a056c4a189432ce7e4",
+  "description": "Model-authored alignment candidates from actual bucket rim sections and carried bottle transform; all terminal commands hold, release requires separate verification.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_mouth_alignment_v1/7399a3c609e23c3f31018b92ad0a328853798689261957a056c4a189432ce7e4/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:18.242659+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_mouth_alignment_v1/v000001",
+  "library_parent_commit": "07968cb3735be08fc431c3320485d699a0b1afb0"
+}

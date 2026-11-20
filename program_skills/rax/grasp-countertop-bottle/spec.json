@@ -1,0 +1,96 @@
+{
+  "name": "grasp-countertop-bottle",
+  "interface": "rax_main_ctx",
+  "callable": "ctx.call(\"manip\", recipe=..., targets=..., parameters=..., constraints=..., revision=..., allow_draft=True)",
+  "recipe": "countertop_pick",
+  "protocol": "oracle_waypoints",
+  "status": "draft",
+  "controller_sha256": "b762bcb71c6267ccdd664badaf833d16c043c0afccf0c036b0dd1c89d3cb2742",
+  "bundle": null,
+  "runner_sha256": null,
+  "independent_successes": 0,
+  "authorship": "manual atomic-call refactor of Astra/high controller independently accepted twice on 308 and once on 309; changed runtime remains draft",
+  "physical_validation": "required after registration; previous evidence does not qualify changed source",
+  "not_legacy_execute_skill_compatible": true,
+  "recipe_contract": {
+    "targets": {
+      "object": {
+        "type": "EntityRef",
+        "required": true
+      },
+      "support": {
+        "type": "EntityRef",
+        "default": {
+          "task_name": "countertop.n.01_1"
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "arm": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "left",
+            "right"
+          ],
+          "default": "auto"
+        },
+        "ready_posture": {
+          "type": "string",
+          "enum": [
+            "countertop_ready"
+          ],
+          "default": "countertop_ready"
+        },
+        "lift_m": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 0.15,
+          "default": 0.1,
+          "description": "Commanded lift-path displacement in metres; not a guarantee of measured lift"
+        },
+        "hold_steps": {
+          "type": "integer",
+          "minimum": 60,
+          "default": 60
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow_base_motion": {
+          "type": "boolean",
+          "default": false
+        },
+        "allow_trunk_motion": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "revision": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Expected current observation revision; None reacquires fresh observation"
+    }
+  },
+  "safety_invariants": [
+    "native_only: no held navigation",
+    "one grasp call; no release or hidden retry",
+    "unknown parameters rejected before robot calls",
+    "endpoint checks do not certify continuous hold or official task success"
+  ],
+  "compatibility_main": "main(ctx) performs ideal checked empty navigation, then one manip call bound to this frozen project",
+  "publisher": null,
+  "proposal_only": true,
+  "mcp_tool": "manip",
+  "applicability": "Upright free bottle on the bound countertop; both hands empty; navigate while empty until local arm reach and clearance are feasible. Not floor pickups, cans, paper or complete sorting."
+}

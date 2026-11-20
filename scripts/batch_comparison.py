@@ -1,0 +1,210 @@
+"""Dated, matched-task comparison; keep scoring separate from evidence checks."""
+import argparse
+from collections import Counter
+from datetime import datetime, timezone
+import html
+import json
+from pathlib import Path
+import time
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
+
+def outcome(row):
+    """Keep timeout/failure terminal even when native shutdown lost its score."""
+    from manipulation_agent.batch_lifecycle import classify_episode_outcome
+    return classify_episode_outcome(row)
+
+ARMS = ('original', 'motor', 'official')
+LABELS = {'original': '原实现', 'motor': 'Motor · 代码控制', 'official': 'Official · 符号动作'}
+
+
+def atomic(path, data):
+    temp = path.with_suffix(path.suffix + '.tmp')
+    temp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+    temp.replace(path)
+
+
+def summarize_comparison(progress):
+    arms=tuple(arm for arm in ARMS if arm in progress)
+    if 'original' not in arms or len(arms)<2 or set(progress)-set(ARMS):
+        raise ValueError('Comparison requires original and at least one known paired arm')
+    task_sets = [{r['task'] for r in p['tasks']} for p in progress.values()]
+    if any(tasks != task_sets[0] for tasks in task_sets):
+        raise ValueError('Comparison arms must contain identical task sets')
+    # Emit the same canonical classification used by aggregate counts. Rendering
+    # must not independently reinterpret timeouts, finish latches or media errors.
+    maps = {arm: {r['task']: {**r, 'episode_outcome': outcome(r)} for r in p['tasks']}
+            for arm, p in progress.items()}
+    tasks = []
+    for template in progress['original']['tasks']:
+        rows = {arm: maps[arm][template['task']] for arm in arms}
+        for key in ('instance', 'seed', 'instruction_sha256', 'bddl_sha256'):
+            if len({r[key] for r in rows.values()}) != 1:
+                raise ValueError('Unmatched task inputs: ' + template['task'] + ' / ' + key)
+        tasks.append({'index': template['index'], 'task': template['task'], 'name': template['name'],
+                      'instruction': template['instruction'], 'arms': rows})
+    summaries = {}
+    for arm in arms:
+        rows = list(maps[arm].values())
+        counts = dict(Counter(r['status'] for r in rows))
+        outcomes = dict(Counter(outcome(r) for r in rows if outcome(r) is not None))
+        summaries[arm] = {'total': len(rows), 'counts': counts,
+            'outcome_counts': outcomes,
+            'worker_states': progress[arm].get('worker_states', {}),
+            'active_executions': sum(r['status']=='running' and r.get('stage') not in
+                {'waiting_for_resources','waiting_for_lease','archiving','finalizing'} for r in rows),
+            'ended': sum(counts.get(k, 0) for k in ('passed', 'failed', 'blocked')),
+            'official_goal_successes': sum(r.get('task_success') is True for r in rows),
+            'fully_validated_successes': counts.get('passed', 0),
+            'scored': sum(r.get('task_success') is not None for r in rows),
+            'unscored_ended': sum(r['status'] in ('passed', 'failed', 'blocked') and r.get('task_success') is None for r in rows),
+            'infrastructure_retries': sum(len(r.get('previous_attempts', [])) for r in rows if r.get('retry_kind') == 'infrastructure'),
+            'source': progress[arm].get('source'), 'updated_at': progress[arm].get('updated_at')}
+    paired = [t for t in tasks if all(r['status'] in ('passed', 'failed', 'blocked') and r.get('task_success') is not None for r in t['arms'].values())]
+    return {'updated_at': datetime.now(timezone.utc).isoformat(), 'arms': summaries, 'tasks': tasks,
+            'paired_scored_tasks': len(paired),
+            'paired_goal_successes': {arm: sum(t['arms'][arm]['task_success'] is True for t in paired) for arm in arms}}
+
+
+def render_arm_dashboard(progress):
+    esc = lambda x: html.escape(str(x))
+    protocol = progress.get('protocol') or {}
+    standalone = protocol.get('standalone_batch') is True
+    if standalone:
+        return render_standalone_dashboard(progress)
+    title = (protocol.get('batch_title') if standalone else None) or protocol.get('comparison_arm', protocol.get('agent_profile', 'original'))
+    page_title = title if standalone else 'Execution comparison'
+    navigation = '' if standalone else '<p><a href="../">Three-arm comparison</a></p>'
+    if protocol.get('episode_budget_policy') == 'execution_deadline_only':
+        navigation += ('<p>Execution budget: ' + esc(protocol.get('model_timeout_seconds', 1800)) +
+                       ' seconds after initialization and MCP readiness. Action counts, tool calls and simulator steps are recorded without separate episode cutoffs.</p>')
+    summary = ''
+    extra_style = ''
+    if standalone:
+        counts = Counter(outcome(r) or ('queued' if r['status'] in ('planned', 'queued') else r['status']) for r in progress['tasks'])
+        summary = '<p id="batch-counts">' + ' · '.join(
+            label + ' ' + str(counts.get(key, 0)) for key, label in (
+                ('success', 'Success'), ('failure', 'Failed'), ('timeout', 'Timeout'),
+                ('running', 'Running'), ('queued', 'Queued'))) + '</p>'
+        summary += '<p><a href="behavior100/progress.json">Progress JSON</a> · <a href="behavior100/manifest.json">Frozen manifest</a></p>'
+        extra_style = 'h1,td,th{overflow-wrap:anywhere}table{table-layout:fixed}td,th{padding:8px}th:nth-child(1){width:7%}th:nth-child(2){width:35%}th:nth-child(3){width:28%}th:nth-child(4){width:7%}th:nth-child(5){width:23%}'
+    rows = []
+    for r in progress['tasks']:
+        link = '<a href="' + esc(r['replay_url']) + '">Replay ↗</a>' if r.get('replay_url') else 'Pending'
+        rows.append('<tr><td>' + str(r['index'] + 1) + '</td><td>' + esc(r['name']) + '</td><td>' + esc(outcome(r) or r['status']) + ' / ' + esc(r.get('stage', 'queued')) + '</td><td>' + esc(r.get('q_score', '—')) + '</td><td>' + link + '</td></tr>')
+    return '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="30"><title>' + esc(page_title) + '</title><style>body{font:16px/1.6 system-ui;max-width:1100px;margin:32px auto;padding:0 20px}table{width:100%;border-collapse:collapse}td,th{padding:12px;text-align:left;border-bottom:1px solid #ddd}a{color:#087866}' + extra_style + '</style><h1>' + esc(title) + '</h1>' + navigation + summary + '<p>Updated ' + esc(progress['updated_at']) + '. Task success and complete evidence are separate fields.</p><p>' + esc(protocol.get('protocol', 'Four-camera RGB; see frozen manifest for execution protocol')) + '</p><table><tr><th>#</th><th>Task</th><th>Status</th><th>Q</th><th>Replay</th></tr>' + ''.join(rows) + '</table></html>'
+
+
+def render_standalone_dashboard(progress):
+    """Compact result view. Provenance stays in the existing run records."""
+    from datetime import timedelta
+    esc=lambda value:html.escape(str(value),quote=True)
+    tasks=progress['tasks'];total=len(tasks);protocol=progress.get('protocol') or {}
+    status_of=lambda row:outcome(row) or ('queued' if row['status'] in ('planned','queued') else 'running')
+    counts=Counter(status_of(row) for row in tasks)
+    ended=sum(counts[k] for k in ('success','failure','timeout'))
+    labels={'success':'成功','failure':'失败','timeout':'超时','running':'进行中','queued':'待开始'}
+    completed=ended==total
+    title=protocol.get('display_title') or (f'{total} 项任务评测' if total==100 else f'{total} 项任务补测')
+    def local_time(value,fmt):
+        if not value:return '—'
+        try:return datetime.fromisoformat(value.replace('Z','+00:00')).astimezone(timezone(timedelta(hours=8))).strftime(fmt)
+        except ValueError:return '—'
+    rows=[]
+    for row in tasks:
+        state=status_of(row);q=row.get('custom_score') if row.get('custom_task_spec') else row.get('q_score')
+        score=(f'<div class="score"><span>{float(q)*100:.0f}<small>%</small></span><span class="score-track"><i style="width:{max(0,min(100,float(q)*100)):.2f}%"></i></span></div>'
+               if isinstance(q,(int,float)) else '<span class="unavailable">未取得评分</span>' if state in ('failure','timeout') else '<span class="unavailable">—</span>')
+        reason={'controller_failed':'模型运行中断','execution_error':'运行异常','agent_step_budget_exhausted':'agent step 用尽'}.get(row.get('termination_reason'),'')
+        if row.get('failure_stage')=='simulator_starting':reason='初始化中断'
+        status=f'<span class="badge {state}"><i></i>{labels[state]}</span>'
+        if reason:status+=f'<span class="reason">{esc(reason)}</span>'
+        replay=row.get('replay_url')
+        if replay and row.get('video_validation')!='failed':
+            link=f'<a class="replay-link" href="{esc(replay)}" aria-label="回放 {esc(row["name"])}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5.5 3 7 5-7 5z"/></svg>查看回放<span>↗</span></a>'
+        else:link='<span class="unavailable">暂无回放</span>'
+        detail=f'<details><summary>{esc(row["name"])}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg></summary><p>{esc(row.get("instruction",""))}</p></details>'
+        search=' '.join(str(row.get(k,'')) for k in ('index','name','task','instruction'))
+        rows.append(f'<tr data-status="{state}" data-search="{esc(search.lower())}"><td class="task-cell"><span class="task-index">{row["index"]+1:02d}</span>{detail}</td><td>{status}</td><td>{score}</td><td class="replay-cell">{link}</td></tr>')
+    tabs='<button class="filter active" data-filter="all" aria-pressed="true">全部<span>'+str(total)+'</span></button>'
+    for key in ('success','failure','timeout','running','queued'):
+        if counts[key] or key in ('success','failure','timeout'):
+            tabs+=f'<button class="filter" data-filter="{key}" aria-pressed="false">{labels[key]}<span>{counts[key]}</span></button>'
+    segments=''.join(f'<i class="segment {key}" style="width:{counts[key]/max(total,1)*100:.4f}%" title="{labels[key]} {counts[key]}"></i>' for key in labels if counts[key])
+    scope=protocol.get('display_scope_note') or ('本页仅展示本轮 100 项任务结果。' if total==100 else '本页展示故障任务的独立补测结果，原始成绩保留。')
+    if protocol.get('episode_budget_policy')=='agent_steps':
+        scope+=' 模型：'+str(protocol.get('model'))+' / '+str(protocol.get('model_reasoning_effort'))+'；每项最多 '+str(protocol['max_agent_steps'])+' 个 agent step；任务执行无时间上限。'
+    values={'TITLE':title,'TOTAL':str(total),'ENDED':str(ended),'SUCCESS':str(counts['success']),
+        'FAILURE':str(counts['failure']),'TIMEOUT':str(counts['timeout']),
+        'RATE':f'{counts["success"]/max(total,1)*100:.0f}',
+        'STATE':'已完成' if completed else '评测中','STATE_CLASS':'done' if completed else 'live',
+        'UPDATE_LABEL':'完成时间' if completed else '最近更新',
+        'UPDATED':local_time(progress.get('updated_at'),'%m月%d日 %H:%M'),
+        'BATCH_DATE':local_time(protocol.get('revision_started_at') or progress.get('updated_at'),'%Y.%m.%d'),
+        'METHOD':esc({'original':'Original','official':'Official','motor':'Motor'}.get(protocol.get('comparison_arm'),'Original')),
+        'PROGRESS_NOTE':f'进行中 {counts["running"]} · 待开始 {counts["queued"]}' if not completed else '所有任务已结束',
+        'ROWS':''.join(rows),'TABS':tabs,'SEGMENTS':segments,
+        'LIVE_JSON':json.dumps(not completed),'UPDATED_JSON':json.dumps(progress.get('updated_at','')),
+        'SCOPE_NOTE':esc(scope),
+        'BUDGET_NOTE':('失败的 act/look 调用也计入步数。' if protocol.get('episode_budget_policy')=='agent_steps'
+                       else '任务时间预算以冻结配置为准，初始化单独计时。'),
+        'SCORE_HELP':'官方任务指标；任务成功由独立终态评分决定',
+        'SCORE_LABEL':'目标完成度','SCORE_SUFFIX':'Q'}
+    if any(row.get('custom_task_spec') for row in tasks):
+        values.update(SCORE_HELP='终态与历史条件满足比例；公开过程约束另行判定，全部通过才成功',
+                      SCORE_LABEL='目标与阶段完成度',SCORE_SUFFIX='')
+    template=Path(__file__).with_name('batch_dashboard.html').read_text()
+    for key,value in values.items():template=template.replace('__'+key+'__',value)
+    return template
+
+
+DASHBOARD_VERSION = 2
+
+
+def render_comparison_page(arms=ARMS):
+    """Render the maintained template; no JavaScript fragment rewriting."""
+    arms=tuple(arms)
+    if not arms or set(arms)-set(ARMS):raise ValueError('Unknown comparison arms')
+    template=Path(__file__).with_name('comparison_dashboard.html').read_text()
+    return template.replace('__ARMS_JSON__',json.dumps(arms)).replace(
+        '__NAMES_JSON__',json.dumps([LABELS[arm] for arm in arms],ensure_ascii=False))
+
+
+# Compatibility for older monitor entry points; new publishers call the renderer.
+PAGE = render_comparison_page()
+
+
+def publish(root):
+    config = json.loads((root / 'comparison_config.json').read_text())
+    progress = {}
+    arms=config.get('active_arms',ARMS)
+    for arm in arms:
+        batch=Path(config.get('arm_roots',{}).get(arm,root/arm))
+        p = batch / 'progress.json'
+        progress[arm] = json.loads(p.read_text()) if p.exists() else {'tasks': json.loads((batch / 'manifest.json').read_text())['tasks']}
+        annotations=batch/'outcome_annotations.json'
+        if annotations.exists():
+            overlays=json.loads(annotations.read_text()).get('runs',{})
+            allowed={'episode_outcome','termination_reason','episode_timed_out','controller_timeout','timeout',
+                     'execution_finished_at_unix','deadline_expired_at_finish'}
+            for row in progress[arm]['tasks']:
+                for key,value in overlays.get(row.get('run_id'),{}).items():
+                    if key in allowed and row.get(key) is None:row[key]=value
+    result = summarize_comparison(progress)
+    atomic(root / 'comparison.json', result)
+    report = Path(config['reports']); report.mkdir(parents=True, exist_ok=True)
+    atomic(report / 'comparison.json', result)
+    (report / 'index.html').write_text(render_comparison_page(arms))
+    return result
+
+
+if __name__ == '__main__':
+    p = argparse.ArgumentParser(); p.add_argument('--root', type=Path, required=True); p.add_argument('--watch', action='store_true')
+    args = p.parse_args()
+    while True:
+        result = publish(args.root)
+        if not args.watch or all(s['ended'] == s['total'] for s in result['arms'].values()):
+            break
+        time.sleep(10)

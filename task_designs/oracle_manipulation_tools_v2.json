@@ -1,0 +1,797 @@
+[
+  {
+    "name": "grasp",
+    "description": "Execute YOUR pregrasp, approach, close and verification paths. Never samples a grasp. All paths are EEF LINK poses with gripper=hold. For free objects provide a lift path; for articulated handles provide a small joint-consistent probe, not an upward lift.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "arm": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ]
+        },
+        "frame": {
+          "type": "string",
+          "enum": [
+            "robot_base"
+          ]
+        },
+        "allow_trunk": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_object_id": {
+          "type": "string"
+        },
+        "target_link": {
+          "type": "string"
+        },
+        "grasp_kind": {
+          "type": "string",
+          "enum": [
+            "free_object",
+            "articulated_handle"
+          ]
+        },
+        "pregrasp_waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "gripper": {
+                "type": "string",
+                "enum": [
+                  "hold"
+                ]
+              }
+            },
+            "required": [
+              "position_m",
+              "quaternion_xyzw",
+              "gripper"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "approach_waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "gripper": {
+                "type": "string",
+                "enum": [
+                  "hold"
+                ]
+              }
+            },
+            "required": [
+              "position_m",
+              "quaternion_xyzw",
+              "gripper"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "verification_waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "gripper": {
+                "type": "string",
+                "enum": [
+                  "hold"
+                ]
+              }
+            },
+            "required": [
+              "position_m",
+              "quaternion_xyzw",
+              "gripper"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "settle_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 150
+        },
+        "min_lift_m": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 0.3
+        }
+      },
+      "required": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "target_link",
+        "grasp_kind",
+        "pregrasp_waypoints",
+        "approach_waypoints",
+        "verification_waypoints",
+        "settle_steps",
+        "min_lift_m"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "_meta": {
+      "mas": {
+        "profile": "oracle_waypoints",
+        "mutates_world": true,
+        "requires_fresh_observation": true,
+        "closes_episode": false,
+        "model_authored_motion": true
+      }
+    }
+  },
+  {
+    "name": "place",
+    "description": "Place an already retained object using YOUR placement and retreat paths. Opens only after reaching the release pose, then checks actual Inside/OnTop and stability.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "arm": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ]
+        },
+        "frame": {
+          "type": "string",
+          "enum": [
+            "robot_base"
+          ]
+        },
+        "allow_trunk": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_object_id": {
+          "type": "string"
+        },
+        "destination_object_id": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string",
+          "enum": [
+            "inside",
+            "on_top"
+          ]
+        },
+        "placement_waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "gripper": {
+                "type": "string",
+                "enum": [
+                  "hold"
+                ]
+              }
+            },
+            "required": [
+              "position_m",
+              "quaternion_xyzw",
+              "gripper"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "retreat_waypoints": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "gripper": {
+                "type": "string",
+                "enum": [
+                  "hold"
+                ]
+              }
+            },
+            "required": [
+              "position_m",
+              "quaternion_xyzw",
+              "gripper"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "settle_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 150
+        }
+      },
+      "required": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "destination_object_id",
+        "relation",
+        "placement_waypoints",
+        "retreat_waypoints",
+        "settle_steps"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "_meta": {
+      "mas": {
+        "profile": "oracle_waypoints",
+        "mutates_world": true,
+        "requires_fresh_observation": true,
+        "closes_episode": false,
+        "model_authored_motion": true
+      }
+    }
+  },
+  {
+    "name": "translate",
+    "description": "Follow YOUR path to move the specified prismatic joint by displacement_m. Uses native contact only; never sets joint state. Read the joint axis and limits first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "arm": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ]
+        },
+        "frame": {
+          "type": "string",
+          "enum": [
+            "robot_base"
+          ]
+        },
+        "allow_trunk": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_object_id": {
+          "type": "string"
+        },
+        "target_link": {
+          "type": "string"
+        },
+        "joint_id": {
+          "type": "string"
+        },
+        "displacement_m": {
+          "type": "number",
+          "minimum": -0.5,
+          "maximum": 0.5
+        },
+        "motion_waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "gripper": {
+                "type": "string",
+                "enum": [
+                  "hold"
+                ]
+              }
+            },
+            "required": [
+              "position_m",
+              "quaternion_xyzw",
+              "gripper"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "release_after": {
+          "type": "boolean"
+        },
+        "settle_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 150
+        }
+      },
+      "required": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "target_link",
+        "joint_id",
+        "displacement_m",
+        "motion_waypoints",
+        "release_after",
+        "settle_steps"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "_meta": {
+      "mas": {
+        "profile": "oracle_waypoints",
+        "mutates_world": true,
+        "requires_fresh_observation": true,
+        "closes_episode": false,
+        "model_authored_motion": true
+      }
+    }
+  },
+  {
+    "name": "rotate",
+    "description": "Follow YOUR arc path to move the specified revolute joint by angle_rad. Uses native contact only; never sets joint state. Read the hinge axis and limits first.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "arm": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ]
+        },
+        "frame": {
+          "type": "string",
+          "enum": [
+            "robot_base"
+          ]
+        },
+        "allow_trunk": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_object_id": {
+          "type": "string"
+        },
+        "target_link": {
+          "type": "string"
+        },
+        "joint_id": {
+          "type": "string"
+        },
+        "angle_rad": {
+          "type": "number",
+          "minimum": -3.14,
+          "maximum": 3.14
+        },
+        "motion_waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "gripper": {
+                "type": "string",
+                "enum": [
+                  "hold"
+                ]
+              }
+            },
+            "required": [
+              "position_m",
+              "quaternion_xyzw",
+              "gripper"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "release_after": {
+          "type": "boolean"
+        },
+        "settle_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 150
+        }
+      },
+      "required": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "target_link",
+        "joint_id",
+        "angle_rad",
+        "motion_waypoints",
+        "release_after",
+        "settle_steps"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "_meta": {
+      "mas": {
+        "profile": "oracle_waypoints",
+        "mutates_world": true,
+        "requires_fresh_observation": true,
+        "closes_episode": false,
+        "model_authored_motion": true
+      }
+    }
+  },
+  {
+    "name": "press",
+    "description": "Follow YOUR press/dwell/retreat paths with an eligible finger contacting the supplied functional toggle region. Verifies the native local device state; never sets it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "arm": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ]
+        },
+        "frame": {
+          "type": "string",
+          "enum": [
+            "robot_base"
+          ]
+        },
+        "allow_trunk": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_object_id": {
+          "type": "string"
+        },
+        "functional_region": {
+          "type": "string"
+        },
+        "contact_link": {
+          "type": "string"
+        },
+        "press_waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "gripper": {
+                "type": "string",
+                "enum": [
+                  "hold"
+                ]
+              }
+            },
+            "required": [
+              "position_m",
+              "quaternion_xyzw",
+              "gripper"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "dwell_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 150
+        },
+        "retreat_waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "gripper": {
+                "type": "string",
+                "enum": [
+                  "hold"
+                ]
+              }
+            },
+            "required": [
+              "position_m",
+              "quaternion_xyzw",
+              "gripper"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "desired_local_state": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "functional_region",
+        "contact_link",
+        "press_waypoints",
+        "dwell_steps",
+        "retreat_waypoints",
+        "desired_local_state"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "_meta": {
+      "mas": {
+        "profile": "oracle_waypoints",
+        "mutates_world": true,
+        "requires_fresh_observation": true,
+        "closes_episode": false,
+        "model_authored_motion": true
+      }
+    }
+  },
+  {
+    "name": "release",
+    "description": "Open the native gripper, settle, and verify disengagement from the specified target. Release alone is not successful placement.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "arm": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ]
+        },
+        "frame": {
+          "type": "string",
+          "enum": [
+            "robot_base"
+          ]
+        },
+        "allow_trunk": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_object_id": {
+          "type": "string"
+        },
+        "settle_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 150
+        }
+      },
+      "required": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "settle_steps"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "_meta": {
+      "mas": {
+        "profile": "oracle_waypoints",
+        "mutates_world": true,
+        "requires_fresh_observation": true,
+        "closes_episode": false,
+        "model_authored_motion": true
+      }
+    }
+  }
+]

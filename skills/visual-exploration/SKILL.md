@@ -1,0 +1,17 @@
+---
+name: visual-exploration
+description: Search and revisit places using current RGB, bounded turns, visible navigation points and conversation history.
+---
+# Visual exploration
+
+Call initialize({}) first and inspect its front/back/left/right RGB. Continue with the four images returned by every act/look. These fixed-camera views share a capture timestamp and simulation step; acquisition does not turn the robot or perform a panorama sweep. No wrist images are available. Read relevant skills as needed.
+
+Choose visible openings and target candidates from any of the four images. Only the latest returned refs and revision are valid act targets; previous images remain historical evidence. look(yaw_degrees, revision) turns the robot explicitly when a new physical orientation is useful, but it is not needed merely to collect surround RGB. To let an ongoing process advance, use act with primitive=wait and target=null, then inspect the returned images.
+
+For macro travel use act(navigate_to, target={image_ref, point:[x,y]}, revision): reaching another task area, exploring, or restoring a view when no current camera permits reliable target selection. In `target_locked_approach_v2`, a clearly selectable target should receive the intended manipulation action directly, including in the initial view; its local controller handles stance and heading. Do not use navigation simply to get closer or center that target. For necessary travel, mark an object surface or visible floor beyond an opening. The executor follows only that pixel; it will not find a named room or object. A floor click requests that XY destination, with bounded projection if the exact cell is occupied; it does not keep a viewing standoff. An elevated object click requests a nearby approach position. A point near your feet may produce no movement; select a farther visible floor point when traveling. Do not try to act through a wall or remember an expired pixel.
+
+Use your conversation history to keep track of which opening was inspected, which remains unexplored, what a return landmark looks like, and why a direction is useful. No explicit memory or recall tool is required. Prior observations do not give you simulator coordinates or a global map. On return, identify the landmark again in RGB.
+
+Break longer travel into visible stages when needed. Inspect all four returned views before another hop; stop navigating as soon as the intended target is selectable and request its operation. If blocked, change the visual approach or viewpoint rather than repeating the same point. A room guess or empty image does not prove the entire scene has been searched.
+
+An item missing from an expected support may be inside closed storage. Inspect plausible visible cabinets or appliances before reporting that a required item cannot be found. Use current RGB to choose the storage and then examine its exposed contents. If holding a tool prevents opening storage, place it on a suitable visible support and retrieve it after finding the item. Track unchecked areas separately from areas whose visible contents have been inspected; do not guess hidden pixels.

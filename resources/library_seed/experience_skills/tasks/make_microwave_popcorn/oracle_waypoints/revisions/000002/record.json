@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "name": "behavior-make-microwave-popcorn",
+  "kind": "task",
+  "key": "make_microwave_popcorn",
+  "protocol": "oracle_waypoints",
+  "revision": 2,
+  "previous_active_revision": 1,
+  "description": "Open, release and retreat from the microwave door with reviewed continuous hold evidence; cooking remains unverified.",
+  "action_keys": [
+    "open-door"
+  ],
+  "updated_at": "2026-10-30T01:49:48.198805+00:00",
+  "sources": [
+    {
+      "run": "archive://v02/runtime/runs/oracle_transfer_microwave_door_20261029_194648_19c826",
+      "run_id": "env",
+      "task": "make_microwave_popcorn",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": null,
+      "sampled_goal_checks_passed": true,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "55677217632d809347800c4c15687a7f75275e436e66d8bb5d3cb6ef2cd59b01",
+        "events.jsonl": "eec64344ae616309b43b6213c9ed6cd5d8b165ede1b0f709cc64215ff236895c",
+        "scene_geometry_repair.json": "cecba9cb3ee14d53e89a615da4c2f693e510b54b9b26cf9ab0d62a0f03595f58",
+        "engineering_validation.json": "8ee4a1aab53faa2e4623d4e81507ccd9fd21eb02ae98a23e08e1060a8e578e96",
+        "transfer_validation.json": "92964ef3cbb7604dfa783cb8a3b53681b2ab760b6412672f2b780ad22b0285dc"
+      },
+      "claim": "partial_or_failure"
+    },
+    {
+      "run": "archive://v02/runtime/runs/oracle_transfer_microwave_door_skill_r1_20261029_223245_61f9a8",
+      "run_id": "env",
+      "task": "make_microwave_popcorn",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": false,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "d584d9ceb885475520b443ba4e466dab763a16aa8c83387764d9bb18677ef411",
+        "events.jsonl": "1ceafd57203220cc66af3916af210fef8c65bf3515648f9a3438e0d7a7bb07ae",
+        "scene_geometry_repair.json": "cecba9cb3ee14d53e89a615da4c2f693e510b54b9b26cf9ab0d62a0f03595f58",
+        "engineering_validation.json": "540ca6a26a46bfbd206f4425403a60f88870d233bc8ae6be2cd6b96dabfa8159",
+        "transfer_validation.json": "286a87c4c73c3a0200cc7f9ecacc4d78cfda01189ca9631731de44064c23659d"
+      },
+      "claim": "engineering_success"
+    },
+    {
+      "run": "archive://v02/runtime/runs/oracle_transfer_microwave_door_skill_r2_20261029_232922_cf704f",
+      "run_id": "env",
+      "task": "make_microwave_popcorn",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": true,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "0f65f077cab5014d03b585043758600e9c12d9b2a5a796fb2de24d4495f77256",
+        "events.jsonl": "b0686c31930bc0fa9ad34d31ee10336ac58e569b3efbc23cea30b6c4b9dddbb9",
+        "scene_geometry_repair.json": "cecba9cb3ee14d53e89a615da4c2f693e510b54b9b26cf9ab0d62a0f03595f58",
+        "engineering_validation.json": "08a25bf6520b87290692d25d7dae82843e06bacc5ffb8b4105baebe8b9c7e1dc",
+        "transfer_validation.json": "a7298254e396b990eef1284ce5cb8eb757dc39951d3087d0a8173b59412c6d72"
+      },
+      "claim": "engineering_success"
+    }
+  ],
+  "document_sha256": "dfd58fb0a87467086c720ad8200780de7ecb28dd6ab447c6c079438dbde71628"
+}

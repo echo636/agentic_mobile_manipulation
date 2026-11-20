@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "oracle-grasp",
+  "kind": "action",
+  "key": "grasp",
+  "protocol": "oracle_waypoints",
+  "revision": 4,
+  "previous_active_revision": 3,
+  "description": "Plan free-object grasp and recovery from current finger geometry, then verify native assisted retention and world lift.",
+  "action_keys": [],
+  "updated_at": "2026-10-31T08:32:14.931692+00:00",
+  "document_sha256": "3f4cb6caf48d6fe84d7ba8821d29a98e176d8508caa4a3e15b2f738d556c97a6",
+  "record_sha256": "f41b561800f257e64da7243c8783b71a6679d05c32aa87061a1d407134386c8b"
+}

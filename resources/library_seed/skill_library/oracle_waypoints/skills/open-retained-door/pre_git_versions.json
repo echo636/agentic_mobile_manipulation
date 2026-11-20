@@ -1,0 +1,10 @@
+{
+  "versions": [
+    {
+      "version": 1,
+      "code_sha256": "c12a7754a019cac29caa2369b5337230b5e815951658accc401879d7e5038368",
+      "commit": "e5948e5f2e815ecfbc90e50e514c880abc468f09",
+      "path": "oracle_waypoints/skills/open-retained-door/revisions/000001"
+    }
+  ]
+}

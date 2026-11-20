@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "name": "behavior-sorting-bottles-cans-and-paper",
+  "kind": "task",
+  "key": "sorting_bottles_cans_and_paper",
+  "protocol": "oracle_waypoints",
+  "revision": 11,
+  "previous_active_revision": 10,
+  "description": "Sequential Pose grasp, saved whole-body recovery and audited bottle placement, with measured retention and explicit development limits.",
+  "action_keys": [
+    "grasp",
+    "place"
+  ],
+  "updated_at": "2026-11-11T08:31:17.825563+00:00",
+  "document_sha256": "9e38c5175e4c459f941288c33a23a45dd7b9d6fac73182d118b8fd464de69557",
+  "record_sha256": "16bff589585ee67e0feecabcc514a9f840b22cef955304e5e76858811a55e084"
+}

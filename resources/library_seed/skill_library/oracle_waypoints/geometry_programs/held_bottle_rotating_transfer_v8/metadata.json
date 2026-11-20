@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_rotating_transfer_v8",
+  "source_sha256": "cfe3b2c59b83cdb0e2934f7b5beefc544ba2756707f74679bc2761ecc70eebd1",
+  "description": "Model-authored mesh mouth transfer with16 ordered short rigid-object phases; samples meaningful yaw/tilt changes to avoid constant-orientation joint configuration jumps; EEF-only hold.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_rotating_transfer_v8/cfe3b2c59b83cdb0e2934f7b5beefc544ba2756707f74679bc2761ecc70eebd1/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:22.089631+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_rotating_transfer_v8/v000001",
+  "library_parent_commit": "5bcd2a069676ff49ec7ed433631791b9b625854a"
+}

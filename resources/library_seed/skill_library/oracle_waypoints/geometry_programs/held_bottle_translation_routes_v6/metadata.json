@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_translation_routes_v6",
+  "source_sha256": "77ccec17bad8022fca5fa4842b396321ab209a4ecb39b4fcc8c145f7dad2d265",
+  "description": "Model-authored continuation from actual rotated held-bottle pose: mesh-certified near-mouth target, current measured orientation, 16 sequential EEF stages along straight, axis ordered or height-curved routes. EEF-only, real payload, all hold.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_translation_routes_v6/77ccec17bad8022fca5fa4842b396321ab209a4ecb39b4fcc8c145f7dad2d265/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:35.079715+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_translation_routes_v6/v000001",
+  "library_parent_commit": "1957f4289862f94b414fd1db5c318063af83f9a0"
+}

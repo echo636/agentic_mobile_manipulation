@@ -1,0 +1,18 @@
+{
+  "name": "grasp-countertop-bottle",
+  "interface": "rax_main_ctx",
+  "protocol": "oracle_waypoints",
+  "status": "draft",
+  "bundle": "14ea0e109a7e8a12173c2a277fb211e46c094d9ab163bb0708bd44246058fb64",
+  "code_sha256": "2ffcc608734b8f1b2b76c6b7c3557bf71238a932bbaf312c9f7b595b30616118",
+  "independent_successes": 1,
+  "unresolved_code_failures": 2,
+  "controller_sha256": "8c80bcfac39d8b50b020a196e126594030fd04a803d834a17abd5b2afb6e833b",
+  "runner_sha256": "9933cb75747a4f254a01ac05ee52a1f7df2327f273975940f988ee8ac28e4a9d",
+  "author_model": "gpt-6-astra",
+  "reasoning_effort": "xhigh",
+  "not_legacy_execute_skill_compatible": true,
+  "validation": "Independent per-step engineering goal; original full sorting score separate",
+  "publisher": "archive://v02/runtime/operations/rax_bottle_20261031/export_code_skill.py",
+  "version": 2
+}

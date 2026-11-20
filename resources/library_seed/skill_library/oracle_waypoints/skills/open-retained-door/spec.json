@@ -1,0 +1,60 @@
+{
+  "name": "open-retained-door",
+  "description": "Open a positively hinged door from established movable-link retention; release, retreat and wait.",
+  "robot": "R1Pro",
+  "protocol": "oracle_waypoints",
+  "uses": [],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "arm": {
+        "type": "string",
+        "enum": [
+          "left",
+          "right"
+        ]
+      },
+      "target_object_id": {
+        "type": "string"
+      },
+      "allow_trunk": {
+        "type": "boolean"
+      },
+      "target_link": {
+        "type": "string"
+      },
+      "joint_id": {
+        "type": "string"
+      },
+      "goal_position_rad": {
+        "type": "number",
+        "minimum": -3.14,
+        "maximum": 3.14
+      },
+      "minimum_released_position_rad": {
+        "type": "number",
+        "minimum": -3.14,
+        "maximum": 3.14
+      },
+      "retreat_direction_base": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "items": {
+          "type": "number"
+        }
+      }
+    },
+    "required": [
+      "arm",
+      "target_object_id",
+      "allow_trunk",
+      "target_link",
+      "joint_id",
+      "goal_position_rad",
+      "minimum_released_position_rad",
+      "retreat_direction_base"
+    ],
+    "additionalProperties": false
+  }
+}

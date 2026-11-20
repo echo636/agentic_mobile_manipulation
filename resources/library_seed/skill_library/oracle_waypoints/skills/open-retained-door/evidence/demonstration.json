@@ -1,0 +1,28 @@
+{
+  "type": "model_authored_demonstration",
+  "source": {
+    "run": "archive://v02/runtime/runs/oracle_transfer_microwave_door_skill_r2_20261029_232922_cf704f",
+    "run_id": "env",
+    "task": "make_microwave_popcorn",
+    "protocol": "oracle_waypoints",
+    "backend": "omnigibson",
+    "instance": 301,
+    "seed": 0,
+    "ik_backend": "omnigibson",
+    "grasping_mode": "assisted",
+    "official_task_success": false,
+    "engineering_success": true,
+    "sampled_goal_checks_passed": true,
+    "scene_floor_repairs": 11,
+    "sha256": {
+      "run.json": "0f65f077cab5014d03b585043758600e9c12d9b2a5a796fb2de24d4495f77256",
+      "events.jsonl": "b0686c31930bc0fa9ad34d31ee10336ac58e569b3efbc23cea30b6c4b9dddbb9",
+      "scene_geometry_repair.json": "cecba9cb3ee14d53e89a615da4c2f693e510b54b9b26cf9ab0d62a0f03595f58",
+      "engineering_validation.json": "08a25bf6520b87290692d25d7dae82843e06bacc5ffb8b4105baebe8b9c7e1dc",
+      "transfer_validation.json": "a7298254e396b990eef1284ce5cb8eb757dc39951d3087d0a8173b59412c6d72"
+    }
+  },
+  "image": "archive://v02/runtime/runs/oracle_transfer_microwave_door_skill_r2_20261029_232922_cf704f/env/frames/rgb-00048-back.jpg",
+  "image_sha256": "cab574455d5b57e11b25b5d9aa76cdec3ad19e6d40dcd992bd9eb38ddb97f0b3",
+  "proves_unattended_code_success": false
+}

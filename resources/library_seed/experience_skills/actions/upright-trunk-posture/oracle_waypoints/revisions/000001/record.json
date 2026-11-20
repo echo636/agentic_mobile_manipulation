@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "name": "oracle-upright-trunk-posture",
+  "kind": "action",
+  "key": "upright-trunk-posture",
+  "protocol": "oracle_waypoints",
+  "revision": 1,
+  "previous_active_revision": 0,
+  "description": "Derive R1Pro upright trunk pitch correctly and verify actual posture; optional empty-handed draft code skips already-satisfied moves.",
+  "action_keys": [],
+  "updated_at": "2026-10-30T08:45:01.165794+00:00",
+  "sources": [
+    {
+      "run": "archive://v02/runtime/runs/oracle_transfer_can_placement_skill_r2_20261029_234018_11de7b",
+      "run_id": "env",
+      "task": "collecting_aluminum_cans",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 1,
+      "sha256": {
+        "run.json": "d95833b7f8301ce236f01c561686e7de98d1d71391be83fc36944d1814910138",
+        "events.jsonl": "dff7acacba5864bcfb70d4e7d69dac4418ebb1848325f7de41cbe17213c15a09",
+        "scene_geometry_repair.json": "e4fc08c0bd82842979f01cd537ab54cb62f1e88a8c595abe7c5bd7f387dd183c",
+        "engineering_validation.json": "c868a8391ac52270cf19614f1353a34e4a2658c5c084b30db5f89ece7c088362",
+        "transfer_validation.json": "5c3fb62befb835fa61c2bd6772438db696fb3d0d8bf67619e257e314dd5a048f"
+      },
+      "claim": "engineering_success"
+    }
+  ],
+  "document_sha256": "38f3f3ee489db430e67f2a2b8240c687052059a34422dc96d85d0282ff9f8e69"
+}

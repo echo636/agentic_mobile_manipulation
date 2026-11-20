@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_tilt_transfer_prefix_v12",
+  "source_sha256": "5e696ca9153f16875a55005af8d62cc2c4eb6add6aa5ff2854f4d504722f5452",
+  "description": "Model adaptation: execute feasible five tilt and two lateral phases from v11, preserving measured mesh clearance and native held bottle.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_tilt_transfer_prefix_v12/5e696ca9153f16875a55005af8d62cc2c4eb6add6aa5ff2854f4d504722f5452/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:32.188644+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_tilt_transfer_prefix_v12/v000001",
+  "library_parent_commit": "9ab01bf282b6a2e5157bf9f8dc9214438838acf6"
+}

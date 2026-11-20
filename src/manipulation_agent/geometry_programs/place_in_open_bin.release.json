@@ -1,0 +1,8 @@
+{
+  "program": "place_in_open_bin",
+  "version": 1,
+  "source_sha256": "6cbc9c0942b2192d65bc1edc9db285ce1421f8e7b026e040e830f3ad521e54f6",
+  "library_root": "archive://v02/runtime/skill_library",
+  "library_commit": "3bf4079145d3426cb22ce69e68257e676934254b",
+  "release_tag": "oracle_waypoints/geometry-place_in_open_bin/v000001"
+}

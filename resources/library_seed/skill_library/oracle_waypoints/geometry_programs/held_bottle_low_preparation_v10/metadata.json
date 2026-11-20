@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_low_preparation_v10",
+  "source_sha256": "92ec52dc991858ea112df60af8e5be55001327a948584be679b81a0284413073",
+  "description": "Model adaptation of own low transfer: execute feasible lowering and forward preparation, all hold, before lateral/orientation planning.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_low_preparation_v10/92ec52dc991858ea112df60af8e5be55001327a948584be679b81a0284413073/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:04.830971+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_low_preparation_v10/v000001",
+  "library_parent_commit": "434719dc31f27da4ba049e730903d71e0b2f3006"
+}

@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "name": "behavior-collecting-aluminum-cans",
+  "kind": "task",
+  "key": "collecting_aluminum_cans",
+  "protocol": "oracle_waypoints",
+  "revision": 3,
+  "previous_active_revision": 2,
+  "description": "Plan the full six-can task with explicit native/hybrid transport, calibrated torso preparation and failure-driven station changes; full-task success remains unverified.",
+  "action_keys": [
+    "grasp",
+    "place",
+    "upright-trunk-posture"
+  ],
+  "updated_at": "2026-10-30T09:26:21.858287+00:00",
+  "sources": [
+    {
+      "run": "archive://v02/runtime/runs/oracle_transfer_can_placement_20261029_201056_dca3d1",
+      "run_id": "env",
+      "task": "collecting_aluminum_cans",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 1,
+      "sha256": {
+        "run.json": "4b5f187224eb5f00d487f0c91000a4321a7f1ba42993f5ed0aa8b28f0d61f39e",
+        "events.jsonl": "967feb9696d35533460f3ee95f6ea2eda89fc972d6466dc6a0549f85e4626034",
+        "scene_geometry_repair.json": "e4fc08c0bd82842979f01cd537ab54cb62f1e88a8c595abe7c5bd7f387dd183c",
+        "engineering_validation.json": "b014124d90b65355066be9fd9f5cf810de19c993233a4543c9a9de1c3442892d",
+        "transfer_validation.json": "d2bc2a3a1098c1885ddf1eb43ac19b76beca9c4e76fe4e4d3f23ab1db9c9aaf9"
+      },
+      "claim": "engineering_success"
+    },
+    {
+      "run": "archive://v02/runtime/runs/oracle_transfer_can_placement_skill_r1_20261029_223245_958875",
+      "run_id": "env",
+      "task": "collecting_aluminum_cans",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 1,
+      "sha256": {
+        "run.json": "39526c7338b3f8f1c7635f0e551477fdf6d47b1ad8d1c1266859e936bdfbb05b",
+        "events.jsonl": "dc45f3a18f9620cbfd42cbb086c9c7f6ed07aaaebf8fc5f6d00d8d0f5d93000d",
+        "scene_geometry_repair.json": "e4fc08c0bd82842979f01cd537ab54cb62f1e88a8c595abe7c5bd7f387dd183c",
+        "engineering_validation.json": "92a4152f0eef6b2d853030157a2dc22664cb34cb4002dfb16994f834d5ab9135",
+        "transfer_validation.json": "4ede631d3e3b98b776eb64bdd490df1418d58bc5a0e3c40525244326bad79513"
+      },
+      "claim": "engineering_success"
+    },
+    {
+      "run": "archive://v02/runtime/runs/oracle_transfer_can_placement_skill_r2_20261029_234018_11de7b",
+      "run_id": "env",
+      "task": "collecting_aluminum_cans",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 1,
+      "sha256": {
+        "run.json": "d95833b7f8301ce236f01c561686e7de98d1d71391be83fc36944d1814910138",
+        "events.jsonl": "dff7acacba5864bcfb70d4e7d69dac4418ebb1848325f7de41cbe17213c15a09",
+        "scene_geometry_repair.json": "e4fc08c0bd82842979f01cd537ab54cb62f1e88a8c595abe7c5bd7f387dd183c",
+        "engineering_validation.json": "c868a8391ac52270cf19614f1353a34e4a2658c5c084b30db5f89ece7c088362",
+        "transfer_validation.json": "5c3fb62befb835fa61c2bd6772438db696fb3d0d8bf67619e257e314dd5a048f"
+      },
+      "claim": "engineering_success"
+    },
+    {
+      "run": "archive://v02/runtime/runs/oracle_transfer_can_full_station_reuse_20261030_151818",
+      "run_id": "env",
+      "task": "collecting_aluminum_cans",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": false,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 1,
+      "sha256": {
+        "run.json": "d68e82cf80206be84b069a44ed1503a49c3a3eeb5c5dc527b5ace1f06cc826b6",
+        "events.jsonl": "6ee883ab73f3158d0c10392c235533e69b10f7a36389a94441182911fd3c76b3",
+        "scene_geometry_repair.json": "e4fc08c0bd82842979f01cd537ab54cb62f1e88a8c595abe7c5bd7f387dd183c",
+        "engineering_validation.json": "e320725f818b30e902eff04cfdd7a5e41ae4819d7443d1452d2bb8dfb5cd5427"
+      },
+      "claim": "partial_or_failure"
+    }
+  ],
+  "document_sha256": "e14fa0f0e8fb376456f0019835f72c77805d69eea3ff0954c5d4363fa3d7c3ec"
+}

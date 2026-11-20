@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_mouth_segmented_v4",
+  "source_sha256": "a7cb2ae93d00f1d620e61bc286c3a8ac62b8d8bdfc5af3a1415821a5afa91c45",
+  "description": "Model-authored actual-mesh mouth alignment using measured hand-object rigid offset,16 continuous short hold phases,slerp with full bottle rim clearance. Three ordered paths; EEF-only.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_mouth_segmented_v4/a7cb2ae93d00f1d620e61bc286c3a8ac62b8d8bdfc5af3a1415821a5afa91c45/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:19.916658+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_mouth_segmented_v4/v000001",
+  "library_parent_commit": "b0bfcd12caf4c6c504788fcc15220a61d52bbf52"
+}

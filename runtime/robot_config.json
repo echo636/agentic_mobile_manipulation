@@ -1,0 +1,10 @@
+{
+  "task": "turning_on_radio",
+  "instance": 301,
+  "seed": 0,
+  "bridge_port": 29440,
+  "model": "gpt-6-astra",
+  "reasoning_effort": "high",
+  "control_mode": "rgb",
+  "grasping_mode": "assisted"
+}

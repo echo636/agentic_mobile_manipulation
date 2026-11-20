@@ -1,0 +1,12 @@
+.library.lock
+**/.write.lock
+**/__pycache__/
+*.py[cod]
+*.tmp
+**/evidence/images/
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.webm
+*.npz

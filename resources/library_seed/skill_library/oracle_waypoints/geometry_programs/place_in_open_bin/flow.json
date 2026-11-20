@@ -1,0 +1,57 @@
+{
+  "name": "bottle_to_bin",
+  "version": 1,
+  "status": "draft",
+  "protocol": "oracle_waypoints",
+  "engine": "model_program_v1",
+  "timing_policy": "model_estimated_v1",
+  "geometry_program": "place_in_open_bin",
+  "geometry_source_sha256": "6cbc9c0942b2192d65bc1edc9db285ce1421f8e7b026e040e830f3ad521e54f6",
+  "phases": [
+    {
+      "name": "select_and_approach",
+      "executor": "Astra+navigate_to",
+      "condition": "fresh RGB+Oracle; empty hands"
+    },
+    {
+      "name": "grasp",
+      "executor": "model-selected geometry program+cuRobo",
+      "condition": "native retention of selected object"
+    },
+    {
+      "name": "lift_and_compact",
+      "executor": "Astra EEF waypoint+cuRobo",
+      "condition": "lift measured; full carrying footprint clear"
+    },
+    {
+      "name": "transport",
+      "executor": "navigate_to/native_joint_v1",
+      "condition": "retention and swept collision checks"
+    },
+    {
+      "name": "refresh_geometry",
+      "executor": "get_manip_geometry",
+      "condition": "current bottle+bin meshes and measured hand/object transform"
+    },
+    {
+      "name": "place_and_release",
+      "executor": "place_in_open_bin+cuRobo",
+      "condition": "model explicit release=true; reached endpoint before open"
+    },
+    {
+      "name": "settle_and_verify",
+      "executor": "wait+get_placement_state",
+      "condition": "wait90 then Inside+released; wait60 then repeat"
+    }
+  ],
+  "model_estimates": "each pose or generated phase control_steps positive integer; backend may extend; no100-step cap",
+  "supervision": [
+    "EEF waypoint",
+    "phase",
+    "gripper",
+    "requested and executed duration",
+    "complete planner and execution paths"
+  ],
+  "oracle_metadata": "teacher/audit only",
+  "acceptance": "single bottle Inside and released; whole task separate"
+}

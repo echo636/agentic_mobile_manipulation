@@ -1,0 +1,104 @@
+[
+  {
+    "agent_step": 1,
+    "primitive": "open",
+    "file": "plates_step_01.npz",
+    "sha256": "0bcbdb39a31edb1ae8564c4a445d71cc298bda30f7ecfc0bb780db5a550b897e",
+    "original_run": "mas_navcontinuous_c1d34b4_20261021_003_cleaning_up_plates_and_food_i301_s0_r1",
+    "source_commit": "f2bc930f71873cbb670df8e28678b630540af626",
+    "original_grid": "navigation_grids/0001.npz",
+    "original_sha256": "1ab88c56d306a6e2fb7ade21c283ff820ee6a5ef937b09ff8c80cbf230bc3b57",
+    "crop_rc": [
+      588,
+      711,
+      629,
+      752
+    ],
+    "scope": "Offline cropped geometry after a no-motion failed manipulation; no visibility/IK/physical manipulation evidence"
+  },
+  {
+    "agent_step": 4,
+    "primitive": "grasp",
+    "file": "plates_step_04.npz",
+    "sha256": "7850a57e6c25a5d9418841576b0506373af1725fe1ee9653dfcd94aab5f0763a",
+    "original_run": "mas_navcontinuous_c1d34b4_20261021_003_cleaning_up_plates_and_food_i301_s0_r1",
+    "source_commit": "f2bc930f71873cbb670df8e28678b630540af626",
+    "original_grid": "navigation_grids/0002.npz",
+    "original_sha256": "adf4e75bb0d5cba412624fa86810ab71cf7fc57c4c9ac053183f25d30d881453",
+    "crop_rc": [
+      546,
+      669,
+      655,
+      778
+    ],
+    "scope": "Offline cropped geometry after a no-motion failed manipulation; no visibility/IK/physical manipulation evidence"
+  },
+  {
+    "agent_step": 7,
+    "primitive": "place_inside",
+    "file": "plates_step_07.npz",
+    "sha256": "fab9753b86f3c48c6cfb4f810f777fce9e9be2f9402844e66167956acc9b91ee",
+    "original_run": "mas_navcontinuous_c1d34b4_20261021_003_cleaning_up_plates_and_food_i301_s0_r1",
+    "source_commit": "f2bc930f71873cbb670df8e28678b630540af626",
+    "original_grid": "navigation_grids/0003.npz",
+    "original_sha256": "890ced5fc40bbf7ff2650e1037d94a7e4c7d5c33b1cefac1b0f724dcb1a99dfe",
+    "crop_rc": [
+      580,
+      725,
+      613,
+      758
+    ],
+    "scope": "Offline cropped geometry after a no-motion failed manipulation; no visibility/IK/physical manipulation evidence"
+  },
+  {
+    "agent_step": 9,
+    "primitive": "place_inside",
+    "file": "plates_step_09.npz",
+    "sha256": "512f7d588d1bd1c65d4a0432d8cf8618313ca590133909c589950099db458849",
+    "original_run": "mas_navcontinuous_c1d34b4_20261021_003_cleaning_up_plates_and_food_i301_s0_r1",
+    "source_commit": "f2bc930f71873cbb670df8e28678b630540af626",
+    "original_grid": "navigation_grids/0004.npz",
+    "original_sha256": "2d5a5c8e6e4a36a6df7fe7267c6419243836a83ea8cbda41de32b7d4c8403432",
+    "crop_rc": [
+      535,
+      680,
+      647,
+      792
+    ],
+    "scope": "Offline cropped geometry after a no-motion failed manipulation; no visibility/IK/physical manipulation evidence"
+  },
+  {
+    "agent_step": 18,
+    "primitive": "grasp",
+    "file": "plates_step_18.npz",
+    "sha256": "f8f29b30e9de49a92006362703b2c660711e1ea9d7c3db0a97b720a7f245b7f3",
+    "original_run": "mas_navcontinuous_c1d34b4_20261021_003_cleaning_up_plates_and_food_i301_s0_r1",
+    "source_commit": "f2bc930f71873cbb670df8e28678b630540af626",
+    "original_grid": "navigation_grids/0008.npz",
+    "original_sha256": "915020c7d468ddc2502fee8f987abeebe7d2d3175932a2979210123ad458a3ea",
+    "crop_rc": [
+      542,
+      665,
+      644,
+      767
+    ],
+    "scope": "Offline cropped geometry after a no-motion failed manipulation; no visibility/IK/physical manipulation evidence"
+  },
+  {
+    "agent_step": 24,
+    "primitive": "place_on_top",
+    "file": "plates_step_24.npz",
+    "sha256": "b6450a40eda8fd92a68d27a94017c47dec20659afaba4300dcb43fbfbe6a53d7",
+    "original_run": "mas_navcontinuous_c1d34b4_20261021_003_cleaning_up_plates_and_food_i301_s0_r1",
+    "source_commit": "f2bc930f71873cbb670df8e28678b630540af626",
+    "original_grid": "navigation_grids/0012.npz",
+    "original_sha256": "89885f2c69826646385f92d25bedb5e5301778a8a68c2d11b5f8d436cb1e11e8",
+    "crop_rc": [
+      570,
+      715,
+      641,
+      786
+    ],
+    "scope": "Offline cropped geometry after a no-motion failed manipulation; no visibility/IK/physical manipulation evidence"
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "oracle-upright-trunk-posture",
+  "kind": "action",
+  "key": "upright-trunk-posture",
+  "protocol": "oracle_waypoints",
+  "revision": 1,
+  "previous_active_revision": 0,
+  "description": "Derive R1Pro upright trunk pitch correctly and verify actual posture; optional empty-handed draft code skips already-satisfied moves.",
+  "action_keys": [],
+  "updated_at": "2026-10-30T08:45:01.165794+00:00",
+  "document_sha256": "38f3f3ee489db430e67f2a2b8240c687052059a34422dc96d85d0282ff9f8e69",
+  "record_sha256": "c6cacf9d9d934b38b85e68154b69768a34618b80bb273bce2ea7f7d6f4771aae"
+}

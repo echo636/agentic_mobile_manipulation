@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_x_preparation_v7",
+  "source_sha256": "dbb75af6db5c7366bbaa7ae397ea2eac072d8097e8eacb758db79535c4d0b1b7",
+  "description": "Model-authored four-stage x translation preparation from current mesh target and measured held transform; prefix passed previous full preflight. EEF-only, all hold.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_x_preparation_v7/dbb75af6db5c7366bbaa7ae397ea2eac072d8097e8eacb758db79535c4d0b1b7/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:37.353886+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_x_preparation_v7/v000001",
+  "library_parent_commit": "34bde1b50fe97b7713f3b5e378f274f28eda8da0"
+}

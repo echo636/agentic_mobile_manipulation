@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_tilt_prefix_v13",
+  "source_sha256": "10b96a6098cbe74678efabdf33fd714d2497892e623ea9ccf102c9ae9ad7504c",
+  "description": "Execute five tilt phases and one lateral phase; v12 second lateral triggered a long joint branch transition.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_tilt_prefix_v13/10b96a6098cbe74678efabdf33fd714d2497892e623ea9ccf102c9ae9ad7504c/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:28.797428+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_tilt_prefix_v13/v000001",
+  "library_parent_commit": "1dd167a43a2abb85d6a89587be5eae8aea35be14"
+}

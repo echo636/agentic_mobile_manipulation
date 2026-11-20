@@ -1,0 +1,21 @@
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.env.*
+!.env.example
+.codex/
+auth.json
+*.log
+.DS_Store
+build/
+dist/
+runs/*
+!runs/.gitkeep
+
+# Generated experiment pages and run records live outside the source checkout.
+# Keep them untracked if an output directory is created here by mistake.
+/reports/
+/operations/

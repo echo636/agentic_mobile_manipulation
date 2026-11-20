@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "name": "oracle-press",
+  "kind": "action",
+  "key": "press",
+  "protocol": "oracle_waypoints",
+  "revision": 1,
+  "previous_active_revision": 0,
+  "description": "Activate a device through current toggle geometry, measured finger offsets and contact/state checks.",
+  "action_keys": [],
+  "updated_at": "2026-10-29T14:06:12.623886+00:00",
+  "sources": [
+    {
+      "run": "archive://v02/runtime/runs/oracle_official_ik_20261029_081435_71e43b",
+      "run_id": "env",
+      "task": "turning_on_radio",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": true,
+      "engineering_success": null,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 0,
+      "sha256": {
+        "run.json": "27cad0052dea19e70a4f334d4168af2d5fa215efb248b476ed43b7200785a0bd",
+        "events.jsonl": "33932eca041e7e5405334678e03746a8455e49d6ba97e80656e79c161d3048ff"
+      },
+      "claim": "whole_task_success"
+    }
+  ],
+  "document_sha256": "a50d370d5842f6b420960296bbd5920c003a895738e476ce62a938d809ad1318"
+}

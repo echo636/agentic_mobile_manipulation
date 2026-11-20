@@ -1,0 +1,648 @@
+{
+  "schema_version": 1,
+  "id": "movie_night_and_restore_v1",
+  "instance_id": "pilot_001",
+  "status": "construction_pending",
+  "official_submission_eligible": false,
+  "base": {
+    "task": "make_microwave_popcorn",
+    "instance": 301,
+    "seed": 0
+  },
+  "public_instruction": "Get the living room ready for movie night for two and put everything else away.",
+  "public_context": [
+    "Movie night for two calls for cooked popcorn in its bag and two cups, two plates, and two forks on the living-room coffee table. The raw popcorn bag is in the kitchen; use the microwave. The microwave must be switched off before the cooked bag leaves it and must finish off and closed.",
+    "The coffee table is ready for food only after it has been cleared of clutter and dusted with the cleaning brush, before any food or dining items are set on it.",
+    "The three soda cans are trash for the bin; the two toy figures belong inside the toy box. The brush belongs back on the kitchen counter where it started. The final coffee table should be clean, with the cooked popcorn and all six dining items set out."
+  ],
+  "roles": {
+    "bag": "popcorn_bag_73",
+    "microwave": "microwave_hjjxmi_0",
+    "prep": "bar_byvbuc_0",
+    "floor": "floors_ulujpr_0",
+    "table": "lh_table",
+    "bin": "lh_bin",
+    "toybox": "lh_toybox",
+    "brush": "lh_brush",
+    "cup1": "lh_cup1",
+    "plate1": "lh_plate1",
+    "fork1": "lh_fork1",
+    "toy1": "lh_toy1",
+    "cup2": "lh_cup2",
+    "plate2": "lh_plate2",
+    "fork2": "lh_fork2",
+    "toy2": "lh_toy2",
+    "can1": "lh_can1",
+    "can2": "lh_can2",
+    "can3": "lh_can3",
+    "dishes_source": "breakfast_table_xftrki_0"
+  },
+  "asset_imports": [
+    {
+      "source_task": "make_microwave_popcorn",
+      "source_object": "coffee_table_koagbh_0",
+      "name": "lh_table"
+    },
+    {
+      "source_task": "picking_up_trash",
+      "source_object": "trash_can_116",
+      "name": "lh_bin",
+      "position": [
+        2.25,
+        4.6,
+        0.2
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "putting_away_toys",
+      "source_object": "toy_box_241",
+      "name": "lh_toybox",
+      "position": [
+        4.8,
+        5.3,
+        0.35
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "clean_a_keyboard",
+      "source_object": "pipe_cleaner_120",
+      "name": "lh_brush",
+      "position": [
+        53,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "sorting_household_items",
+      "source_object": "coffee_cup_220",
+      "name": "lh_cup1",
+      "position": [
+        54,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "setting_the_table",
+      "source_object": "plate_243",
+      "name": "lh_plate1",
+      "position": [
+        55,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "setting_the_table",
+      "source_object": "tablefork_247",
+      "name": "lh_fork1",
+      "position": [
+        56,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "name": "lh_toy1",
+      "position": [
+        57,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "sorting_household_items",
+      "source_object": "coffee_cup_220",
+      "name": "lh_cup2",
+      "position": [
+        58,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "setting_the_table",
+      "source_object": "plate_244",
+      "name": "lh_plate2",
+      "position": [
+        59,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "setting_the_table",
+      "source_object": "tablefork_248",
+      "name": "lh_fork2",
+      "position": [
+        60,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_243",
+      "name": "lh_toy2",
+      "position": [
+        61,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "picking_up_trash",
+      "source_object": "can_of_soda_114",
+      "name": "lh_can1",
+      "position": [
+        62,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "picking_up_trash",
+      "source_object": "can_of_soda_114",
+      "name": "lh_can2",
+      "position": [
+        63,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "picking_up_trash",
+      "source_object": "can_of_soda_114",
+      "name": "lh_can3",
+      "position": [
+        64,
+        50,
+        1
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "brush",
+      "state": "OnTop",
+      "target": "prep"
+    },
+    {
+      "object": "cup1",
+      "state": "OnTop",
+      "target": "dishes_source"
+    },
+    {
+      "object": "cup2",
+      "state": "OnTop",
+      "target": "dishes_source"
+    },
+    {
+      "object": "plate1",
+      "state": "OnTop",
+      "target": "dishes_source"
+    },
+    {
+      "object": "plate2",
+      "state": "OnTop",
+      "target": "dishes_source"
+    },
+    {
+      "object": "fork1",
+      "state": "OnTop",
+      "target": "dishes_source"
+    },
+    {
+      "object": "fork2",
+      "state": "OnTop",
+      "target": "dishes_source"
+    },
+    {
+      "object": "toy1",
+      "state": "OnTop",
+      "target": "table"
+    },
+    {
+      "object": "toy2",
+      "state": "OnTop",
+      "target": "table"
+    },
+    {
+      "object": "can1",
+      "state": "OnTop",
+      "target": "table"
+    },
+    {
+      "object": "can2",
+      "state": "OnTop",
+      "target": "table"
+    },
+    {
+      "object": "can3",
+      "state": "OnTop",
+      "target": "table"
+    },
+    {
+      "object": "table",
+      "state": "Covered",
+      "system": "dust",
+      "value": true
+    },
+    {
+      "object": "microwave",
+      "state": "ToggledOn",
+      "value": false
+    },
+    {
+      "object": "microwave",
+      "state": "Open",
+      "value": false,
+      "kwargs": {
+        "fully": true
+      }
+    }
+  ],
+  "initial_assertions": {
+    "table_dusty": "table_dusty",
+    "bin_on_floor": "bin_on_floor",
+    "toybox_on_floor": "toybox_on_floor",
+    "popcorn_raw": {
+      "not": "cooked_popcorn"
+    }
+  },
+  "evaluation": {
+    "predicates": {
+      "cooked_popcorn": {
+        "object": "bag",
+        "state": "Contains",
+        "system": "cooked__popcorn"
+      },
+      "bag_in_microwave": {
+        "object": "bag",
+        "state": "Inside",
+        "target": "microwave"
+      },
+      "bag_on_table": {
+        "object": "bag",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "microwave_on": {
+        "object": "microwave",
+        "state": "ToggledOn"
+      },
+      "table_dusty": {
+        "object": "table",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "toy1_on_table": {
+        "object": "toy1",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "toy1_stored": {
+        "object": "toy1",
+        "state": "Inside",
+        "target": "toybox"
+      },
+      "toy2_on_table": {
+        "object": "toy2",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "toy2_stored": {
+        "object": "toy2",
+        "state": "Inside",
+        "target": "toybox"
+      },
+      "can1_on_table": {
+        "object": "can1",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "can1_stored": {
+        "object": "can1",
+        "state": "Inside",
+        "target": "bin"
+      },
+      "can2_on_table": {
+        "object": "can2",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "can2_stored": {
+        "object": "can2",
+        "state": "Inside",
+        "target": "bin"
+      },
+      "can3_on_table": {
+        "object": "can3",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "can3_stored": {
+        "object": "can3",
+        "state": "Inside",
+        "target": "bin"
+      },
+      "cup1_set": {
+        "object": "cup1",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "cup2_set": {
+        "object": "cup2",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "plate1_set": {
+        "object": "plate1",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "plate2_set": {
+        "object": "plate2",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "fork1_set": {
+        "object": "fork1",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "fork2_set": {
+        "object": "fork2",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "brush_returned": {
+        "object": "brush",
+        "state": "OnTop",
+        "target": "prep"
+      },
+      "microwave_closed": {
+        "object": "microwave",
+        "state": "Open"
+      },
+      "bin_on_floor": {
+        "object": "bin",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "toybox_on_floor": {
+        "object": "toybox",
+        "state": "OnTop",
+        "target": "floor"
+      }
+    },
+    "terminal": {
+      "toy1_stored": "toy1_stored",
+      "toy2_stored": "toy2_stored",
+      "can1_stored": "can1_stored",
+      "can2_stored": "can2_stored",
+      "can3_stored": "can3_stored",
+      "cup1_set": "cup1_set",
+      "cup2_set": "cup2_set",
+      "plate1_set": "plate1_set",
+      "plate2_set": "plate2_set",
+      "fork1_set": "fork1_set",
+      "fork2_set": "fork2_set",
+      "brush_returned": "brush_returned",
+      "microwave_closed": {
+        "not": "microwave_closed"
+      },
+      "popcorn_served": {
+        "all": [
+          "cooked_popcorn",
+          "bag_on_table"
+        ]
+      },
+      "table_clean": {
+        "not": "table_dusty"
+      },
+      "microwave_off": {
+        "not": "microwave_on"
+      }
+    },
+    "milestones": {
+      "table_cleared_and_dusted": {
+        "when": {
+          "all": [
+            {
+              "not": "table_dusty"
+            },
+            {
+              "not": "toy1_on_table"
+            },
+            {
+              "not": "toy2_on_table"
+            },
+            {
+              "not": "can1_on_table"
+            },
+            {
+              "not": "can2_on_table"
+            },
+            {
+              "not": "can3_on_table"
+            },
+            {
+              "not": "cup1_set"
+            },
+            {
+              "not": "cup2_set"
+            },
+            {
+              "not": "plate1_set"
+            },
+            {
+              "not": "plate2_set"
+            },
+            {
+              "not": "fork1_set"
+            },
+            {
+              "not": "fork2_set"
+            },
+            {
+              "not": "bag_on_table"
+            }
+          ]
+        }
+      },
+      "settings_ready": {
+        "after": [
+          "table_cleared_and_dusted"
+        ],
+        "when": {
+          "all": [
+            "cup1_set",
+            "cup2_set",
+            "plate1_set",
+            "plate2_set",
+            "fork1_set",
+            "fork2_set"
+          ]
+        }
+      },
+      "popcorn_cooked_in_microwave": {
+        "when": {
+          "all": [
+            "cooked_popcorn",
+            "bag_in_microwave"
+          ]
+        }
+      },
+      "microwave_off_before_removal": {
+        "after": [
+          "popcorn_cooked_in_microwave"
+        ],
+        "when": {
+          "all": [
+            "cooked_popcorn",
+            "bag_in_microwave",
+            {
+              "not": "microwave_on"
+            }
+          ]
+        }
+      },
+      "popcorn_delivered": {
+        "after": [
+          "microwave_off_before_removal",
+          "table_cleared_and_dusted"
+        ],
+        "when": {
+          "all": [
+            "cooked_popcorn",
+            "bag_on_table"
+          ]
+        }
+      }
+    },
+    "motion_guards": [
+      {
+        "id": "power_off_before_cooked_bag_removal",
+        "object": "bag",
+        "since": "popcorn_cooked_in_microwave",
+        "until": "microwave_off_before_removal",
+        "require": {
+          "any": [
+            {
+              "not": "microwave_on"
+            },
+            "bag_in_microwave"
+          ]
+        }
+      }
+    ],
+    "state_guards": [
+      {
+        "id": "clear_and_dust_before_serving",
+        "until": "table_cleared_and_dusted",
+        "require": {
+          "not": {
+            "any": [
+              "cup1_set",
+              "cup2_set",
+              "plate1_set",
+              "plate2_set",
+              "fork1_set",
+              "fork2_set",
+              "bag_on_table"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "public_context_kind": "household_conventions_and_completion_criteria_not_reference_plan"
+}

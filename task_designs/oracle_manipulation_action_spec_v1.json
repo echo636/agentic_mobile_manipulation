@@ -1,0 +1,498 @@
+{
+  "schema_version": 1,
+  "status": "runtime_v2_implemented_partial_physical_validation",
+  "purpose": "GPT generates fine manipulation geometry and contact motion; harness executes and reports evidence.",
+  "scope": [
+    "free_object_grasp_and_place",
+    "hinged_doors",
+    "prismatic_drawers",
+    "buttons_and_switches"
+  ],
+  "navigation": {
+    "runtime_tool": "navigate_to",
+    "implementation": "existing senior harness",
+    "new_navigation_planner": false
+  },
+  "model_owns": [
+    "target and target link selection",
+    "grasp/contact pose",
+    "approach direction",
+    "end-effector orientation",
+    "waypoint positions and sequence",
+    "release pose",
+    "retry and recovery strategy"
+  ],
+  "executor_owns": [
+    "schema and freshness checks",
+    "IK and native joint/gripper control",
+    "phase stopping and bounded execution",
+    "actual state and contact feedback",
+    "action-level verification"
+  ],
+  "control_basis": [
+    {
+      "name": "move_eef",
+      "runtime_tool": "execute_waypoints",
+      "implemented": true,
+      "meaning": "track model-authored SE(3) end-effector link poses; no automatic grasp/placement sampling"
+    },
+    {
+      "name": "command_gripper",
+      "runtime_tool": "set_gripper",
+      "implemented": true,
+      "meaning": "native binary open/close; arbitrary width/force not implemented"
+    },
+    {
+      "name": "move_posture",
+      "runtime_tool": "move_joints",
+      "implemented": true,
+      "meaning": "explicit arm/trunk joint posture; no automatic semantic manipulation"
+    },
+    {
+      "name": "hold",
+      "runtime_tool": "wait",
+      "implemented": true,
+      "meaning": "hold current commands and advance physics"
+    }
+  ],
+  "common_contract": {
+    "frame": "current robot_base; position metres; orientation quaternion xyzw",
+    "pose_origin": "EEF link origin, convert from desired fingertip/contact pose using contact-link offset",
+    "freshness": "revision required; navigation invalidates prior base-frame targets",
+    "targets": "object/link IDs identify observation and verification targets; must not select hidden motion plans",
+    "stopping": "stop at first unreached path point and failed prerequisite; contacts recorded per step, retention/joint/relation checked at phase boundaries or completion; no continuous force/slip safety monitor",
+    "feedback": [
+      "phase",
+      "execution_reached",
+      "actual_eef_pose",
+      "position_error_m",
+      "orientation_error_rad",
+      "joint_limits_hit",
+      "target_object_and_link_motion",
+      "gripper_and_grasp_mode",
+      "contact_information_if_available",
+      "verification_status",
+      "fresh_observation",
+      "recoverable_failure"
+    ],
+    "verification_status": [
+      "verified",
+      "failed",
+      "unknown"
+    ],
+    "no_scene_goal_leak": true,
+    "no_symbolic_state_setters": true,
+    "tracking_tolerances": {
+      "transit_position_m": 0.008,
+      "transit_orientation_rad": 0.06,
+      "final_contact_position_m": 0.004,
+      "final_contact_orientation_rad": 0.04,
+      "physical_verification_independent": true
+    }
+  },
+  "operations": [
+    {
+      "name": "grasp",
+      "meaning": "建立可保持的抓持",
+      "status": "implemented_validation_in_progress",
+      "model_authored_inputs": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "target_link",
+        "grasp_kind",
+        "pregrasp_waypoints",
+        "approach_waypoints",
+        "verification_waypoints",
+        "settle_steps",
+        "min_lift_m"
+      ],
+      "preconditions": [
+        "reachable open-gripper pregrasp",
+        "target geometry and finger contact offsets available"
+      ],
+      "execution_phases": [
+        "open gripper",
+        "follow supplied pregrasp and approach",
+        "close only after target pose reached",
+        "execute model-supplied verification motion"
+      ],
+      "success": "free object: retained through a small lift and hold; articulated handle: retained during a small joint-consistent probe, not an upward lift",
+      "failures": [
+        "pose unreachable",
+        "wrong link or no contact",
+        "grip miss",
+        "slip or drop",
+        "verification unavailable"
+      ],
+      "implementation_gaps": [
+        "no successful target retention and lift validated in the current recorded public trial",
+        "no collision-aware IK planner or semantic handle sampler"
+      ],
+      "control_basis": [
+        "move_eef",
+        "command_gripper",
+        "move_posture",
+        "hold"
+      ],
+      "runtime_tool": "grasp",
+      "validation_level": "real_simulator_attempted_no_retention",
+      "validation_evidence": {
+        "verified_recorded_runs": [],
+        "current_build_run": "archive://v02/runtime/runs/oracle_primitives_video_20261028_191807_3394bd",
+        "current_build_attempts": 0,
+        "current_build_verified": false
+      }
+    },
+    {
+      "name": "place",
+      "meaning": "按指定关系放置",
+      "status": "implemented_validation_in_progress",
+      "model_authored_inputs": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "destination_object_id",
+        "relation",
+        "placement_waypoints",
+        "retreat_waypoints",
+        "settle_steps"
+      ],
+      "preconditions": [
+        "retained held object",
+        "destination opening/interior or support geometry available"
+      ],
+      "execution_phases": [
+        "follow supplied transport/placement path",
+        "open only at supplied reached release pose",
+        "retreat using supplied path",
+        "settle and check specified physical relation"
+      ],
+      "success": "object released and stable in the selected container or on the selected support; AABB overlap is insufficient",
+      "failures": [
+        "target unreachable",
+        "opening obstruction",
+        "object still held",
+        "object outside or unstable",
+        "interior/support geometry unavailable"
+      ],
+      "implementation_gaps": [
+        "no verified held-object placement trial yet",
+        "authored fill regions are exported but certified opening/free-space geometry is not available"
+      ],
+      "control_basis": [
+        "move_eef",
+        "command_gripper",
+        "move_posture",
+        "hold"
+      ],
+      "runtime_tool": "place",
+      "validation_level": "not_yet_physically_verified",
+      "validation_evidence": {
+        "verified_recorded_runs": [],
+        "current_build_run": "archive://v02/runtime/runs/oracle_primitives_video_20261028_191807_3394bd",
+        "current_build_attempts": 0,
+        "current_build_verified": false
+      }
+    },
+    {
+      "name": "translate",
+      "meaning": "沿约束直线拉推",
+      "status": "implemented_validation_in_progress",
+      "model_authored_inputs": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "target_link",
+        "joint_id",
+        "displacement_m",
+        "motion_waypoints",
+        "release_after",
+        "settle_steps"
+      ],
+      "preconditions": [
+        "prismatic joint and limits known",
+        "handle contact/grasp established when pulling"
+      ],
+      "execution_phases": [
+        "follow model-supplied straight path consistent with joint axis",
+        "monitor actual target-link/joint movement and grasp",
+        "stop at failure or bound"
+      ],
+      "success": "target prismatic joint moves toward requested displacement while its parent remains appropriately anchored; hand motion alone is insufficient",
+      "failures": [
+        "axis mismatch",
+        "joint limit",
+        "lost handle",
+        "blocked or excessive contact",
+        "no target joint progress"
+      ],
+      "implementation_gaps": [
+        "scene joints and end-state verification implemented; physical drawer motion not validated",
+        "no force-control or continuous slip/collision stop monitor"
+      ],
+      "control_basis": [
+        "move_eef",
+        "command_gripper",
+        "move_posture",
+        "hold"
+      ],
+      "runtime_tool": "translate",
+      "validation_level": "not_yet_physically_verified",
+      "validation_evidence": {
+        "verified_recorded_runs": [],
+        "current_build_run": "archive://v02/runtime/runs/oracle_primitives_video_20261028_191807_3394bd",
+        "current_build_attempts": 0,
+        "current_build_verified": false
+      }
+    },
+    {
+      "name": "rotate",
+      "meaning": "绕约束轴转动",
+      "status": "implemented_validation_in_progress",
+      "model_authored_inputs": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "target_link",
+        "joint_id",
+        "angle_rad",
+        "motion_waypoints",
+        "release_after",
+        "settle_steps"
+      ],
+      "preconditions": [
+        "revolute joint and limits known",
+        "required handle engagement/latch prerequisites established"
+      ],
+      "execution_phases": [
+        "follow model-supplied arc around supplied joint axis",
+        "maintain intended handle contact",
+        "monitor actual joint and gripper state"
+      ],
+      "success": "target revolute joint changes toward the requested angle; moving the whole cabinet or only the hand is not success",
+      "failures": [
+        "wrong axis or direction",
+        "joint limit or latch block",
+        "lost handle",
+        "unreachable arc",
+        "no joint progress"
+      ],
+      "implementation_gaps": [
+        "hinge geometry and end-state verification implemented; physical door motion not validated",
+        "native latch/contact behavior not validated"
+      ],
+      "control_basis": [
+        "move_eef",
+        "command_gripper",
+        "move_posture",
+        "hold"
+      ],
+      "runtime_tool": "rotate",
+      "validation_level": "not_yet_physically_verified",
+      "validation_evidence": {
+        "verified_recorded_runs": [],
+        "current_build_run": "archive://v02/runtime/runs/oracle_primitives_video_20261028_191807_3394bd",
+        "current_build_attempts": 0,
+        "current_build_verified": false
+      }
+    },
+    {
+      "name": "press",
+      "meaning": "接触并触发按钮",
+      "status": "implemented_validation_in_progress",
+      "model_authored_inputs": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "functional_region",
+        "contact_link",
+        "press_waypoints",
+        "dwell_steps",
+        "retreat_waypoints",
+        "desired_local_state"
+      ],
+      "preconditions": [
+        "button functional geometry known",
+        "designated finger/tool link eligible for native activation",
+        "device prerequisites known"
+      ],
+      "execution_phases": [
+        "approach from model-selected direction",
+        "make intended native contact/overlap",
+        "dwell",
+        "retreat",
+        "read local device/button feedback"
+      ],
+      "success": "native device/button state reaches requested local state after contact and release; nearby EEF pose is insufficient",
+      "failures": [
+        "missed functional region",
+        "wrong contacting link",
+        "insufficient dwell",
+        "incompatible native trigger",
+        "state not changed or feedback unknown"
+      ],
+      "implementation_gaps": [
+        "native contact/overlap activation and local-state feedback implemented; real task result recorded separately",
+        "functional surface normal is unknown where asset supplies none"
+      ],
+      "control_basis": [
+        "move_eef",
+        "command_gripper",
+        "move_posture",
+        "hold"
+      ],
+      "runtime_tool": "press",
+      "validation_level": "previous_recorded_build_success_current_build_case_failed",
+      "validation_evidence": {
+        "verified_recorded_runs": [
+          "archive://v02/runtime/runs/oracle_primitives_video_20261028_185551_93926c"
+        ],
+        "current_build_run": "archive://v02/runtime/runs/oracle_primitives_video_20261028_191807_3394bd",
+        "current_build_attempts": 5,
+        "current_build_verified": false
+      }
+    },
+    {
+      "name": "release",
+      "meaning": "解除当前抓持",
+      "status": "implemented_validation_in_progress",
+      "model_authored_inputs": [
+        "arm",
+        "frame",
+        "allow_trunk",
+        "revision",
+        "target_object_id",
+        "settle_steps"
+      ],
+      "preconditions": [
+        "release intention explicit",
+        "current grasp/contact state recorded"
+      ],
+      "execution_phases": [
+        "open native gripper",
+        "advance settling physics",
+        "report actual release and target motion"
+      ],
+      "success": "gripper disengaged and target no longer retained by the hand; successful placement is a separate check",
+      "failures": [
+        "release not completed",
+        "object caught or still constrained",
+        "release state unknown"
+      ],
+      "implementation_gaps": [
+        "native disengagement verifier implemented; release of a previously retained object not validated",
+        "empty-hand opening is only disengagement, not proof of a successful earlier grasp"
+      ],
+      "control_basis": [
+        "move_eef",
+        "command_gripper",
+        "move_posture",
+        "hold"
+      ],
+      "runtime_tool": "release",
+      "validation_level": "real_empty_hand_disengagement_only",
+      "validation_evidence": {
+        "verified_recorded_runs": [
+          "archive://v02/runtime/runs/oracle_primitives_video_20261028_183438_94fe0f"
+        ],
+        "current_build_run": "archive://v02/runtime/runs/oracle_primitives_video_20261028_191807_3394bd",
+        "current_build_attempts": 0,
+        "current_build_verified": false
+      }
+    }
+  ],
+  "observation_requirements": {
+    "current": [
+      "object root/link pose and conservative AABB",
+      "robot joint positions, limits, EEF/finger geometry and body link AABBs",
+      "scene articulation type, parent/child, joint axis and origin in explicit frame, q, limits",
+      "native assisted held object, canonical target link and constraint type",
+      "native finger contact pairs and per-step object/link pose histories",
+      "functional meta regions and exact native toggle activation sphere",
+      "local Open/ToggledOn feedback independent of whole-task evaluator",
+      "four RGB images"
+    ],
+    "remaining_extensions": [
+      "certified container opening, interior and free-space geometry",
+      "semantic graspable handle-region annotation beyond physical link geometry",
+      "collision-aware planning and continuous active slip/force stopping"
+    ],
+    "not_currently_supported": [
+      "continuous force/impedance manipulation tools",
+      "arbitrary gripper width and force command"
+    ]
+  },
+  "task_bindings": [
+    {
+      "task": "picking_up_trash",
+      "instance": 301,
+      "seed": 0,
+      "verified_catalog_binding": true,
+      "required_operations": [
+        "grasp",
+        "place",
+        "release"
+      ],
+      "goal": "three soda cans inside the kitchen trash can"
+    },
+    {
+      "task": "turning_on_radio",
+      "instance": 301,
+      "verified_catalog_binding": true,
+      "required_operations": [
+        "press"
+      ],
+      "note": "Public instance bound; native togglebutton and local state observed in real simulation. Success evidence is in recorded validation, not inferred from this binding.",
+      "seed": 0
+    },
+    {
+      "task": null,
+      "mechanism": "hinged_door",
+      "required_operations": [
+        "grasp",
+        "rotate",
+        "release"
+      ],
+      "note": "No public task/instance claimed yet"
+    },
+    {
+      "task": null,
+      "mechanism": "prismatic_drawer",
+      "required_operations": [
+        "grasp",
+        "translate",
+        "release"
+      ],
+      "note": "No public task/instance claimed yet"
+    }
+  ],
+  "calibration_candidates": {
+    "status": "engineering_defaults_to_calibrate_not_official_task_thresholds",
+    "free_object_test_lift_m": 0.05,
+    "hold_control_steps": 30
+  },
+  "evidence_sources": [
+    "src/manipulation_agent/tasks.json",
+    "src/manipulation_agent/oracle_contracts.py",
+    "src/manipulation_agent/executors/oracle_waypoints.py",
+    "archive://v02/runtime/BEHAVIOR-1K-v3.9.2/bddl3/bddl/activity_definitions/picking_up_trash/problem0.bddl",
+    "archive://v02/runtime/BEHAVIOR-1K-v3.9.2/OmniGibson/omnigibson/object_states/toggle.py",
+    "archive://v02/runtime/BEHAVIOR-1K-v3.9.2/OmniGibson/omnigibson/robots/robot.py",
+    "src/manipulation_agent/oracle_operations.py",
+    "src/manipulation_agent/executors/oracle_geometry.py",
+    "src/manipulation_agent/executors/oracle_primitives.py"
+  ],
+  "runtime_contract_source": "src/manipulation_agent/oracle_operations.py",
+  "validation_report": "README.md#validation"
+}

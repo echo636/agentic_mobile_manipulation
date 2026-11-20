@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "name": "behavior-collecting-aluminum-cans",
+  "kind": "task",
+  "key": "collecting_aluminum_cans",
+  "protocol": "oracle_waypoints",
+  "revision": 3,
+  "previous_active_revision": 2,
+  "description": "Plan the full six-can task with explicit native/hybrid transport, calibrated torso preparation and failure-driven station changes; full-task success remains unverified.",
+  "action_keys": [
+    "grasp",
+    "place",
+    "upright-trunk-posture"
+  ],
+  "updated_at": "2026-10-30T09:26:21.858287+00:00",
+  "document_sha256": "e14fa0f0e8fb376456f0019835f72c77805d69eea3ff0954c5d4363fa3d7c3ec",
+  "record_sha256": "c319e4ffa5e5ea7ef0d4bdcdb41de066c49c247c24629a47c1e495332cc1e8e2"
+}

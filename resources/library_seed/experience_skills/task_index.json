@@ -1,0 +1,741 @@
+{
+  "tasks": [
+    {
+      "task": "assembling_gift_baskets",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "attach_a_camera_to_a_tripod",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "boxing_books_up_for_storage",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "boxing_food_after_dinner",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "bringing_in_wood",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "bringing_paper_to_recycling",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "bringing_water",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "can_meat",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "canning_food",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "carrying_in_groceries",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "carrying_out_garden_furniture",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "chop_an_onion",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "chopping_wood",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "clean_a_keyboard",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "clean_a_patio",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "clean_a_trumpet",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "clean_boxing_gloves",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "clean_up_broken_glass",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "clean_up_your_desk",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "clean_your_rusty_garden_tools",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "cleaning_up_branches_and_twigs",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "cleaning_up_plates_and_food",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "clearing_food_from_table_into_fridge",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "collecting_aluminum_cans",
+      "protocols": {
+        "oracle_waypoints": {
+          "revision": 1,
+          "name": "behavior-collecting-aluminum-cans"
+        },
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "collecting_childrens_toys",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "composting_waste",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "cook_a_brisket",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "cook_a_frozen_pie",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "cook_bacon",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "cook_broccolini",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "cook_brussels_sprouts",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "cook_cabbage",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "cook_hot_dogs",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "dispose_of_batteries",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "dispose_of_glass",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "freeze_fruit",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "freeze_pies",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "getting_organized_for_work",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "halve_an_egg",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "hanging_pictures",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "hiding_Easter_eggs",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "installing_a_fax_machine",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "installing_a_modem",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "installing_a_scanner",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "installing_smoke_detectors",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "laying_tile_floors",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "loading_the_car",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "make_cabinet_doors",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "make_gift_bags_for_baby_showers",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "make_microwave_popcorn",
+      "protocols": {
+        "oracle_waypoints": {
+          "revision": 1,
+          "name": "behavior-make-microwave-popcorn"
+        },
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "make_pizza",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "make_rose_centerpieces",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "moving_boxes_to_storage",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "organizing_art_supplies",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "organizing_school_stuff",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "outfit_a_basic_toolbox",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "packing_meal_for_delivery",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "picking_up_toys",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "picking_up_trash",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "polishing_shoes",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "preparing_lunch_box",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "put_together_a_basic_pruning_kit",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "putting_away_Halloween_decorations",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "putting_away_toys",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "putting_dirty_dishes_in_sink",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "putting_dishes_away_after_cleaning",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "putting_shoes_on_rack",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "putting_up_Christmas_decorations_inside",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "re_shelving_library_books",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "rearrange_your_room",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "rearranging_kitchen_furniture",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "scrubbing_bathroom_floor",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "set_up_a_coffee_station_in_your_kitchen",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "setting_mousetraps",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "setting_the_fire",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "setting_the_table",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "setup_a_bar_for_a_cocktail_party",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "slicing_vegetables",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "sorting_books_on_shelf",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "sorting_bottles_cans_and_paper",
+      "protocols": {
+        "oracle_waypoints": {
+          "revision": 1,
+          "name": "behavior-sorting-bottles-cans-and-paper"
+        },
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "sorting_household_items",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "sorting_vegetables",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "spraying_for_bugs",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "spraying_fruit_trees",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "stacking_wood",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "store_batteries",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "store_honey",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "store_produce",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "storing_food",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "sweeping_garage",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "thawing_frozen_food",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "tidying_bathroom",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "tidying_bedroom",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "tidying_living_room",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "turning_on_radio",
+      "protocols": {
+        "oracle_waypoints": {
+          "revision": 1,
+          "name": "behavior-turning-on-radio"
+        },
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "turning_out_all_lights_before_sleep",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "unloading_the_car",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "vacuuming_floors",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "wash_a_baseball_cap",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    },
+    {
+      "task": "wash_dog_toys",
+      "protocols": {
+        "oracle_waypoints": null,
+        "rgb_only": null
+      }
+    }
+  ],
+  "actions": {
+    "rgb_only": [],
+    "oracle_waypoints": [
+      {
+        "name": "oracle-grasp",
+        "key": "grasp",
+        "revision": 2
+      },
+      {
+        "name": "oracle-open-door",
+        "key": "open-door",
+        "revision": 1
+      },
+      {
+        "name": "oracle-place",
+        "key": "place",
+        "revision": 1
+      },
+      {
+        "name": "oracle-press",
+        "key": "press",
+        "revision": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "program": "place_in_open_bin",
+  "source_sha256": "6cbc9c0942b2192d65bc1edc9db285ce1421f8e7b026e040e830f3ad521e54f6",
+  "version": 1,
+  "author": "harness_curated_from_model_demonstration",
+  "status": "draft",
+  "description": "Direct placement into an upright open bin. Requires fresh object/container meshes and actual retention. parameters: object_id,container_id,arm,control_steps (model duration estimate),release (explicit bool, default false); optional clearance_m,bottom_clearance_m,yaw_degrees,tilt_degrees. One alignment goal per candidate, full payload fit and measured hand/object offset. release=true opens only after reached endpoint. Choose a reachable station first; wait and check native Inside/released afterwards.",
+  "provenance": {
+    "run": "instance_309_18",
+    "program": "held_bottle_lower_arc_transfer_v14",
+    "source_sha256": "afa170207a960a13f66ab89676b599d23373acc6be0908d366136ab82cb132da",
+    "adaptation": "curated mouth_targets geometry; removed fixed16-phase recovery path; explicit optional release"
+  },
+  "validation": "CPU and archived-mesh checks; new native qualification pending",
+  "schema_version": 1,
+  "kind": "geometry_program_and_task_flow",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "published_at": "2026-11-08T16:17:52.983651+00:00",
+  "library_parent_commit": "38c55ccb2f63e4998873047b13ae0c57fbac3c54",
+  "release_tag": "oracle_waypoints/geometry-place_in_open_bin/v000001",
+  "flow_sha256": "b30e98d3898cb38859232df23e2556544473b4f7b5bcc2916af8fe6c1edc58c6",
+  "document_sha256": "5fd9349334ae7b6e1ef1bb9fa6654588620afb7fb7ca2c72cdb75ea508b1c4cd",
+  "harness_runtime_sha256": "ff8c50e2f574be195b569ae485c418a874bb6cf5e356f84894567a756e5d1205",
+  "evidence": [
+    {
+      "path": "archive://v02/runtime/operations/geometry_pick_20261105/smooth_bin_20261108/cpu_validation_takeover.xml",
+      "sha256": "bb663d7d04319d03a5302970b25c3b85e7b1ff24efcfe4cde5c5432828db2d03"
+    },
+    {
+      "path": "archive://v02/runtime/operations/geometry_pick_20261105/smooth_bin_20261108/cpu_host_sandbox.xml",
+      "sha256": "08d3879df1d9fef37a7b942163ab8c4b85641bdecd8cdb61508264a50b614447"
+    },
+    {
+      "path": "archive://v02/runtime/operations/geometry_pick_20261105/smooth_bin_20261108/cpu_adaptive_execution.xml",
+      "sha256": "4335695ce597c02c42579fdf410d09a84a5223cf74927c1750211002c0512d0f"
+    },
+    {
+      "path": "archive://v02/runtime/operations/geometry_pick_20261105/smooth_bin_20261108/cpu_navigation.xml",
+      "sha256": "038556398d5fa957795eea8dfbbb0c32c16c169bf68b8ae994c20c9a87da4d44"
+    },
+    {
+      "path": "archive://v02/runtime/operations/geometry_pick_20261105/smooth_bin_20261108/archived_mesh_validation.json",
+      "sha256": "e8183c30ecec36ac08a6c18eb2f94401c0d2264a7de79931624162fdf6c1b557"
+    },
+    {
+      "path": "archive://v02/runtime/operations/geometry_pick_20261105/smooth_bin_20261108/compatibility.json",
+      "sha256": "7a7a1521e0579667161077d3535b20158fcd049cf6f3bf274b60df339076cabd"
+    },
+    {
+      "path": "archive://v02/runtime/operations/geometry_pick_20261105/smooth_bin_20261108/validation.json",
+      "sha256": "a3ed21a23c36e3710b29cf4810ce422380c367344e4856f9e8ee7c4d7b316c3f"
+    }
+  ]
+}

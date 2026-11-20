@@ -1,0 +1,36 @@
+{
+  "program": "recover_body",
+  "source_sha256": "17e0174c9bd5166827b7284dbc481cda742d4a64094ece4fe3740e841db369e3",
+  "description": "User-saved R1Pro whole-body recovery: the measured final torso and BOTH arms, independent of which hand is occupied. Reference has right arm folded, left arm lowered and torso about2.34deg from vertical; it is not mirrored. Call with parameters={} or optional control_steps (positive integer duration estimate). Emits one Pose phase: arm=both, goal.joint_positions_rad=all18 torso/arm joints, gripper=hold, contact_target=null. cuRobo jointly plans from measured state with current full-scale payloads in either/both hands, locks base and fingers, checks complete timing and dense collision samples, then executes the full path open loop and verifies all18 joints and retention. Keep both actual gripper commands; no historical world base coordinate, object identity, simulator reset or trajectory replay. This explicit calibrated robot-joint reference may be reused without recomputing its target for each scene; current obstacles, mechanical limits and payloads must still be checked. The original demonstration held in the right hand only. Left/both-hand recovery and the new joint planner have not been natively retested. Independent free single-link payloads only; bimanual retention of one object requires constrained planning. Read/reuse this published draft before inventing another recovery posture.",
+  "author": "harness_curated_from_model_demonstration",
+  "provenance": {
+    "kind": "user_requested_fixed_joint_reference",
+    "source_proposal": "archive://v02/source/program_skills/geometry/recover_body",
+    "reference": {
+      "run": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_23",
+      "trace": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_23/env/waypoint_trace.jsonl",
+      "trace_sha256": "866edde395145d69fd54558c685bff48fe688a6b385609d3a7aaa340201149ed",
+      "sim_step": 1079,
+      "request_id": "bfa254ce-38f9-44bb-a4ed-bc1192617a7e",
+      "acceptance": "archive://v02/runtime/operations/geometry_pick_20261105/pose_countertop_grasp_20261110/acceptance.json",
+      "acceptance_sha256": "92db154602f66c49e847b3ff3db32c012653848bb45223318a2cbb51859929f4"
+    },
+    "image": "archive://v02/runtime/operations/geometry_pick_20261105/pose_countertop_grasp_20261110/visual_review/final_hold_spectator.jpg",
+    "image_sha256": "8518bdbe8abddc29ddd786017fd45c1f6d410bb3c5950525e4d2af2370d16511",
+    "reference_target": "measured torso and both arms at final wait step1079",
+    "original_model": "gpt-6-astra/high",
+    "original_run_engineering_passed": true,
+    "new_program_native_invocation": false,
+    "native_qualification": false
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> Pose phases (EEF or whole-body joints) or EEF candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T14:29:11.611105+00:00",
+  "release_tag": "oracle_waypoints/geometry-recover_body/v000001",
+  "library_parent_commit": "c18936fdf8cb3c9391d8e23ee2e80cfb504b92a9"
+}

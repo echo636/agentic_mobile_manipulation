@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_mouth_alignment_local_v2",
+  "source_sha256": "9c223fd3b40516559c51be5ff8a24c4807a41fa794366f1a6f597f473eb58413",
+  "description": "Model-authored neighborhood refinement of mesh-certified mouth alignment around the prior lowest joint-rate violation. Recomputes carried mesh/offset; yaw87-93 tilt17-23 degrees and 25mm lower bottle, still >=160mm above rim. Hold only.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_mouth_alignment_local_v2/9c223fd3b40516559c51be5ff8a24c4807a41fa794366f1a6f597f473eb58413/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:16.042263+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_mouth_alignment_local_v2/v000001",
+  "library_parent_commit": "bf60b914587e27563985ab6c72fd9779936be2e1"
+}

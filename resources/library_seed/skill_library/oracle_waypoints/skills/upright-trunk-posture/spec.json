@@ -1,0 +1,24 @@
+{
+  "name": "upright-trunk-posture",
+  "description": "For prepared empty-handed R1Pro, derive q3=q1+q2 and verify upright posture with at most one trunk move; skip when already satisfied.",
+  "robot": "R1Pro",
+  "protocol": "oracle_waypoints",
+  "uses": [],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "q1_rad": {"type": "number"},
+      "q2_rad": {"type": "number"},
+      "yaw_rad": {"type": "number"},
+      "prepared_for_trunk_motion": {"type": "boolean"},
+      "expected_height_interval_m": {
+        "type": ["array", "null"],
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {"type": "number", "minimum": 0}
+      }
+    },
+    "required": ["q1_rad", "q2_rad", "yaw_rad", "prepared_for_trunk_motion", "expected_height_interval_m"],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "name": "behavior-sorting-bottles-cans-and-paper",
+  "kind": "task",
+  "key": "sorting_bottles_cans_and_paper",
+  "protocol": "oracle_waypoints",
+  "revision": 11,
+  "previous_active_revision": 10,
+  "description": "Sequential Pose grasp, saved whole-body recovery and audited bottle placement, with measured retention and explicit development limits.",
+  "action_keys": [
+    "grasp",
+    "place"
+  ],
+  "updated_at": "2026-11-11T08:31:17.825563+00:00",
+  "sources": [
+    {
+      "run": "archive://v02/runtime/runs/oracle_bottle_wrist_upright_20261029_113405_30f048",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "78ce41a0447175cc8c7845b8105cfeff1a9439ed75c74efa9c7420e032b6cef9",
+        "events.jsonl": "ebf9d7bebb03a79652cf6b93eaae741459c16024f822932438641ae53a077a8f",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "62c7b271f33932dd1c6e28f807f443d638b8a513155f1a4960bb2f237ce4fb34"
+      },
+      "claim": "engineering_success"
+    },
+    {
+      "run": "archive://v02/runtime/runs/rax_bottle_exploration_301_20261031",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 301,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "c1a616e4ff6cfacf8bbd3e6e8939f41202836c0baa8b534e64fb69eb93c19ac8",
+        "events.jsonl": "d7485ae294b7b8a5150709fec78761c5f85dcec415729c8db4453a1363ba3b4f",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "785332ed0ac5f69367c2d41d00f0c695bbacf9148c3b27912e1711d04bc7dde5"
+      },
+      "claim": "partial_or_failure"
+    },
+    {
+      "run": "archive://v02/runtime/runs/rax_bottle_exploration_302_20261031",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 302,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "2a5af0f18c6d85a87b66661409dee911b592a48481c24997fe74a952ddccfa35",
+        "events.jsonl": "db96f23a4dec2caa84a0594054fe7b12637fc8f19126a62ac9b155290fca78e2",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "9cd775e0143b840a2b43178a96806018c644061c521f9381e099b02ae1d26696"
+      },
+      "claim": "partial_or_failure"
+    },
+    {
+      "run": "archive://v02/runtime/runs/rax_bottle_formal_305_20261031",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 305,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": false,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "eddb1f8d01c34c49daf6587cf7ffbbc13317f3a964a571a54e0e622ae2f39c74",
+        "events.jsonl": "8d477386a9c65a1998772fc9c7b957b518410f0456ea2d8c26b9fbbc4f9e8ab0",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "067bc77f5e7f6c60ee38450104e5ff3103e1f081ad418dac9d9f79959eef6125"
+      },
+      "claim": "partial_or_failure"
+    },
+    {
+      "run": "archive://v02/runtime/runs/rax_bottle_formal_306_20261031",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 306,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": false,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "d780a9860e675d4ef766567b1ea68c977a512bfd04c781ecdf51813f1908e4cf",
+        "events.jsonl": "639f7210c7e9409e1d17121a68b5982b103eae08bd279b7663c1c6664b7cc732",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "6601f50ddfd8f5be745ce23a4dd5b5c7079b3341b3b13e1830dd5208bfc2049d"
+      },
+      "claim": "partial_or_failure"
+    },
+    {
+      "run": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 309,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "7d6dc3c376c75025b86256497efd3cb3e8ea8973373f7b7bfd34b133ba1f0b95",
+        "events.jsonl": "8fe235eec9607d22a253eedebcf7f6b78fc4397fc9e23c0ad7358362c970e05f",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "0cf16a7625e7eb0b3dc56cb8c3645541df8656cb75d50ac30d843565ccd28298"
+      },
+      "claim": "engineering_success"
+    },
+    {
+      "run": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_22",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 309,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "6b419a85744895bdcb467d95eaa82bb426c078fd05b0bdf1542b0cd14aa151ad",
+        "events.jsonl": "a5786d6bf92042af48c380745eecee7de1fd0a0f34a4cfdf6c58b969c856d4d8",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "5065dc6e35cc61d42fd68615fdcaddd7ab6e994f56841cf3e42c27d916f4bd2f"
+      },
+      "claim": "engineering_success"
+    },
+    {
+      "run": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_23",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 309,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "89e24a81680d6fbf1f1791ff1442f6f5a0a87487d11540e02e8a5d659f2da9f4",
+        "events.jsonl": "2c36c05a35439e9eac3873cae7ea67032e241f4ebead313bcb0685d1259b5fd3",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "1787263476dedd3aad14d1ebc75c7d64f19c54a3f165b76f307464ef50cf0af8"
+      },
+      "claim": "engineering_success"
+    },
+    {
+      "run": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_24",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 309,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "e2e96e2c24513fb13fd52e4f72b10029a81b7ee0b28267a93007ec71a9e9ef9d",
+        "events.jsonl": "e8e1dd759296168f15fefe31dd41f5880b71e0bef1c0b260860753a1776adc60",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "6852813d3abacd7ebb5ac6a2e2b098c3e6f9a42a73cdd17f06e31d06af6140c2"
+      },
+      "claim": "engineering_success"
+    },
+    {
+      "run": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_25",
+      "run_id": "env",
+      "task": "sorting_bottles_cans_and_paper",
+      "protocol": "oracle_waypoints",
+      "backend": "omnigibson",
+      "instance": 309,
+      "seed": 0,
+      "ik_backend": "omnigibson",
+      "grasping_mode": "assisted",
+      "official_task_success": false,
+      "engineering_success": true,
+      "sampled_goal_checks_passed": null,
+      "scene_floor_repairs": 11,
+      "sha256": {
+        "run.json": "2402d64660d81dacdb6da4c58a13704be734d9e9db1f253409dd71fd40a09422",
+        "events.jsonl": "0b7474e37a279bbcc9de797f8c068b569ab933cb89510595365428bda045e561",
+        "scene_geometry_repair.json": "4ee01351abaf075acdee1fe92e635b2b02c65bc6ee9dcfec44fd4e273ceafc7e",
+        "engineering_validation.json": "40bf05bf1e7c874574adf5745bf56f4e78d5a703947e6057246151933156db36"
+      },
+      "claim": "partial_or_failure"
+    }
+  ],
+  "document_sha256": "9e38c5175e4c459f941288c33a23a45dd7b9d6fac73182d118b8fd464de69557"
+}

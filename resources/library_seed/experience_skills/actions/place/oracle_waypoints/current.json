@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "oracle-place",
+  "kind": "action",
+  "key": "place",
+  "protocol": "oracle_waypoints",
+  "revision": 2,
+  "previous_active_revision": 1,
+  "description": "Transport a retained object locally into a container and verify relation, release, retreat and consecutive settling.",
+  "action_keys": [],
+  "updated_at": "2026-10-30T01:49:48.591813+00:00",
+  "document_sha256": "690249b1a8efdfd3640e52e9f423b54e8ebc67f1fa6fa4b863f5e1641fa9ad72",
+  "record_sha256": "67e7c30e2d607b97b680fcae20cad1c220320830a18d9b9ca968dbf7eddfda8a"
+}

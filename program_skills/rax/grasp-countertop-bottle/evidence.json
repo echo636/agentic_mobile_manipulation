@@ -1,0 +1,93 @@
+{
+  "status": "draft",
+  "independent_successes": 0,
+  "physical_runs_of_this_revision": [],
+  "validation": "Not physically executed; offline interface checks only",
+  "manual_refactor": true,
+  "adapted_from": {
+    "controller": "archive://v02/runtime/operations/rax_bottle_transfer308_20261101/session/bundles/7f38c42d402de8051a91e29e50dc5746d22fb65945f53bedd8655f5284f9fe25/controller.py",
+    "controller_sha256": "443f5deb88d3fcd7532e4e4a0272ef5316b05b9dbf4abe6203b0d97e543b192d",
+    "bundle": "7f38c42d402de8051a91e29e50dc5746d22fb65945f53bedd8655f5284f9fe25",
+    "recorded_author_model": "gpt-6-astra",
+    "recorded_reasoning_effort": "xhigh",
+    "run": "repeat_308_01",
+    "replay": "archive://v02/replays/transfer_20261029/manipulation_runs/repeat_308_01/replay.html",
+    "evidence_qualifies_new_interface": false
+  },
+  "previous_source_evidence": {
+    "demonstration_run": "archive://v02/runtime/runs/rax_bottle_exploration_301_20261031",
+    "demonstration_is_not_full_controller_verification": true,
+    "independent_successes": 1,
+    "unresolved_code_failures": 2,
+    "runs": [
+      {
+        "phase": "exploration",
+        "run": null,
+        "run_id": "724d1a78d65140eea0b4634289ed62e5",
+        "engineering_success": null,
+        "accepted_independent_code_success": false,
+        "startup_error": "RuntimeError",
+        "controller_ok": null,
+        "unattended": null,
+        "failed_motor_calls": null,
+        "bundle": "14ea0e109a7e8a12173c2a277fb211e46c094d9ab163bb0708bd44246058fb64",
+        "runner_sha256": "9933cb75747a4f254a01ac05ee52a1f7df2327f273975940f988ee8ac28e4a9d"
+      },
+      {
+        "phase": "exploration",
+        "run": "archive://v02/runtime/runs/rax_bottle_exploration_302_20261031",
+        "run_id": "96e75e01979040eca8e4e3c7ad9aad63",
+        "engineering_success": true,
+        "accepted_independent_code_success": true,
+        "startup_error": null,
+        "controller_ok": true,
+        "unattended": true,
+        "failed_motor_calls": 0,
+        "bundle": "14ea0e109a7e8a12173c2a277fb211e46c094d9ab163bb0708bd44246058fb64",
+        "runner_sha256": "9933cb75747a4f254a01ac05ee52a1f7df2327f273975940f988ee8ac28e4a9d",
+        "evidence_sha256": {
+          "engineering_validation.json": "9cd775e0143b840a2b43178a96806018c644061c521f9381e099b02ae1d26696",
+          "trajectory_audit.json": "e7cbc272f83c37d2d7250f6b65007f84f2c3e85eaadb3058eefedfc6335950df",
+          "rax_workflow.json": "ad50aece8b366934848bba3b35df8d5472199a24c48297e5cef657a36903eeee"
+        }
+      },
+      {
+        "phase": "formal",
+        "run": "archive://v02/runtime/runs/rax_bottle_formal_305_20261031",
+        "run_id": "7859c67f41ba4ea68d96b2624800eba0",
+        "engineering_success": false,
+        "accepted_independent_code_success": false,
+        "startup_error": null,
+        "controller_ok": false,
+        "unattended": true,
+        "failed_motor_calls": 1,
+        "bundle": "14ea0e109a7e8a12173c2a277fb211e46c094d9ab163bb0708bd44246058fb64",
+        "runner_sha256": "9933cb75747a4f254a01ac05ee52a1f7df2327f273975940f988ee8ac28e4a9d",
+        "evidence_sha256": {
+          "engineering_validation.json": "067bc77f5e7f6c60ee38450104e5ff3103e1f081ad418dac9d9f79959eef6125",
+          "trajectory_audit.json": "5bd06ef31e18477328a13c1ec5f2208593edcadd0fdecb3dad0d79ecb6be658e",
+          "rax_workflow.json": "39320d5e6a3e2c3cb1185463ee7eaa5e3e40287419541662282b5b59b3688773"
+        }
+      },
+      {
+        "phase": "formal",
+        "run": "archive://v02/runtime/runs/rax_bottle_formal_306_20261031",
+        "run_id": "bac4e6c9e05c400ca7052a55cb8cabe4",
+        "engineering_success": false,
+        "accepted_independent_code_success": false,
+        "startup_error": null,
+        "controller_ok": false,
+        "unattended": true,
+        "failed_motor_calls": 1,
+        "bundle": "14ea0e109a7e8a12173c2a277fb211e46c094d9ab163bb0708bd44246058fb64",
+        "runner_sha256": "9933cb75747a4f254a01ac05ee52a1f7df2327f273975940f988ee8ac28e4a9d",
+        "evidence_sha256": {
+          "engineering_validation.json": "6601f50ddfd8f5be745ce23a4dd5b5c7079b3341b3b13e1830dd5208bfc2049d",
+          "trajectory_audit.json": "e69bf901d69627b9dc694a5bd3ed11b39bc9a7fc7c20f1e4fe0053bfbe889c00",
+          "rax_workflow.json": "b0265bd124230daf610542950aab132860bde5ee4a55f2cd058433873562daed"
+        }
+      }
+    ]
+  },
+  "publication": "Source proposal only; existing published-library edits preserved"
+}

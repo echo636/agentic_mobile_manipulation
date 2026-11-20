@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "behavior-make-microwave-popcorn",
+  "kind": "task",
+  "key": "make_microwave_popcorn",
+  "protocol": "oracle_waypoints",
+  "revision": 2,
+  "previous_active_revision": 1,
+  "description": "Open, release and retreat from the microwave door with reviewed continuous hold evidence; cooking remains unverified.",
+  "action_keys": [
+    "open-door"
+  ],
+  "updated_at": "2026-10-30T01:49:48.198805+00:00",
+  "document_sha256": "dfd58fb0a87467086c720ad8200780de7ecb28dd6ab447c6c079438dbde71628",
+  "record_sha256": "78f85ecf3712d1456c68ade13f1662a9920f7d1959df557e18b892a7dd6ef41b"
+}

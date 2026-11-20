@@ -1,0 +1,10 @@
+{
+  "versions": [
+    {
+      "version": 1,
+      "code_sha256": "26fd922c9d902409499f0f031fe7e549723a3a2f6e05fb5a00ef89a9ca134cdf",
+      "commit": "e5948e5f2e815ecfbc90e50e514c880abc468f09",
+      "path": "oracle_waypoints/skills/place-held-object/revisions/000001"
+    }
+  ]
+}

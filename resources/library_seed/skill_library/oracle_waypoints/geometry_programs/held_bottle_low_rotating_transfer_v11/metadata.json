@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_low_rotating_transfer_v11",
+  "source_sha256": "1da685bbeafd673a1f37518256a860de0f3bf559c0a9d05a508d53c3c847fdd7",
+  "description": "Model own v8 adaptation for actual lower forward state: bottle mesh clearance .065, staged rotation then mouth translation or combined yaw; EEF-only allhold.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_low_rotating_transfer_v11/1da685bbeafd673a1f37518256a860de0f3bf559c0a9d05a508d53c3c847fdd7/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:08.370227+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_low_rotating_transfer_v11/v000001",
+  "library_parent_commit": "8f110a527d5c0cde0a6df24d4b8a2e828f4d070f"
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "behavior-turning-on-radio",
+  "kind": "task",
+  "key": "turning_on_radio",
+  "protocol": "oracle_waypoints",
+  "revision": 1,
+  "previous_active_revision": 0,
+  "description": "Reuse the observed contact-press strategy for turning on a radio in an Oracle R1Pro scene.",
+  "action_keys": [
+    "press"
+  ],
+  "updated_at": "2026-10-29T14:06:12.258630+00:00",
+  "document_sha256": "88b47d644940cdfc1fb62c51461e4829ff4f0144a116cfeda27ab91eac35937d",
+  "record_sha256": "083809d43edb1ac534e26f34f86274d14b2df5899c6a8482b3a72a95c7d701d7"
+}

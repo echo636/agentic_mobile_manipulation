@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "program": "recover_body",
+  "robot": "R1Pro",
+  "pose_template": {
+    "mode": "pose",
+    "arm": "both",
+    "frame": "robot_base",
+    "goal": {
+      "joint_positions_rad": {
+        "torso_joint1": -0.43985891342163086,
+        "torso_joint2": 0.48001566529273987,
+        "torso_joint3": 0.08119270950555801,
+        "torso_joint4": -0.8062744736671448,
+        "left_arm_joint1": -2.377708187850658e-05,
+        "left_arm_joint2": 7.78791363700293e-05,
+        "left_arm_joint3": 0.000822790723759681,
+        "left_arm_joint4": 1.3150044651411008e-05,
+        "left_arm_joint5": -0.0007134482730180025,
+        "left_arm_joint6": -1.2009090823994484e-05,
+        "left_arm_joint7": 6.6996767600358e-06,
+        "right_arm_joint1": 0.3201662302017212,
+        "right_arm_joint2": -0.3651871979236603,
+        "right_arm_joint3": -0.3483026921749115,
+        "right_arm_joint4": -2.0941901206970215,
+        "right_arm_joint5": -0.43559470772743225,
+        "right_arm_joint6": 0.32150599360466003,
+        "right_arm_joint7": 1.049560308456421
+      }
+    },
+    "gripper": "hold",
+    "contact_target": null
+  },
+  "revision_policy": "Supply the latest observation revision at execution; no saved revision is replayed",
+  "reference_source": {
+    "run": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_23",
+    "trace": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_23/env/waypoint_trace.jsonl",
+    "trace_sha256": "866edde395145d69fd54558c685bff48fe688a6b385609d3a7aaa340201149ed",
+    "sim_step": 1079,
+    "request_id": "bfa254ce-38f9-44bb-a4ed-bc1192617a7e",
+    "acceptance": "archive://v02/runtime/operations/geometry_pick_20261105/pose_countertop_grasp_20261110/acceptance.json",
+    "acceptance_sha256": "92db154602f66c49e847b3ff3db32c012653848bb45223318a2cbb51859929f4"
+  },
+  "scope": {
+    "reference_configuration": "measured torso and both arms from the final held posture",
+    "reference_hand_occupancy": "right held bottle, left empty; these joint angles are not mirrored",
+    "current_hand_occupancy": "either/both/empty; host uses actual payloads and preserves both grippers",
+    "excludes": [
+      "world base position",
+      "base yaw",
+      "gripper opening",
+      "held object identity",
+      "simulation snapshot"
+    ],
+    "new_native_recovery_execution_verified": false
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "program": "held_bottle_lower_arc_transfer_v14",
+  "source_sha256": "afa170207a960a13f66ab89676b599d23373acc6be0908d366136ab82cb132da",
+  "description": "Measured bottle-bottom clearance, lower before cross-body transfer; alternative curved translations and progressive rotations, each 16 continuous EEF phases.",
+  "author": "model",
+  "provenance": {
+    "episode_program_root": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs",
+    "archived_source": "archive://v02/runtime/operations/geometry_pick_20261105/episodes/instance_309_18/env/manip_programs/held_bottle_lower_arc_transfer_v14/afa170207a960a13f66ab89676b599d23373acc6be0908d366136ab82cb132da/source.py",
+    "validation": "Historical source collection; inspect original run outcomes before reuse"
+  },
+  "schema_version": 1,
+  "kind": "geometry_program",
+  "version": 1,
+  "status": "draft",
+  "interface": "generate(task, oracle, parameters) -> EEF phases or candidates",
+  "validation": "Collected for reuse; physical validation is recorded separately",
+  "parent_source_sha256": null,
+  "published_at": "2026-11-10T10:27:13.923565+00:00",
+  "release_tag": "oracle_waypoints/geometry-held_bottle_lower_arc_transfer_v14/v000001",
+  "library_parent_commit": "efa79982ff78edba3ac0200fa30deef3a8f3169d"
+}

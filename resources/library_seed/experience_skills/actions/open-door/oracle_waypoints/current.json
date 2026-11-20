@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "oracle-open-door",
+  "kind": "action",
+  "key": "open-door",
+  "protocol": "oracle_waypoints",
+  "revision": 2,
+  "previous_active_revision": 1,
+  "description": "Recover articulated-handle contact, author hinge arcs, release and review a continuous post-release opening interval.",
+  "action_keys": [],
+  "updated_at": "2026-10-30T01:49:48.760055+00:00",
+  "document_sha256": "159027aebd660cbd9d8013ed230316e1295f784b67cd2b343312696a4f5d6431",
+  "record_sha256": "6b09880910a0703ddc4fe8ec30494c7fafe25a19a44425fa23bc049198c1beae"
+}
