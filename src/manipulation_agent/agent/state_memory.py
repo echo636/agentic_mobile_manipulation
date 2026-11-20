@@ -409,6 +409,61 @@ class StateMemory:
         self._loc_seq += 1
         return f'loc_{self._loc_seq}'
 
+    # ------------------------------------------------------------------
+    # Harness options --place-names / --place-return (2026-11-21, default off). Names come only from the model.
+    # ------------------------------------------------------------------
+    @staticmethod
+    def place_key(name: Any) -> str | None:
+        if not isinstance(name, str):
+            return None
+        words = name.strip().lower().split()
+        while words and words[0] in ('a', 'an', 'the'):
+            words = words[1:]
+        return ' '.join(words) or None
+
+    def named_places(self) -> dict[str, str]:
+        return {info['name']: loc for loc, info in self.visited_locations.items() if info.get('name')}
+
+    def location_for_name(self, name: Any) -> str | None:
+        key = self.place_key(name)
+        if key is None:
+            return None
+        for loc, info in self.visited_locations.items():
+            if info.get('name') and self.place_key(info['name']) == key:
+                return loc
+        return None
+
+    def name_location(self, loc_id: str, name: str) -> dict[str, Any]:
+        """Bind `name` to `loc_id`; one name per location and one location per name (latest wins)."""
+        entry = self.visited_locations.get(loc_id)
+        if entry is None:
+            return {'ignored': True, 'message': f'No location {loc_id} to name.'}
+        clean = ' '.join(name.strip().split())
+        note: dict[str, Any] = {'location': loc_id, 'name': clean}
+        previous_owner = self.location_for_name(clean)
+        if previous_owner is not None and previous_owner != loc_id:
+            self.visited_locations[previous_owner].pop('name', None)
+            note['message'] = f"name '{clean}' moved from {previous_owner} to {loc_id}"
+        old = entry.get('name')
+        if old and self.place_key(old) != self.place_key(clean):
+            note['message'] = f"{loc_id} renamed '{old}' -> '{clean}'"
+        entry['name'] = clean
+        note.setdefault('message', f"{loc_id} is now named '{clean}'")
+        self._persist()
+        return note
+
+    def resolve_place(self, place: Any) -> tuple[str, int] | None:
+        """A model-given place (a name or a loc id) -> (loc id, observation revision of its latest visit)."""
+        if not isinstance(place, str) or not place.strip():
+            return None
+        loc = self.location_for_name(place)
+        if loc is None and place.strip() in self.visited_locations:
+            loc = place.strip()
+        if loc is None:
+            return None
+        revision = self.visited_locations[loc].get('last_revision')
+        return (loc, int(revision)) if isinstance(revision, int) else None
+
     def _touch_location(self, loc_id: str, step: int, revision: int, image_refs: list[str], hint: str | None = None) -> None:
         entry = self.visited_locations.get(loc_id)
         if entry is None:
@@ -1004,9 +1059,13 @@ class StateMemory:
 
         # Line 1: Visited locations & measured point-to-point travel times
         locs = list(self.visited_locations.values())
+        # Harness option --place-names (default off): named places are listed besides the last 6; without any
+        # name the output is unchanged.
+        shown = [r for r in locs[:-6] if r.get('name')] + locs[-6:]
         loc_parts = [
-            f"{r['id']}" + (f"({r['hint']})" if r.get('hint') else '') + f":v{r['visits']}"
-            for r in locs[-6:]
+            f"{r['id']}" + (f' "{r["name"]}"' if r.get('name') else '')
+            + (f"({r['hint']})" if r.get('hint') else '') + f":v{r['visits']}"
+            for r in shown
         ]
         loc_prefix = f"Locations({len(locs)}): " + ', '.join(loc_parts)
         edges = self.travel_edges()
@@ -1118,6 +1177,9 @@ class StateMemory:
             'any_process_running': bool(self.process_state.get('any_running')),
             'process_elapsed_s': self.process_state.get('elapsed_active_s'),
         }
+        named = self.named_places()
+        if named:
+            view['named_places'] = named
         if self.tool_state.get('state') is not None:
             view['tool_state'] = {
                 'level': self.tool_state.get('level'),
@@ -1230,6 +1292,10 @@ class StateMemory:
         if open_map:
             open_desc = ', '.join(f"{cid}@{info['location']}" for cid, info in list(open_map.items())[:8])
             lines.append(f'Currently open enclosures: {open_desc}.')
+
+        named = self.named_places()
+        if named:
+            lines.append('Named places: ' + ', '.join(f'"{n}" = {loc}' for n, loc in named.items()) + '.')
 
         if self.unresolved_notes_goals:
             lines.append(f"Unfinished subgoals from your task_notes: {', '.join(self.unresolved_notes_goals[:8])}.")

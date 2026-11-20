@@ -49,6 +49,10 @@ def main():
                    help='Route A selection option (separate decision): report the category of the selected object')
     p.add_argument('--operation-tips', choices=['off','on'], default='off',
                    help='Harness option: append general per-action operation checks to the visual-manipulation skill')
+    p.add_argument('--place-return', choices=['off','on'], default='off',
+                   help='Harness option (default off): bridge-side return_to (drive back to a recorded own pose)')
+    p.add_argument('--place-return-visited-only', choices=['off','on'], default='on',
+                   help='With --place-return: plan only through places the robot has been (off = whole walkable map, ablation)')
     p.add_argument('--require-tool-intent',action='store_true',
                    help='Require a concise public intent argument on every tool call; use identically in both arms')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
@@ -131,7 +135,9 @@ def main():
                                   argument_tolerance=a.argument_tolerance == 'on',
                                   selection_assist=a.selection_assist == 'on',
                                   selection_names=a.selection_names == 'on',
-                                  operation_tips=a.operation_tips == 'on')
+                                  operation_tips=a.operation_tips == 'on',
+                                  place_return=a.place_return == 'on',
+                                  place_return_visited_only=a.place_return_visited_only == 'on')
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,with_scoring_objective(a.instruction),image_history_captures=a.image_history_captures)

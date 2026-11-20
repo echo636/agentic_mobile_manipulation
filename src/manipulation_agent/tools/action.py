@@ -18,7 +18,13 @@ Inspect the returned images and feedback, including after failures.""", object_s
     "placement_roll_degrees":{"type":["number","null"],"minimum":-180,"maximum":180},
     "wait_seconds":{"type":["number","null"],"minimum":0.1,"maximum":120}}))
 def act(ctx, primitive, target, revision, placement_yaw_degrees=None, wait_seconds=None,
-        placement_roll_degrees=None):
+        placement_roll_degrees=None, return_revision=None):
+    if primitive == 'return_to':
+        # Harness option --place-return (default off): the bridge schema only lists return_to when it is installed.
+        from ..runtime.place_return import perform_return
+        if target is not None:
+            raise SkillError('invalid_arguments', 'return_to takes target=null')
+        return perform_return(ctx.harness, revision, return_revision, parent_request_id=ctx.request_id)
     if placement_yaw_degrees is not None and primitive not in {'place_on_top','place_next_to'}:
         raise SkillError('invalid_arguments','placement_yaw_degrees is supported only for place_on_top and place_next_to')
     if wait_seconds is not None and primitive!='wait':

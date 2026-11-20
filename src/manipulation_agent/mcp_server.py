@@ -47,6 +47,7 @@ from .transport.bridge import rpc
 from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
 from .agent.state_memory import StateMemory
+from .agent.place_options import place_catalog, prepare as place_prepare, apply_name as place_apply_name
 from .agent.failure_memory import FailureMemory
 from .agent.stance_repeat import StanceRepeatGuard
 from .tools.zoom_select import ZOOM_LIMIT, ZOOM_TOOL, compose_region, two_step_catalog, zoom_image, zoom_to_full
@@ -318,7 +319,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         selection_assist=False, argument_tolerance=False, failure_look_again=False,
                         failure_memory=False, place_look_again=False, finish_evidence=False,
                         finish_evidence_judge=None, finish_evidence_dir=None, stance_repeat_guard=False,
-                        stance_repeat_state=None, echo_full_frame=False, two_step_select=False):
+                        stance_repeat_state=None, echo_full_frame=False, two_step_select=False,
+                        place_names=False, place_return=False):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -350,6 +352,9 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     # Harness-side option, off by default: defer early finishes while act/look budget remains.
     guard = FinishGuard(guard_state, state_memory=state_memory) if finish_guard else None
     proxy_memory = StateMemory() if state_memory else None
+    # Harness options --place-names / --place-return (2026-11-21, default off): both read and write state_memory.
+    if (place_names or place_return) and proxy_memory is None:
+        raise ValueError('--place-names / --place-return need --state-memory on')
     # Harness option (--failure-memory, default off): the model's own recent failed attempts.
     failures = FailureMemory() if failure_memory else None
     # Harness option (--stance-repeat-guard, v12, default off): same primitive failing repeatedly at one stance.
@@ -459,7 +464,11 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         )
                     except Exception:
                         pre_source = None
-                result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()),timeout=rpc_timeout)
+                forward_args, observe_args, name_here, early = place_prepare(
+                    name, arguments, proxy_memory, names=place_names, ret=place_return)
+                if early is not None:
+                    return [types.TextContent(type='text', text=json.dumps(without_wall_clock(early), ensure_ascii=False))]
+                result = await asyncio.to_thread(rpc, url, name, forward_args, str(uuid.uuid4()),timeout=rpc_timeout)
                 if two_step_select and name in ('initialize', 'act', 'look') and isinstance(result, dict):
                     images = (result.get('observation') or {}).get('images') or []
                     if images:
@@ -470,7 +479,9 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                     if zoom_note is not None:
                         result['zoom_selection'] = {**zoom_note, 'note': 'zoom point converted to the full image'}
                 if proxy_memory is not None and isinstance(result, dict):
-                    proxy_memory.observe(name, arguments if isinstance(arguments, dict) else {}, result)
+                    proxy_memory.observe(name, observe_args if isinstance(observe_args, dict) else {}, result)
+                    if place_names:
+                        place_apply_name(result, proxy_memory, name_here)
                     if name in ('initialize', 'act', 'look') and 'state_memory' not in result:
                         result['state_memory'] = proxy_memory.public_view(
                             include_handoff=(name == 'initialize' and proxy_memory.steps_observed > 0)
@@ -663,6 +674,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
 
     if two_step_select:
         catalog = two_step_catalog(catalog)
+    catalog = place_catalog(catalog, names=place_names, ret=place_return)
     registered = [Tool(
         fn=wrap(spec['name']), name=spec['name'], description=spec.get('description', ''),
         parameters=deepcopy(spec['inputSchema']), is_async=True,
@@ -792,7 +804,8 @@ async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, fini
               planning_mode='off', handoff_note=False, selection_assist=False, argument_tolerance=False,
               failure_look_again=False, failure_memory=False, place_look_again=False, finish_evidence=False,
               finish_evidence_judge=None, finish_evidence_dir=None, stance_repeat_guard=False,
-              stance_repeat_state=None, echo_full_frame=False, two_step_select=False):
+              stance_repeat_state=None, echo_full_frame=False, two_step_select=False,
+              place_names=False, place_return=False):
     server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
                                  enable_click_echo=enable_click_echo,
                                  max_inline_image_bytes=max_inline_image_bytes,
@@ -805,7 +818,8 @@ async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, fini
                                  finish_evidence_judge=finish_evidence_judge,
                                  finish_evidence_dir=finish_evidence_dir,
                                  stance_repeat_guard=stance_repeat_guard, stance_repeat_state=stance_repeat_state,
-                                 echo_full_frame=echo_full_frame, two_step_select=two_step_select)
+                                 echo_full_frame=echo_full_frame, two_step_select=two_step_select,
+                                 place_names=place_names, place_return=place_return)
     _startup('serving')
     if transport == 'stdio' and argument_tolerance:
         await run_stdio_parsing_string_arguments(server)
@@ -863,6 +877,10 @@ def main():
                         help='state file of the stance-repeat guard (read by the unfinished-turn nudge)')
     parser.add_argument('--echo-full-frame', choices=('off', 'on'), default='off',
                         help='harness option (v12): echoes and look-again show the full cited view with the point marked')
+    parser.add_argument('--place-names', choices=('off', 'on'), default='off',
+                        help='harness option: act/look accept name_here to name the current place in state_memory')
+    parser.add_argument('--place-return', choices=('off', 'on'), default='off',
+                        help='harness option: act primitive return_to drives back to a named or visited place')
     parser.add_argument('--two-step-select', choices=('off', 'on'), default='off',
                         help='harness option (v12): zoom tool; act may target a point in the newest zoomed image')
     args = parser.parse_args()
@@ -885,7 +903,8 @@ def main():
                     stance_repeat_guard=args.stance_repeat_guard == 'on',
                     stance_repeat_state=args.stance_repeat_state,
                     echo_full_frame=args.echo_full_frame == 'on',
-                    two_step_select=args.two_step_select == 'on'))
+                    two_step_select=args.two_step_select == 'on',
+                    place_names=args.place_names == 'on', place_return=args.place_return == 'on'))
 
 
 if __name__ == '__main__':

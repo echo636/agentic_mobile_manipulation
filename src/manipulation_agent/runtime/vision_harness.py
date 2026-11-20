@@ -57,7 +57,7 @@ class VisionHarness:
                  goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False,
                  scheduling_mode='none', planning_mode='off', auxiliary_feedback=False, state_memory=False,
                  argument_tolerance=False, selection_assist=False, selection_names=False,
-                 operation_tips=False):
+                 operation_tips=False, place_return=False, place_return_visited_only=True):
         if profile == 'basic-skills': goal_skill = 'none'
         if profile == 'goal-tree': goal_skill = 'tree'
         if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
@@ -110,6 +110,7 @@ class VisionHarness:
             profile, require_intent=require_tool_intent,
             scheduling_mode=scheduling_mode, planning_mode=planning_mode)}
         self.cache,self.evidence={},{}
+        self.place_return=bool(place_return)
         self.skills = None
         if profile == 'workflow':
             self.plan,self.memory=[],{}
@@ -140,6 +141,10 @@ class VisionHarness:
         recorder.run['episode_deadline_unix']=self.deadline.unix
         self.deadline.check()
         self.snapshot=self.refresh()
+        if self.place_return:
+            # Harness option --place-return (default off): private odometry by revision + bridge-only return_to.
+            from .place_return import install as install_place_return
+            install_place_return(self, visited_only=place_return_visited_only)
         recorder.run.update(backend=backend.provenance(),budget=asdict(budget),skill_bundle_sha256=self.skills.digest if self.skills else None,
                             observation_contract="rgb_four_camera_same_state_v1" if 'capture' in self.snapshot else "rgb_only_v1")
         recorder.run['execution_limit_policy']={'clock':'episode_execution_excludes_initialization',
