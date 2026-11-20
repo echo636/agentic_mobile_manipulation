@@ -182,3 +182,35 @@ def test_tiers_and_switch(monkeypatch):
     assert abs(FC.tiers(0.4)[0][1] - 0.5) < 1e-9 and FC.tiers(0.4)[1][1] == 0.4 and FC.tiers(0.4)[2][1] is None
     monkeypatch.setenv('MAS_FLOOR_CLEARANCE', 'off')
     assert FC.enabled() is False
+
+
+class FakePhysx:
+    def __init__(self):
+        self.subs = []
+
+    def subscribe_physics_on_step_events(self, fn, pre_step, order):
+        self.subs.append((pre_step, fn)); return len(self.subs)
+
+    def step(self, push):
+        for pre, fn in self.subs:
+            if pre: fn(0.0)
+        push()                                   # contact physics inside the step
+        for pre, fn in self.subs:
+            if not pre: fn(0.0)
+
+
+def test_door_never_reads_open_after_any_step_during_hold(door, monkeypatch):
+    # coordinator 12:59: during a hold, every state read (ToggledOn requires_closed, evaluator) after an env step sees
+    # the door closed. T2 probe: garments pushed the door to 0.0928-0.105 rad within one step (Open threshold 0.0785).
+    obj, j = door
+    monkeypatch.setattr(AH, '_SUBSCRIPTION', None)
+    phys = FakePhysx()
+    assert AH._subscribe(phys) is True and sorted(p for p, _ in phys.subs) == [False, True]
+    AH.lock_closed(SimpleNamespace(), obj)
+    for push in (0.0928, 0.105, 0.3, 0.004):
+        phys.step(lambda: setattr(j, 'q', push))
+        assert j.q <= AH.HOLD_TOLERANCE and not (j.q > 0.0785)     # Open would be read false
+    AH.unlock(SimpleNamespace(), obj)
+    phys.step(lambda: setattr(j, 'q', 1.5708))                    # explicit open: released, physics free
+    assert j.q == 1.5708
+    monkeypatch.setattr(AH, '_SUBSCRIPTION', None)

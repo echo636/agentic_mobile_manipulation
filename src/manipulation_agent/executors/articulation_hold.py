@@ -1,9 +1,10 @@
 """rc1 (2026-11-20, benchmark side): keep explicit close / toggle results from being undone by contact physics.
 
 Two unintended flips are blocked, nothing else:
-1. A door closed by the `close` primitive is held closed: before every physics step a held joint pushed more than
-   HOLD_TOLERANCE away from its closed position is put back with zero velocity, until the next explicit `open` of that
-   object releases it. Contents pressing on the door can no longer push it open. (Narrowing joint limits was tried in
+1. A door closed by the `close` primitive is held closed: before and after every physics step a held joint pushed more
+   than HOLD_TOLERANCE away from its closed position is put back with zero velocity, until the next explicit `open` of
+   that object releases it (the post-step clamp precedes OmniGibson's object-state update, so requires_closed and the
+   evaluator never read the door open during a hold). Contents pressing on the door can no longer push it open. (Narrowing joint limits was tried in
    the first dev snapshot and rejected: OmniGibson derives Open thresholds and open goals from the limits.)
 2. Finger contact no longer toggles switches: OmniGibson's ToggledOn counts steps with a robot finger inside the toggle
    marker and flips the state after CAN_TOGGLE_STEPS; that counter is held at 0. Legal changes are unchanged:
@@ -66,14 +67,22 @@ def clamp_now(obj):
     return out
 
 
-def _subscribe():
+def _physx_interface():
+    import omnigibson as og
+    return og.sim._physics_context._physx_interface
+
+
+def _subscribe(physx=None):
+    """Clamp held joints both before and after every physics step. The post-step clamp runs inside the physics step,
+    before OmniGibson updates object states (ToggledOn's requires_closed check reads Open there), so no state read
+    during a hold sees the door pushed open; the pre-step clamp keeps the solver starting from the closed pose."""
     global _SUBSCRIPTION
     if _SUBSCRIPTION is not None:
         return True
     try:
-        import omnigibson as og
-        _SUBSCRIPTION = og.sim._physics_context._physx_interface.subscribe_physics_on_step_events(
-            lambda _: enforce(), pre_step=True, order=1)
+        physx = physx if physx is not None else _physx_interface()
+        _SUBSCRIPTION = (physx.subscribe_physics_on_step_events(lambda _: enforce(), pre_step=True, order=1),
+                         physx.subscribe_physics_on_step_events(lambda _: enforce(), pre_step=False, order=1))
         return True
     except Exception:          # simulator-free unit tests
         return False
