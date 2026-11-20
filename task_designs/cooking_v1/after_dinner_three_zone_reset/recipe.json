@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "after_dinner_three_zone_reset",
- "instance_id": "after_dinner_three_zone_reset_seed0_r1",
+ "instance_id": "after_dinner_three_zone_reset_seed0_r2",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -15,7 +15,8 @@
   "storage": "countertop_kelzer_0",
   "fridge": "fridge_dszchb_0",
   "oven": "oven_ffitak_0",
-  "dishwasher": "dishwasher_ynrhuk_0",
+  "dishwasher": "c4_dishwasher",
+  "kitchen_floor": "floors_kxcpgy_0",
   "cabinet": "bottom_cabinet_fancyy_0",
   "floor": "floors_qgmjvd_0",
   "table": "coffee_table_rlsebe_0",
@@ -45,7 +46,8 @@
  },
  "scene_exclusions": [
   "water_glass_bbpraa_0",
-  "table_lamp_uupwiq_0"
+  "table_lamp_uupwiq_0",
+  "dishwasher_ynrhuk_0"
  ],
  "construction_asset_scales": [],
  "asset_imports": [
@@ -95,6 +97,30 @@
   }
  ],
  "native_assets": [
+  {
+   "name": "c4_dishwasher",
+   "category": "dishwasher",
+   "model": "dugpby",
+   "usd_sha256": "b3b9bff0c97770c4f25dc43b421bc6d93b447180d6347e755d2ca6552ea80dee",
+   "prim_type": 0,
+   "fixed_base": true,
+   "scale": [
+    1.05,
+    1.08,
+    1.2
+   ],
+   "position": [
+    92.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
   {
    "name": "c4_tray",
    "category": "tray",
@@ -632,6 +658,21 @@
     0.0,
     0.0,
     1.0
+   ]
+  },
+  {
+   "object": "dishwasher",
+   "target": "kitchen_floor",
+   "place_on_support": true,
+   "xy": [
+    7.205,
+    -1.955
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
    ]
   },
   {

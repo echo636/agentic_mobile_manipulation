@@ -109,7 +109,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'after_dinner_three_zone_reset',
-        'instance_id': 'after_dinner_three_zone_reset_seed0_r1',
+        'instance_id': 'after_dinner_three_zone_reset_seed0_r2',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -120,7 +120,8 @@ def build_recipe() -> dict:
             'storage': 'countertop_kelzer_0',
             'fridge': 'fridge_dszchb_0',
             'oven': 'oven_ffitak_0',
-            'dishwasher': 'dishwasher_ynrhuk_0',
+            'dishwasher': 'c4_dishwasher',
+            'kitchen_floor': 'floors_kxcpgy_0',
             'cabinet': 'bottom_cabinet_fancyy_0',
             'floor': 'floors_qgmjvd_0',
             # living room
@@ -157,6 +158,9 @@ def build_recipe() -> dict:
         'scene_exclusions': [
             'water_glass_bbpraa_0',      # duplicate glass (as in T1)
             'table_lamp_uupwiq_0',       # frees the bedroom nightstand for the tray
+            # r2: the scene dishwasher's wire racks let released dishes slide out over the open door
+            # (c4ref_habit r1b: 4 of 6 dishes ended on the floor); replaced in place by a rack-less model
+            'dishwasher_ynrhuk_0',
         ],
         'construction_asset_scales': [],
         'asset_imports': [
@@ -172,6 +176,10 @@ def build_recipe() -> dict:
             for i in (1, 2)
         ],
         'native_assets': [
+            {'name': 'c4_dishwasher', 'category': 'dishwasher', 'model': 'dugpby',
+             'usd_sha256': 'b3b9bff0c97770c4f25dc43b421bc6d93b447180d6347e755d2ca6552ea80dee', 'prim_type': 0,
+             'fixed_base': True, 'scale': [1.05, 1.08, 1.2], 'position': [92.0, 50.0, 2.0],
+             'orientation': [0.0, 0.0, 0.70710678, 0.70710678]},
             native('c4_tray', 'tray', 'coqeme',
                    'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 95.0, [3.38, 2.16, 1.5]),
             native('c4_pie', 'apple_pie', 'ejrgdj',
@@ -265,7 +273,9 @@ def build_recipe() -> dict:
             # children's-bedroom nightstand (48 x 78 cm, lamp removed): mugs at the north end
             on('mug1', 'nightstand', [20.44, 14.14]),
             on('mug2', 'nightstand', [20.66, 14.14]),
-            # appliances
+            # appliances (rack-less dishwasher in the original under-counter slot)
+            {'object': 'dishwasher', 'target': 'kitchen_floor', 'place_on_support': True, 'xy': [7.205, -1.955],
+             'orientation': [0.0, 0.0, 0.70710678, 0.70710678]},
             state('dishwasher', 'ToggledOn', False),
             state('dishwasher', 'Open', False, fully=True),
             state('washer', 'ToggledOn', False),
