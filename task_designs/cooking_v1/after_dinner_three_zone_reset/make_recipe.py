@@ -109,7 +109,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'after_dinner_three_zone_reset',
-        'instance_id': 'after_dinner_three_zone_reset_seed0_r0',
+        'instance_id': 'after_dinner_three_zone_reset_seed0_r1',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -236,13 +236,16 @@ def build_recipe() -> dict:
             state('utility_entry_door', 'Open', True, fully=True),
             state('utility_exit_door', 'Open', True, fully=True),
             state('bedroom_door', 'Open', True, fully=True),
-            # unused base-task objects: tea and board inside the closed fridge, the rest on the cabinet roof
+            # unused base-task objects: tea inside the closed fridge, the board inside the closed pantry
+            # cabinet (r0 put the 37 cm board in the fridge and it kept the door from closing), the rest
+            # on the cabinet roof as in T1
             state('fridge', 'Open', True, fully=True),
-            {'object': 'unused_board', 'target': 'fridge', 'place_on_support': True, 'xy': [7.70, -1.85],
-             'support_probe_height': 1.0, 'initial_relation': 'Inside', 'orientation': [0.0, 0.0, 0.0, 1.0]},
-            {'object': 'unused_tea', 'target': 'fridge', 'place_on_support': True, 'xy': [7.98, -1.85],
+            {'object': 'unused_tea', 'target': 'fridge', 'place_on_support': True, 'xy': [7.82, -1.85],
              'support_probe_height': 1.0, 'initial_relation': 'Inside'},
             state('fridge', 'Open', False, fully=True),
+            state('cabinet', 'Open', True, fully=True),
+            {'object': 'unused_board', 'target': 'cabinet', 'place_on_support': True, 'xy': [8.74, -1.96],
+             'support_probe_height': 0.9, 'initial_relation': 'Inside', 'orientation': [0.0, 0.0, 0.0, 1.0]},
             on('unused_half_apple_a', 'cabinet', [8.22, -1.92]),
             on('unused_half_apple_b', 'cabinet', [8.42, -1.92]),
             on('unused_cookie', 'cabinet', [8.62, -1.92]),
