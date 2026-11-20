@@ -324,7 +324,10 @@ class CheckedPlacement:
         origin = position.detach().cpu().numpy()
         geometry = self._collision_vertices(held)
         orientations = getattr(held, 'orientations', None)
-        if orientations is not None and not center_footprint:
+        # rc1 A8 fix (23:10): an empty / all-zero-probability orientation table is "no authored resting pose" too;
+        # before, such objects took the native branch, which keeps the in-hand tilt, and A8 never ran for them
+        authored = [e for e in (orientations or {}).values() if e.get('prob', 0) > 0]
+        if authored and not center_footprint:
             from .surface_geometry import native_resting_orientation
             quaternion, rotation = native_resting_orientation(
                 orientation.detach().cpu().numpy(), orientations)

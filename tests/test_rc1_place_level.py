@@ -126,3 +126,16 @@ def test_place_inside_tilted_half_log_gets_level_proposal_first(monkeypatch):
     assert labels.index('carried_pose') > max(i for i, l in enumerate(labels) if l == 'a8_level_pose')
     monkeypatch.setenv('MAS_PLACE_LEVEL', 'off')
     assert a8_level_quat(backend, held, in_hand, torch) is None
+
+
+def test_empty_orientation_table_counts_as_unauthored(monkeypatch):
+    # imported assets (trays) carry an empty or all-zero orientation table; A8 must still level them
+    import torch
+    from manipulation_agent.executors.inside_sampling import a8_level_quat
+    monkeypatch.delenv('MAS_PLACE_LEVEL', raising=False)
+    tilted = torch.as_tensor(R.from_euler('xyz', [7., 0., 20.], degrees=True).as_quat(), dtype=torch.float32)
+    for table in ({}, {'a': {'rotation': [0, 0, 0, 1], 'prob': 0.}}):
+        held = _Held(); held.orientations = table
+        assert a8_level_quat(_Backend({}), held, tilted, torch) is not None
+    held = _Held(); held.orientations = {'a': {'rotation': [0, 0, 0, 1], 'prob': 1.}}
+    assert a8_level_quat(_Backend({}), held, tilted, torch) is None              # authored poses: native path

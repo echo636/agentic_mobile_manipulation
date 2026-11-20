@@ -64,7 +64,8 @@ def a8_level_quat(backend, held, root_quat, torch):
     if unknown, held heading kept) as an extra proposal ranked before the in-hand pose. None when the switch
     MAS_PLACE_LEVEL is off, the tilt is under 3 deg / over 45 deg, or the object has authored resting poses."""
     import os
-    if os.environ.get('MAS_PLACE_LEVEL', 'on') == 'off' or getattr(held, 'orientations', None) is not None:
+    authored = [e for e in (getattr(held, 'orientations', None) or {}).values() if e.get('prob', 0) > 0]
+    if os.environ.get('MAS_PLACE_LEVEL', 'on') == 'off' or authored:
         return None
     from .surface_geometry import level_to_reference
     import numpy as np
