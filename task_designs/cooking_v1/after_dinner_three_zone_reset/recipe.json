@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "after_dinner_three_zone_reset",
- "instance_id": "after_dinner_three_zone_reset_seed0_r5",
+ "instance_id": "after_dinner_three_zone_reset_seed0_r5b",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -1234,7 +1234,11 @@
      },
      {
       "primitive": "place_inside",
-      "role": "dishwasher"
+      "role": "dishwasher",
+      "xy": [
+       7.08,
+       -2.02
+      ]
      },
      {
       "primitive": "grasp",
@@ -1242,7 +1246,11 @@
      },
      {
       "primitive": "place_inside",
-      "role": "dishwasher"
+      "role": "dishwasher",
+      "xy": [
+       7.34,
+       -2.02
+      ]
      },
      {
       "primitive": "grasp",
@@ -1250,7 +1258,11 @@
      },
      {
       "primitive": "place_inside",
-      "role": "dishwasher"
+      "role": "dishwasher",
+      "xy": [
+       7.08,
+       -1.84
+      ]
      },
      {
       "primitive": "grasp",
@@ -1258,7 +1270,11 @@
      },
      {
       "primitive": "place_inside",
-      "role": "dishwasher"
+      "role": "dishwasher",
+      "xy": [
+       7.34,
+       -1.84
+      ]
      },
      {
       "primitive": "close",
@@ -1282,7 +1298,11 @@
      },
      {
       "primitive": "place_inside",
-      "role": "dishwasher"
+      "role": "dishwasher",
+      "xy": [
+       7.08,
+       -2.02
+      ]
      },
      {
       "primitive": "grasp",
@@ -1290,7 +1310,11 @@
      },
      {
       "primitive": "place_inside",
-      "role": "dishwasher"
+      "role": "dishwasher",
+      "xy": [
+       7.34,
+       -2.02
+      ]
      },
      {
       "primitive": "grasp",
@@ -1298,7 +1322,11 @@
      },
      {
       "primitive": "place_inside",
-      "role": "dishwasher"
+      "role": "dishwasher",
+      "xy": [
+       7.08,
+       -1.84
+      ]
      },
      {
       "primitive": "grasp",
@@ -1306,7 +1334,11 @@
      },
      {
       "primitive": "place_inside",
-      "role": "dishwasher"
+      "role": "dishwasher",
+      "xy": [
+       7.34,
+       -1.84
+      ]
      }
     ],
     "after": [
@@ -1411,7 +1443,11 @@
      },
      {
       "primitive": "place_inside",
-      "role": "oven"
+      "role": "oven",
+      "xy": [
+       8.43,
+       -1.85
+      ]
      },
      {
       "primitive": "close",

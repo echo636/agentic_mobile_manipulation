@@ -49,6 +49,11 @@ TRAY_SLOTS = {  # tray-local uv, 3 x 2 grid on the 48 x 48 cm tray
     'mug1': [0.73, 0.27], 'mug2': [0.73, 0.73],
 }
 
+# r5b reference aim points inside the dishwasher (front opening at y = -1.62): without an aim the reference
+# clicks the visible front and the executor picks the release pose nearest to it, i.e. at the opening edge,
+# where a dish can slide onto the open door (r5 habit: mug2). Reference tooling only; the scene is unchanged.
+DISHWASHER_SLOTS = {'bowl1': [7.08, -2.02], 'bowl2': [7.34, -2.02], 'mug1': [7.08, -1.84], 'mug2': [7.34, -1.84]}
+
 STAGE_SHA_SETTING = '9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66'
 
 
@@ -109,7 +114,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'after_dinner_three_zone_reset',
-        'instance_id': 'after_dinner_three_zone_reset_seed0_r5',
+        'instance_id': 'after_dinner_three_zone_reset_seed0_r5b',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -415,7 +420,7 @@ def build_reference_plan() -> dict:
         'load_dishwasher_from_tray': {
             'actions': [a for d in DISHES for a in (
                 {'primitive': 'grasp', 'role': d},
-                {'primitive': 'place_inside', 'role': 'dishwasher'})]
+                {'primitive': 'place_inside', 'role': 'dishwasher', 'xy': DISHWASHER_SLOTS[d]})]
                        + [{'primitive': 'close', 'role': 'dishwasher'},
                           {'primitive': 'toggle_on', 'role': 'dishwasher'}],
             'after': ['open_dishwasher', 'tray_to_kitchen'],
@@ -424,7 +429,7 @@ def build_reference_plan() -> dict:
         'dishes_single_trips': {
             'actions': [a for d in DISHES for a in (
                 {'primitive': 'grasp', 'role': d},
-                {'primitive': 'place_inside', 'role': 'dishwasher'})],
+                {'primitive': 'place_inside', 'role': 'dishwasher', 'xy': DISHWASHER_SLOTS[d]})],
             'after': ['open_dishwasher'],
         },
         'start_dishwasher': {
@@ -456,7 +461,7 @@ def build_reference_plan() -> dict:
         'start_pie': {
             'actions': [{'primitive': 'open', 'role': 'oven'},
                         {'primitive': 'grasp', 'role': 'pie'},
-                        {'primitive': 'place_inside', 'role': 'oven'},
+                        {'primitive': 'place_inside', 'role': 'oven', 'xy': [8.43, -1.85]},
                         {'primitive': 'close', 'role': 'oven'},
                         {'primitive': 'toggle_on', 'role': 'oven'}],
             'after': [],
