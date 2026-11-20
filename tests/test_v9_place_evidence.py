@@ -172,6 +172,21 @@ def test_rc1_a7_fixed_base_objects_excluded():
     assert [o.name for o in b._stacking_movable([counter, cup, None])] == ['cup']
 
 
+def test_rc1_a7_cut_counter_records_but_never_changes_values(tmp_path):
+    lotion, nightstand, floor = map(_O, ('lotion', 'nightstand', 'floor'))
+    nightstand.fixed_base = False
+    b = _backend({('lotion', 'nightstand'), ('nightstand', 'floor')})
+    b.fixed_support_names = frozenset({'nightstand'}); b.output = tmp_path; b.steps = 7
+    movable = b._stacking_movable([lotion, nightstand, floor])
+    cut = [nightstand]
+    assert b._note_a7_cut('lotion_ontop_floor', lotion, floor, movable, cut) is False
+    assert b._note_a7_cut('lotion_ontop_floor', lotion, floor, movable, cut) is False   # same situation: one record
+    rows = [json.loads(l) for l in (tmp_path / 'evaluator_diagnostics.jsonl').read_text().splitlines()]
+    assert len(rows) == 1 and rows[0]['event'] == 'a7_stacking_chain_cut' and rows[0]['fixed_layers'] == ['nightstand']
+    assert b.a7_cut_counts == {'lotion_ontop_floor': 1}
+    assert b._note_a7_cut('x', lotion, floor, movable, []) is False                        # nothing cut: no record
+
+
 # ---- benchmark side: simulator wall-clock values never reach the model ----
 
 def test_model_bound_payloads_drop_wall_clock_fields():

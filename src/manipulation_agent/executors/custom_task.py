@@ -622,6 +622,34 @@ class CustomTaskBackend(RGBBackend):
         return [o for o in objects if o is not None and not getattr(o, 'fixed_base', False)
                 and getattr(o, 'name', None) not in fixed]
 
+    def _note_a7_cut(self, key, obj, target, movable, cut_layers):
+        """Private record only; always returns False so no predicate value changes. Records when the pre-A7 rule
+        (fixed supports as layers) would have counted obj as stacked on target, i.e. a chain that A7 cut. Written once
+        per (predicate, object) when the situation starts, with a running count in self.a7_cut_counts."""
+        if not cut_layers or obj is None or target is None:
+            return False
+        try:
+            would = self._stacked_on_top(obj, target, list(movable) + list(cut_layers))
+        except Exception:
+            return False
+        counts = self.__dict__.setdefault('a7_cut_counts', {})
+        active = self.__dict__.setdefault('_a7_cut_active', set())
+        tag = (key, getattr(obj, 'name', None))
+        if would and tag not in active:
+            active.add(tag)
+            counts[key] = counts.get(key, 0) + 1
+            out = getattr(self, 'output', None)
+            if out is not None:
+                with (Path(out) / 'evaluator_diagnostics.jsonl').open('a') as f:
+                    f.write(json.dumps({'audience': 'executor_private', 'event': 'a7_stacking_chain_cut',
+                                        'predicate': key, 'object': getattr(obj, 'name', None),
+                                        'target': getattr(target, 'name', None),
+                                        'fixed_layers': sorted(getattr(o, 'name', '') for o in cut_layers),
+                                        'env_step': getattr(self, 'steps', None)}) + '\n')
+        elif not would:
+            active.discard(tag)
+        return False
+
     def _predicate_values(self, *, stacked=None):
         from omnigibson import object_states
         stacked = getattr(self, 'stacked_on_top', False) if stacked is None else stacked
@@ -633,6 +661,9 @@ class CustomTaskBackend(RGBBackend):
         roles = {key:live.get(name) for key,name in self.custom_spec['roles'].items()}
         movable = ([o for o in self._stacking_movable(roles.values()) if object_states.OnTop in o.states]
                    if stacked else [])
+        # rc1 A7 private counter (coordinator 18:07): objects that the pre-A7 rule would have used as a layer.
+        cut_layers = ([o for o in roles.values() if o is not None and not getattr(o, 'fixed_base', False)
+                       and o not in movable and object_states.OnTop in o.states] if stacked else [])
         result = {}
         for key, row in self.custom_spec['evaluation']['predicates'].items():
             obj = roles[row['object']]
@@ -670,7 +701,8 @@ class CustomTaskBackend(RGBBackend):
                 supported = [m for m in members if object_states.OnTop in m.states
                              and (bool(m.states[object_states.OnTop].get_value(obj))
                                   or self._sleeping_on_top_fallback(m, obj)
-                                  or (stacked and self._stacked_on_top(m, obj, movable)))]
+                                  or (stacked and (self._stacked_on_top(m, obj, movable)
+                                                   or self._note_a7_cut(key, m, obj, movable, cut_layers))))]
                 if row['state']=='CountOnTop':
                     result[key] = len(supported)==row['count']
                 else:
@@ -690,6 +722,8 @@ class CustomTaskBackend(RGBBackend):
                 val = self._sleeping_on_top_fallback(obj, args[0])
             if not val and stacked and row['state'] == 'OnTop' and len(args) == 1:
                 val = self._stacked_on_top(obj, args[0], movable)
+                if not val:
+                    self._note_a7_cut(key, obj, args[0], movable, cut_layers)
             result[key] = val
         if self.tool_cleanliness is not None:
             result['cross_contamination_violation'] = self.tool_cleanliness.has_violation()
