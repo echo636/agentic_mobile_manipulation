@@ -59,7 +59,24 @@ def envelope_protrusion(center, extent, low, high, settling_drop=0., floor_toler
                for axis, (c, e, lo, hi) in enumerate(zip(resting, extent, low, high)))
 
 
-def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None, *, allow_reorientation=False):
+def a8_level_quat(backend, held, root_quat, torch):
+    """rc1 A8 for place_inside (2026-11-20 21:56): the held object's level pose (pre-grasp roll/pitch, asset upright
+    if unknown, held heading kept) as an extra proposal ranked before the in-hand pose. None when the switch
+    MAS_PLACE_LEVEL is off, the tilt is under 3 deg / over 45 deg, or the object has authored resting poses."""
+    import os
+    if os.environ.get('MAS_PLACE_LEVEL', 'on') == 'off' or getattr(held, 'orientations', None) is not None:
+        return None
+    from .surface_geometry import level_to_reference
+    import numpy as np
+    reference = (getattr(backend, '_pregrasp_orientations', None) or {}).get(id(held)) or [0., 0., 0., 1.]
+    quat, rotation, _ = level_to_reference(root_quat.detach().cpu().numpy(), reference)
+    if np.allclose(rotation, np.eye(3)):
+        return None
+    return torch.as_tensor(quat, dtype=root_quat.dtype, device=root_quat.device)
+
+
+def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None, *, allow_reorientation=False,
+                          level_quat=None):
     """Preserve vessel openings and payloads; other unladen items may turn.
 
 For payloads, compare local gravity and reject flips or large tilts. Unladen
@@ -100,6 +117,9 @@ are proposals only, with unchanged collision and settling acceptance checks.
         angle = current_yaw-math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         yaw = transforms.euler2quat(torch.tensor([0.,0.,angle],device=root_quat.device))
         bases.append((option.get('source','asset_resting_pose'), transforms.quat_multiply(yaw,stable)))
+    if level_quat is not None:
+        # rc1 A8: the level pose before the in-hand pose; the in-hand pose stays as a later proposal
+        bases.append(('a8_level_pose', level_quat))
     bases.append(('carried_pose',root_quat))
     angles=[0.,math.pi/2,math.pi,3*math.pi/2]
     if reference_quat is not None:
@@ -144,7 +164,8 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                link.meta_link_type in {'fillable', 'openfillable'}]
     loaded = bool(contents or particles)
     orientations = assembly_orientations(held, original_quat, torch, T,
-        reference_quat=target.get_position_orientation()[1], allow_reorientation=not loaded)
+        reference_quat=target.get_position_orientation()[1], allow_reorientation=not loaded,
+        level_quat=a8_level_quat(backend, held, original_quat, torch))
     closure_geometry = closed_geometry_proposals(backend, target)
     # No body moves during proposal construction. Read receiver geometry once.
     volume_geometry = []
@@ -400,7 +421,8 @@ Rejected candidate poses never become committed actions or task evidence.
             local_volume=(points-vp)@rotation if points is not None else None
             volume_geometry[volume.prim_path]=(lo,hi,vp,rotation,local_volume)
         orientations = assembly_orientations(
-            held,root_quat,torch,T,reference_quat=target_quat,allow_reorientation=not payload_locked)
+            held,root_quat,torch,T,reference_quat=target_quat,allow_reorientation=not payload_locked,
+            level_quat=a8_level_quat(backend, held, root_quat, torch))
         if orientation_phase not in {'all', 'resting', 'additional'}:
             raise ValueError('Unknown placement orientation phase')
         if orientation_phase != 'all':

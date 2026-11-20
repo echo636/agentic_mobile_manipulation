@@ -79,3 +79,50 @@ def test_cylinder_and_offcentre_object():
     xy, _, _ = anchor_xy_after(np.vstack([foot, arm]), R.from_euler('xyz', [0., 6., 0.], degrees=True).as_quat(),
                                [0, 0, 0, 1])
     assert abs(xy[0] - 0.15) < 0.01 and abs(xy[1]) < 0.01
+
+
+class _T:
+    """Minimal xyzw transform shim (torch in, torch out) for assembly_orientations."""
+    @staticmethod
+    def quat2mat(q):
+        import torch
+        return torch.as_tensor(R.from_quat(np.asarray(q, dtype=float)).as_matrix(), dtype=torch.float32)
+
+    @staticmethod
+    def euler2quat(e):
+        import torch
+        return torch.as_tensor(R.from_euler('xyz', np.asarray(e, dtype=float)).as_quat(), dtype=torch.float32)
+
+    @staticmethod
+    def quat_multiply(a, b):
+        import torch
+        return torch.as_tensor((R.from_quat(np.asarray(a, dtype=float)) * R.from_quat(np.asarray(b, dtype=float))).as_quat(),
+                               dtype=torch.float32)
+
+
+class _Held:
+    orientations = None
+    links = {}
+
+
+class _Backend:
+    def __init__(self, pregrasp):
+        self._pregrasp_orientations = pregrasp
+
+
+def test_place_inside_tilted_half_log_gets_level_proposal_first(monkeypatch):
+    import torch
+    from manipulation_agent.executors.inside_sampling import a8_level_quat, assembly_orientations
+    monkeypatch.delenv('MAS_PLACE_LEVEL', raising=False)
+    held = _Held()
+    lying = R.from_euler('xyz', [90., 0., 0.], degrees=True)                       # a half log resting on its side
+    in_hand = torch.as_tensor((R.from_euler('xyz', [0., 12., 40.], degrees=True) * lying).as_quat(), dtype=torch.float32)
+    backend = _Backend({id(held): lying.as_quat().tolist()})
+    level = a8_level_quat(backend, held, in_hand, torch)
+    assert level is not None
+    rows = assembly_orientations(held, in_hand, torch, _T, level_quat=level)
+    labels = [label for label, _, _ in rows]
+    assert labels[0] == 'a8_level_pose' and 'carried_pose' in labels                 # level first, in-hand kept
+    assert labels.index('carried_pose') > max(i for i, l in enumerate(labels) if l == 'a8_level_pose')
+    monkeypatch.setenv('MAS_PLACE_LEVEL', 'off')
+    assert a8_level_quat(backend, held, in_hand, torch) is None
