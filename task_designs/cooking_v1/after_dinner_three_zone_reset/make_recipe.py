@@ -49,6 +49,8 @@ TRAY_SLOTS = {  # tray-local uv, 3 x 2 grid on the 48 x 48 cm tray
     'mug1': [0.73, 0.27], 'mug2': [0.73, 0.73],
 }
 
+# r5 tried a rack-less oven (nvqqkv) in the built-in niche: its door hits the cabinet and cannot open, so r4b
+# keeps the original oven_ffitak_0; the r4 rack2 drag was the same front-edge release, fixed by the pie aim point.
 # r5b reference aim points inside the dishwasher (front opening at y = -1.62): without an aim the reference
 # clicks the visible front and the executor picks the release pose nearest to it, i.e. at the opening edge,
 # where a dish can slide onto the open door (r5 habit: mug2). Reference tooling only; the scene is unchanged.
@@ -114,7 +116,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'after_dinner_three_zone_reset',
-        'instance_id': 'after_dinner_three_zone_reset_seed0_r5b',
+        'instance_id': 'after_dinner_three_zone_reset_seed0_r4b',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -124,7 +126,7 @@ def build_recipe() -> dict:
             'island': 'bar_udatjt_0',
             'storage': 'countertop_kelzer_0',
             'fridge': 'fridge_dszchb_0',
-            'oven': 'c4_oven',
+            'oven': 'oven_ffitak_0',
             'dishwasher': 'c4_dishwasher',
             'kitchen_floor': 'floors_kxcpgy_0',
             'cabinet': 'bottom_cabinet_fancyy_0',
@@ -165,17 +167,10 @@ def build_recipe() -> dict:
             # r2: the scene dishwasher's wire racks let released dishes slide out over the open door
             # (c4ref_habit r1b: 4 of 6 dishes ended on the floor); replaced in place by a rack-less model
             'dishwasher_ynrhuk_0',
-            # r5: the built-in oven's sliding rack2 got dragged out by the pie, so the oven never read as
-            # closed (c4r4 napkin negative); replaced in its cabinet niche by the rack-less T3 oven model
-            'oven_ffitak_0',
         ],
         'construction_asset_scales': [],
         'asset_imports': [],
         'native_assets': [
-            {'name': 'c4_oven', 'category': 'oven', 'model': 'nvqqkv',
-             'usd_sha256': '028cb02e5f005d1112846c92e2999af412d2333421b482d175888cda2ac5a9ee', 'prim_type': 0,
-             'fixed_base': True, 'scale': [1.04, 0.87, 1.05], 'position': [89.0, 50.0, 2.0],
-             'orientation': [0.0, 0.0, 0.70710678, 0.70710678]},
             {'name': 'c4_dishwasher', 'category': 'dishwasher', 'model': 'dugpby',
              'usd_sha256': 'b3b9bff0c97770c4f25dc43b421bc6d93b447180d6347e755d2ca6552ea80dee', 'prim_type': 0,
              'fixed_base': True, 'scale': [1.05, 1.08, 1.2], 'position': [92.0, 50.0, 2.0],
@@ -279,9 +274,6 @@ def build_recipe() -> dict:
             state('dishwasher', 'Open', False, fully=True),
             state('washer', 'ToggledOn', False),
             state('washer', 'Open', False, fully=True),
-            # rack-less oven in the original niche of the tall cabinet (niche floor z = 0.86)
-            {'object': 'oven', 'target': 'cabinet', 'place_on_support': True, 'xy': [8.43, -1.78],
-             'support_probe_height': 1.2, 'orientation': [0.0, 0.0, 0.70710678, 0.70710678]},
             state('oven', 'ToggledOn', False),
             state('oven', 'Open', False, fully=True),
         ],
