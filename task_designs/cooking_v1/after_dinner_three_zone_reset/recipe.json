@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "after_dinner_three_zone_reset",
- "instance_id": "after_dinner_three_zone_reset_seed0_r3b",
+ "instance_id": "after_dinner_three_zone_reset_seed0_r4",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -31,8 +31,6 @@
   "pie": "c4_pie",
   "bowl1": "c4_bowl1",
   "bowl2": "c4_bowl2",
-  "glass1": "c4_glass1",
-  "glass2": "c4_glass2",
   "mug1": "c4_mug1",
   "mug2": "c4_mug2",
   "napkin1": "c4_napkin1",
@@ -51,52 +49,7 @@
   "dishwasher_ynrhuk_0"
  ],
  "construction_asset_scales": [],
- "asset_imports": [
-  {
-   "name": "c4_glass1",
-   "source_task": "setting_the_table",
-   "source_object": "water_glass_bbpraa_0",
-   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
-   "position": [
-    134.0,
-    50.0,
-    2.0
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.0,
-    1.0
-   ],
-   "scale": [
-    1.25,
-    1.25,
-    1.15
-   ]
-  },
-  {
-   "name": "c4_glass2",
-   "source_task": "setting_the_table",
-   "source_object": "water_glass_bbpraa_0",
-   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
-   "position": [
-    137.0,
-    50.0,
-    2.0
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.0,
-    1.0
-   ],
-   "scale": [
-    1.25,
-    1.25,
-    1.15
-   ]
-  }
- ],
+ "asset_imports": [],
  "native_assets": [
   {
    "name": "c4_dishwasher",
@@ -304,8 +257,6 @@
    "items": [
     "bowl1",
     "bowl2",
-    "glass1",
-    "glass2",
     "mug1",
     "mug2"
    ],
@@ -572,36 +523,6 @@
    ]
   },
   {
-   "object": "glass1",
-   "target": "table",
-   "place_on_support": true,
-   "xy": [
-    12.22,
-    0.92
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.0,
-    1.0
-   ]
-  },
-  {
-   "object": "glass2",
-   "target": "table",
-   "place_on_support": true,
-   "xy": [
-    12.47,
-    0.92
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.0,
-    1.0
-   ]
-  },
-  {
    "object": "napkin1",
    "target": "table",
    "place_on_support": true,
@@ -720,8 +641,6 @@
  "initial_assertions": {
   "bowl1_initial": "initial_bowl1_OnTop",
   "bowl2_initial": "initial_bowl2_OnTop",
-  "glass1_initial": "initial_glass1_OnTop",
-  "glass2_initial": "initial_glass2_OnTop",
   "mug1_initial": "initial_mug1_OnTop",
   "mug2_initial": "initial_mug2_OnTop",
   "napkin1_initial": "initial_napkin1_OnTop",
@@ -755,7 +674,7 @@
  "replacements": [],
  "public_instruction": "After dinner, wash the used dishes and the cloth napkins, warm the apple pie and serve it on the living-room coffee table, and leave the appliances off and closed.",
  "public_context": [
-  "Wash all six used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls and two drinking glasses on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
+  "Wash all four used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
   "Wash both cloth napkins from the living-room coffee table in the white washing machine under the counter in the south-east utility room until its wash cycle has finished. A cycle takes about 4 minutes once the door is closed and it is switched on, and the machine switches itself off at the end. The napkins may stay in the washing machine afterwards.",
   "Warm the apple pie from the kitchen island in the black built-in oven to the right of the refrigerator and serve it on the living-room coffee table (directly on the table or on the serving tray resting on the table). Warming takes about 3 minutes with the oven door closed and the oven switched on. The oven does not switch itself off: if the warm pie stays in the running oven for more than about 2 more minutes it burns, and a burnt pie cannot be served.",
   "Leave the oven switched off and the oven, dishwasher and washing machine doors closed. A 48 x 48 cm serving tray is available on the kitchen island.",
@@ -764,7 +683,7 @@
  "requirements": [
   {
    "id": "dishes_washed",
-   "text": "Wash all six used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls and two drinking glasses on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
+   "text": "Wash all four used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
    "terminal": [
     "dishes_washed"
    ]
@@ -807,16 +726,6 @@
    },
    "bowl2_washed": {
     "object": "bowl2",
-    "state": "ProcessComplete",
-    "process": "wash_dishes"
-   },
-   "glass1_washed": {
-    "object": "glass1",
-    "state": "ProcessComplete",
-    "process": "wash_dishes"
-   },
-   "glass2_washed": {
-    "object": "glass2",
     "state": "ProcessComplete",
     "process": "wash_dishes"
    },
@@ -875,16 +784,6 @@
     "state": "Inside",
     "target": "dishwasher"
    },
-   "glass1_inside_dishwasher": {
-    "object": "glass1",
-    "state": "Inside",
-    "target": "dishwasher"
-   },
-   "glass2_inside_dishwasher": {
-    "object": "glass2",
-    "state": "Inside",
-    "target": "dishwasher"
-   },
    "mug1_inside_dishwasher": {
     "object": "mug1",
     "state": "Inside",
@@ -912,16 +811,6 @@
    },
    "bowl2_ontop_tray": {
     "object": "bowl2",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "glass1_ontop_tray": {
-    "object": "glass1",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "glass2_ontop_tray": {
-    "object": "glass2",
     "state": "OnTop",
     "target": "tray"
    },
@@ -987,16 +876,6 @@
     "state": "OnTop",
     "target": "table"
    },
-   "initial_glass1_OnTop": {
-    "object": "glass1",
-    "state": "OnTop",
-    "target": "table"
-   },
-   "initial_glass2_OnTop": {
-    "object": "glass2",
-    "state": "OnTop",
-    "target": "table"
-   },
    "initial_napkin1_OnTop": {
     "object": "napkin1",
     "state": "OnTop",
@@ -1033,8 +912,6 @@
     "all": [
      "bowl1_washed",
      "bowl2_washed",
-     "glass1_washed",
-     "glass2_washed",
      "mug1_washed",
      "mug2_washed"
     ]
@@ -1140,7 +1017,7 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.18,
+       0.27,
        0.27
       ]
      },
@@ -1152,8 +1029,8 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.5,
-       0.27
+       0.27,
+       0.73
       ]
      },
      {
@@ -1164,32 +1041,8 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.82,
+       0.73,
        0.27
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "glass1"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "tray",
-      "uv": [
-       0.18,
-       0.73
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "glass2"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "tray",
-      "uv": [
-       0.5,
-       0.73
       ]
      },
      {
@@ -1200,7 +1053,7 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.82,
+       0.73,
        0.73
       ]
      }
@@ -1292,7 +1145,7 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.82,
+       0.73,
        0.27
       ]
      },
@@ -1304,7 +1157,7 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.82,
+       0.73,
        0.73
       ]
      }
@@ -1345,22 +1198,6 @@
      {
       "primitive": "grasp",
       "role": "bowl2"
-     },
-     {
-      "primitive": "place_inside",
-      "role": "dishwasher"
-     },
-     {
-      "primitive": "grasp",
-      "role": "glass1"
-     },
-     {
-      "primitive": "place_inside",
-      "role": "dishwasher"
-     },
-     {
-      "primitive": "grasp",
-      "role": "glass2"
      },
      {
       "primitive": "place_inside",
@@ -1416,22 +1253,6 @@
      },
      {
       "primitive": "grasp",
-      "role": "glass1"
-     },
-     {
-      "primitive": "place_inside",
-      "role": "dishwasher"
-     },
-     {
-      "primitive": "grasp",
-      "role": "glass2"
-     },
-     {
-      "primitive": "place_inside",
-      "role": "dishwasher"
-     },
-     {
-      "primitive": "grasp",
       "role": "mug1"
      },
      {
@@ -1474,8 +1295,6 @@
        "all": [
         "bowl1_washed",
         "bowl2_washed",
-        "glass1_washed",
-        "glass2_washed",
         "mug1_washed",
         "mug2_washed"
        ]
@@ -1622,8 +1441,6 @@
            "all": [
             "bowl1_washed",
             "bowl2_washed",
-            "glass1_washed",
-            "glass2_washed",
             "mug1_washed",
             "mug2_washed"
            ]

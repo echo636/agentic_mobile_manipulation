@@ -41,12 +41,12 @@ REPO_ROOT = HERE.parents[2]
 sys.path.insert(0, str(REPO_ROOT / 'src'))
 from manipulation_agent.tasks.custom_tasks import validate_spec  # noqa: E402
 
-DISHES = ['bowl1', 'bowl2', 'glass1', 'glass2', 'mug1', 'mug2']
+# r4: glasses dropped; 6 dishes crowded the 57 x 53 cm dishwasher and the last one fell out (r3b napkin negative)
+DISHES = ['bowl1', 'bowl2', 'mug1', 'mug2']
 NAPKINS = ['napkin1', 'napkin2']
 TRAY_SLOTS = {  # tray-local uv, 3 x 2 grid on the 48 x 48 cm tray
-    'bowl1': [0.18, 0.27], 'bowl2': [0.50, 0.27], 'napkin1': [0.82, 0.27],
-    'glass1': [0.18, 0.73], 'glass2': [0.50, 0.73], 'napkin2': [0.82, 0.73],
-    'mug1': [0.82, 0.27], 'mug2': [0.82, 0.73],
+    'bowl1': [0.27, 0.27], 'bowl2': [0.27, 0.73], 'napkin1': [0.73, 0.27], 'napkin2': [0.73, 0.73],
+    'mug1': [0.73, 0.27], 'mug2': [0.73, 0.73],
 }
 
 STAGE_SHA_SETTING = '9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66'
@@ -79,8 +79,8 @@ def served(item):
 
 def build_recipe() -> dict:
     req_dishes = (
-        'Wash all six used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls '
-        'and two drinking glasses on the living-room coffee table, and the two mugs on the low nightstand '
+        'Wash all four used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls '
+        'on the living-room coffee table, and the two mugs on the low nightstand '
         "in the children's bedroom (the north-east bedroom with the single bed, off the long east "
         'corridor). The dishwasher is built in under the counter between the sink and the refrigerator. '
         'A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it '
@@ -109,7 +109,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'after_dinner_three_zone_reset',
-        'instance_id': 'after_dinner_three_zone_reset_seed0_r3b',
+        'instance_id': 'after_dinner_three_zone_reset_seed0_r4',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -141,8 +141,6 @@ def build_recipe() -> dict:
             'pie': 'c4_pie',
             'bowl1': 'c4_bowl1',
             'bowl2': 'c4_bowl2',
-            'glass1': 'c4_glass1',
-            'glass2': 'c4_glass2',
             'mug1': 'c4_mug1',
             'mug2': 'c4_mug2',
             'napkin1': 'c4_napkin1',
@@ -164,18 +162,7 @@ def build_recipe() -> dict:
             'dishwasher_ynrhuk_0',
         ],
         'construction_asset_scales': [],
-        'asset_imports': [
-            {
-                'name': f'c4_glass{i}',
-                'source_task': 'setting_the_table',
-                'source_object': 'water_glass_bbpraa_0',
-                'source_sha256': STAGE_SHA_SETTING,
-                'position': [131.0 + 3 * i, 50.0, 2.0],
-                'orientation': [0.0, 0.0, 0.0, 1.0],
-                'scale': [1.25, 1.25, 1.15],
-            }
-            for i in (1, 2)
-        ],
+        'asset_imports': [],
         'native_assets': [
             {'name': 'c4_dishwasher', 'category': 'dishwasher', 'model': 'dugpby',
              'usd_sha256': 'b3b9bff0c97770c4f25dc43b421bc6d93b447180d6347e755d2ca6552ea80dee', 'prim_type': 0,
@@ -267,8 +254,6 @@ def build_recipe() -> dict:
             # living-room coffee table (98 x 98 cm): west half used, east half free
             on('bowl1', 'table', [12.22, 0.30]),
             on('bowl2', 'table', [12.22, 0.61]),
-            on('glass1', 'table', [12.22, 0.92]),
-            on('glass2', 'table', [12.47, 0.92]),
             on('napkin1', 'table', [12.47, 0.30]),
             on('napkin2', 'table', [12.47, 0.61]),
             # children's-bedroom nightstand (48 x 78 cm, lamp removed): mugs at the north end
@@ -337,7 +322,7 @@ def build_recipe() -> dict:
                 'hand_empty': {'object': 'pie', 'state': 'HandEmpty'},
                 # initial-only verification predicates
                 **{f'initial_{d}_OnTop': {'object': d, 'state': 'OnTop', 'target': 'table'}
-                   for d in ['bowl1', 'bowl2', 'glass1', 'glass2'] + NAPKINS},
+                   for d in ['bowl1', 'bowl2'] + NAPKINS},
                 **{f'initial_{m}_OnTop': {'object': m, 'state': 'OnTop', 'target': 'nightstand'}
                    for m in ['mug1', 'mug2']},
                 'initial_pie_OnTop': {'object': 'pie', 'state': 'OnTop', 'target': 'island'},
@@ -367,7 +352,7 @@ def build_recipe() -> dict:
 
 
 def build_reference_plan() -> dict:
-    living = ['bowl1', 'bowl2', 'napkin1', 'glass1', 'glass2', 'napkin2']
+    living = ['bowl1', 'bowl2', 'napkin1', 'napkin2']
     dishes_washed = {'all': [f'{d}_washed' for d in DISHES]}
     phases = {
         'open_dishwasher': {'actions': [{'primitive': 'open', 'role': 'dishwasher'}], 'after': []},
