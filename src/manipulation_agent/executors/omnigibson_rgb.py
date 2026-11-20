@@ -753,11 +753,30 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if not len(cells):
             raise SkillError('navigation_invalid_start','No native traversable neighbor at the start')
         reach_fallback=None;floor_snap=None
+        # rc1 A3 (benchmark side): keep standing cells clear of loose floor items (floor_clearance.py).
+        from . import floor_clearance as FC
+        clearance={'enabled':FC.enabled()}
+        fc_items=[]
+        if clearance['enabled']:
+            try:
+                held=self._get_held()
+                fc_items=FC.floor_items(list(self.env.scene.objects),trav.floor_heights[floor],
+                                        exclude={getattr(self.robot,'name',None),getattr(held,'name',None)})
+                fc_radius=FC.base_radius(self.robot)
+                clearance.update(items=[i[0] for i in fc_items],base_radius_m=fc_radius)
+            except Exception as exc:   # simulator-free test doubles without a scene object list or primitives
+                fc_items=[];clearance.update(unavailable=type(exc).__name__)
+        target_name=getattr(target,'name',None)
+        target_is_item=any(i[0]==target_name for i in fc_items)
+        def fc_tiers():
+            return FC.tiers(fc_radius) if fc_items else [('v12b_no_clearance',None)]
         if floor_click:
             endpoint=hint
             clicked=tuple(trav.world_to_map(hint).tolist())
             walkable=(0<=clicked[0]<occupancy.shape[0] and 0<=clicked[1]<occupancy.shape[1]
                       and occupancy[clicked]!=0)
+            if walkable and fc_items and bool(FC.blocked(hint.cpu().numpy()[None],fc_items,fc_tiers()[0][1])[0]):
+                walkable=False;clearance['floor_click_inside_clearance']=True
             if not walkable:
                 # A floor spot under a chair or beside a wall is a real place the
                 # base cannot occupy. Go to the closest connected walkable cell
@@ -765,15 +784,21 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 # disconnected region is still refused by the pathfinder below.
                 points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
                 distances=self.torch.linalg.norm(points-hint,dim=1)
-                nearest=int(self.torch.argmin(distances))
+                for tier,grow in fc_tiers():
+                    ok=self.torch.as_tensor(FC.candidate_mask(points.cpu().numpy(),fc_items,grow))
+                    if bool(ok.any()) and float(distances[ok].min())<=self.local_limits.floor_click_snap_m:
+                        break
+                clearance['tier']=tier
+                cand_idx=self.torch.nonzero(ok).flatten() if bool(ok.any()) else self.torch.arange(len(points))
+                nearest=int(cand_idx[int(self.torch.argmin(distances[cand_idx]))])
                 if float(distances[nearest])>self.local_limits.floor_click_snap_m:
                     raise SkillError('navigation_unreachable','Selected floor point is not walkable and no walkable floor is near it')
                 endpoint=points[nearest];floor_snap=float(distances[nearest])
         else:
             # Use cell centers for object approaches. Both explicit navigation
             # and local manipulation must stay near the selected object.
-            points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
-            distances=self.torch.linalg.norm(points-hint,dim=1)
+            all_points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
+            all_distances=self.torch.linalg.norm(all_points-hint,dim=1)
             # rc1 (benchmark side): first the v12 rule on all connected cells. If that stance is already in the
             # selected target's room (0.01 m room layout) it is kept unchanged. Otherwise stand in the target's room:
             # cells within the fallback reach, then within SAME_ROOM_WIDE_M. No cell of the target's room at all:
@@ -799,7 +824,23 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 near=scores<=scores.min()+trav.map_resolution
                 cand=cand[near]
                 return cand[self.torch.argmin(self.torch.linalg.norm(cand-start,dim=1))],fallback
-            endpoint,reach_fallback=select(points,distances,self.local_limits.fallback_reach_m)
+            # rc1 A3: the clearance mask is applied to the candidate cells first; the A2 same-room logic then runs on
+            # the remaining cells. No candidate under a tier -> next, looser tier (recorded privately, no new receipt).
+            for tier,grow in fc_tiers():
+                ok=self.torch.as_tensor(FC.candidate_mask(all_points.cpu().numpy(),fc_items,grow,hint.cpu().numpy(),target_is_item))
+                if not bool(ok.any()):
+                    clearance.setdefault('relaxed',[]).append({'tier':tier,'reason':'no_candidate'});continue
+                points=all_points[ok];distances=all_distances[ok]
+                try:
+                    endpoint,reach_fallback=select(points,distances,self.local_limits.fallback_reach_m)
+                except SkillError:
+                    if grow is None:
+                        raise
+                    clearance.setdefault('relaxed',[]).append({'tier':tier,'reason':'no_cell_within_reach'});continue
+                break
+            clearance['tier']=tier
+            if target_is_item:
+                clearance['target_is_floor_item']=True
             rooms=fine_room_of_points(self.env.scene,points,floor)
             target_room=fine_room_of_points(self.env.scene,hint[None],floor)
             room_filter='not_applied'
@@ -827,6 +868,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'native_map_open_doors':opened_doors,'native_map_added_fixtures':added_fixtures,
                 'reach_fallback_m':reach_fallback,'floor_click_snap_m':floor_snap,
                 'room_filter':None if floor_click else room_filter,
+                'floor_clearance':clearance,
                 'dynamic_collision_check':False}
         try:
             self.deadline.check()

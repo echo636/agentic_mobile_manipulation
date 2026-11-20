@@ -135,3 +135,50 @@ def test_clamp_now_without_hold_does_nothing(door, monkeypatch):
     AH.lock_closed(SimpleNamespace(), obj)          # switch off: nothing held (v12b behaviour)
     j.q = 0.2
     assert AH.clamp_now(obj) == [] and j.q == 0.2
+
+
+# ---- rc1 A3 floor clearance (floor_clearance.py) ----
+from manipulation_agent.executors import floor_clearance as FC
+
+
+class Obj(SimpleNamespace):
+    pass
+
+
+def _obj(name, lo, hi, fixed=False, category='book'):
+    return Obj(name=name, aabb=(np.array(lo, float), np.array(hi, float)), fixed_base=fixed, category=category)
+
+
+def test_floor_item_detection():
+    objs = [_obj('usbe_book', [5.7, 1.9, 0.0], [5.9, 2.05, 0.05]),                 # small, on the floor
+            _obj('teddy', [1.0, 1.0, 0.02], [1.3, 1.3, 0.3]),                       # small, on the floor
+            _obj('cup_on_table', [2.0, 2.0, 0.75], [2.1, 2.1, 0.85]),               # not on the floor
+            _obj('chair', [3.0, 3.0, 0.0], [3.5, 3.5, 0.9], fixed=True, category='chair'),  # fixed
+            _obj('rug_1', [0.0, 0.0, 0.0], [0.5, 0.5, 0.01], category='rug'),        # rug
+            _obj('cart', [4.0, 4.0, 0.0], [4.9, 4.6, 0.9], category='cart'),        # larger than 0.6 m
+            _obj('held_bottle', [6.0, 6.0, 0.0], [6.1, 6.1, 0.2])]
+    names = [i[0] for i in FC.floor_items(objs, 0.0, exclude={'held_bottle'})]
+    assert names == ['usbe_book', 'teddy']
+
+
+def test_clearance_mask_and_target_band():
+    items = [('usbe_book', (5.7, 1.9), (5.9, 2.05))]
+    pts = np.array([[5.8, 2.0], [5.8, 2.4], [5.8, 2.7], [7.0, 2.0]])
+    assert FC.blocked(pts, items, 0.45).tolist() == [True, True, False, False]
+    m = FC.candidate_mask(pts, items, 0.45, target_xy=[5.8, 1.975], target_is_floor_item=True)
+    assert m.tolist() == [False, False, True, True]          # 2.7 is 0.725 m away (>= 0.6) and outside the grown box
+    assert FC.candidate_mask(pts, items, None).all()          # last tier = v12b selection
+
+
+def test_no_floor_items_leaves_candidates_unchanged():
+    # Same as v12b/A2 when no loose item is near: every tier admits every cell, so select() sees identical inputs.
+    pts = np.random.default_rng(0).uniform(-5, 5, size=(200, 2))
+    for _, grow in FC.tiers(0.4):
+        assert FC.candidate_mask(pts, [], grow).all()
+
+
+def test_tiers_and_switch(monkeypatch):
+    assert [t for t, _ in FC.tiers(0.4)] == ['radius_plus_margin', 'radius', 'v12b_no_clearance']
+    assert abs(FC.tiers(0.4)[0][1] - 0.5) < 1e-9 and FC.tiers(0.4)[1][1] == 0.4 and FC.tiers(0.4)[2][1] is None
+    monkeypatch.setenv('MAS_FLOOR_CLEARANCE', 'off')
+    assert FC.enabled() is False
