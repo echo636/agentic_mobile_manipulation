@@ -196,6 +196,42 @@ class CompleteWorkflowContracts(unittest.TestCase):
         flow.action(dict(primitive='open',role='kiln'))
         self.assertNotIn('kiln',flow._approach_stops)
 
+class ReleasedPlacementOutcome(unittest.TestCase):
+    """A failed release with an empty hand passes only if that item is in place."""
+    def run_release(self,inside_after_release):
+        import sys
+        from types import ModuleType
+        from unittest.mock import patch
+        from manipulation_agent.contracts import SkillError
+        Inside=type('Inside',(),{});OnTop=type('OnTop',(),{})
+        states=ModuleType('omnigibson.object_states');states.Inside=Inside;states.OnTop=OnTop
+        target=SimpleNamespace(name='dishwasher_obj')
+        mug=SimpleNamespace(name='mug_obj',states={Inside:SimpleNamespace(
+            get_value=lambda t:inside_after_release and t is target)})
+        hand=[mug]
+        def place(*args,**kwargs):
+            if args[0]=='place_inside':
+                hand.clear();raise SkillError('postcondition_error','Object did not remain inside after release')
+        flow=FullWorkflowReference.__new__(FullWorkflowReference)
+        flow.backend=SimpleNamespace(robot=SimpleNamespace(get_position_orientation=lambda:([0.,0.,0.],None)),
+            _get_held=lambda:hand[0] if hand else None,_predicate_values=lambda:{},
+            custom_spec={'roles':{'mug':'mug_obj','dishwasher':'dishwasher_obj'}},
+            env=SimpleNamespace(scene=SimpleNamespace(objects=[mug,target])))
+        flow.ref=SimpleNamespace(action=Mock(side_effect=place),log=Mock())
+        with patch.dict(sys.modules,{'omnigibson':ModuleType('omnigibson'),'omnigibson.object_states':states}):
+            flow.action(dict(primitive='place_inside',role='dishwasher',point=[.5,0.,.4]))
+        return flow
+
+    def test_item_that_fell_out_stops_the_reference(self):
+        from manipulation_agent.contracts import SkillError
+        with self.assertRaises(SkillError) as caught:self.run_release(False)
+        self.assertEqual(caught.exception.code,'reference_placement_lost')
+
+    def test_item_that_stayed_inside_continues(self):
+        flow=self.run_release(True)
+        check=[c for c in flow.ref.log.call_args_list if c.args[0]=='workflow_released_placement_check']
+        self.assertTrue(check[0].kwargs['placed'])
+
 class IndependentTransitionGuards(unittest.TestCase):
     def tracker(self):
         return TemporalGoalEvaluator({'predicates':{'dirty':{},'on':{}},'terminal':{'ready':{'all':[{'not':'dirty'},'on']}},'transition_guards':[{'id':'off_for_clean','predicate':'dirty','from_value':True,'to_value':False,'require':{'not':'on'}}]})

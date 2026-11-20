@@ -50,6 +50,29 @@ class InsetCentersTests(unittest.TestCase):
                          [(.5, .5, .5)])
 
 
+class InwardMarginTests(unittest.TestCase):
+    def test_opening_edge_pose_ranks_behind_inner_pose(self):
+        from manipulation_agent.executors.inside_sampling import inward_margin_deficit
+        # Robot approaches from +y toward -y (dishwasher opening at y=-1.62).
+        low,high,extent,approach=(6.9,-2.25,.1),(7.5,-1.62,.6),(.1,.1,.1),(0.,-1.)
+        edge,_=inward_margin_deficit((7.2,-1.73,.2),extent,low,high,approach)
+        inner,clearance=inward_margin_deficit((7.2,-1.90,.2),extent,low,high,approach)
+        self.assertGreater(edge,0);self.assertEqual(inner,0);self.assertAlmostEqual(clearance,.23)
+
+    def test_shallow_container_requires_only_the_centre(self):
+        from manipulation_agent.executors.inside_sampling import inward_margin_deficit
+        low,high,extent,approach=(0.,0.,0.),(.2,.2,.1),(.1,.1,.05),(1.,0.)
+        centre,_=inward_margin_deficit((.1,.1,.05),extent,low,high,approach)
+        back,_=inward_margin_deficit((.15,.1,.05),extent,low,high,approach)
+        front,_=inward_margin_deficit((.05,.1,.05),extent,low,high,approach)
+        self.assertEqual((centre,back),(0,0));self.assertGreater(front,0)
+
+    def test_without_robot_pose_ordering_is_unchanged(self):
+        from manipulation_agent.executors.inside_sampling import inward_margin_deficit, approach_direction
+        self.assertIsNone(approach_direction(SimpleNamespace(),(0.,0.,0.)))
+        self.assertEqual(inward_margin_deficit((0.,0.,0.),(.1,.1,.1),(0,0,0),(1,1,1),None),(0,None))
+
+
 @unittest.skipUnless(importlib.util.find_spec('torch'), 'Requires CPU torch')
 class AssemblySamplingTests(unittest.TestCase):
     def fixture(self, *, collide=True, oversize=False):
@@ -163,6 +186,34 @@ class AssemblySamplingTests(unittest.TestCase):
             candidate = select_inside_release(b, held, target, [], point=doorway_click)
         chosen_center = candidate['pose'][0] + held.offset
         self.assertAlmostEqual(float(chosen_center[0]), -.20, places=4)
+        self.assertEqual(state, {'steps': 0, 'loads': 0})
+
+    def test_single_release_pushes_front_click_into_the_cavity(self):
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        b, held, target, _, state, _, modules = self.fixture()
+        torch = b.torch
+        corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+        volume = target.links['volume']
+        volume.visual_boundary_points_world = corners(volume.visual_aabb)
+        b.env = SimpleNamespace(scene=SimpleNamespace())
+        b._collision_vertices = lambda obj: corners(obj.aabb)
+        # Robot stands in front of the opening (+x); the click is on the
+        # opening edge. Supports exist at the edge and deeper inside.
+        b.robot = SimpleNamespace(get_position_orientation=lambda: (torch.tensor([1.5, 0., 0.]), None))
+        b._inside_support_centers = lambda *args, **kwargs: [(.38, 0., .3), (.05, .10, .3)]
+        b._inside_pose_overlap_ranker = lambda *args: lambda position, quat: 0
+        b._inside_overlap_ranker = lambda *args: lambda *args: 0
+        with patch.dict('sys.modules', modules), \
+             patch('manipulation_agent.executors.inside_sampling.assembly_orientations',
+                   return_value=[('carried_pose', held.quat, 0.)]), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',
+                   return_value=None):
+            candidate = select_inside_release(b, held, target, [], point=torch.tensor([.5, 0., .3]))
+            b.robot = None
+            legacy = select_inside_release(b, held, target, [], point=torch.tensor([.5, 0., .3]))
+        self.assertLess(float((candidate['pose'][0] + held.offset)[0]), .30)
+        self.assertGreaterEqual(candidate['inward_clearance_m'], .10)
+        self.assertAlmostEqual(float((legacy['pose'][0] + held.offset)[0]), .38, places=4)
         self.assertEqual(state, {'steps': 0, 'loads': 0})
 
     def test_single_release_prefers_inset_resting_pose_over_lip_edge_standing_proposal(self):

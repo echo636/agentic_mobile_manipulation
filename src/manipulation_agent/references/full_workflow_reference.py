@@ -204,10 +204,15 @@ class FullWorkflowReference:
                 self.ref.action('wait',seconds=row.get('seconds',10.))
             return
         force_approach=False
+        # Remember which item this placement releases, to check that item
+        # itself if the release reports failure with an empty hand.
+        held_name=(getattr(self.backend._get_held(),'name',None)
+                   if primitive in ('place_on_top','place_inside') and hasattr(self.backend,'_get_held') else None)
         for attempt in range(3):
             if primitive in ('place_on_top','place_inside') and hasattr(self.backend,'_get_held') and self.backend._get_held() is None:
                 preds = self.backend._predicate_values()
                 if any(preds.get(f"{k}_ontop_{role}") or preds.get(f"{k}_on_{role}") or preds.get(f"{k}_inside_{role}") or preds.get(f"{k}_in_{role}") for k in self.backend.custom_spec.get('roles', {})):
+                    self.ref.log('workflow_place_skipped_empty_hand',primitive=primitive,role=role)
                     return
             point=row.get('point')
             if 'xy' in row:point=self.surface_xy_point(role,row['xy'])
@@ -300,21 +305,39 @@ class FullWorkflowReference:
                 self.ref.log('workflow_recovery',primitive=primitive,role=role,attempt=attempt+1,code=exc.code)
                 if exc.code in {'sampling_error','sampling_budget_exhausted','postcondition_error'}:
                     if primitive in ('place_on_top','place_inside') and hasattr(self.backend,'_get_held') and self.backend._get_held() is None:
-                        preds = self.backend._predicate_values()
-                        if any(preds.get(f"{k}_ontop_{role}") or preds.get(f"{k}_on_{role}") or preds.get(f"{k}_inside_{role}") or preds.get(f"{k}_in_{role}") for k in self.backend.custom_spec.get('roles', {})):
-                            return
+                        self.released_placement_outcome(held_name,primitive,role,exc)
                         return
                     self.ref.action('wait',seconds=1.)
                     if primitive in ('place_on_top','place_inside') and hasattr(self.backend,'_get_held') and self.backend._get_held() is None:
-                        preds = self.backend._predicate_values()
-                        if any(preds.get(f"{k}_ontop_{role}") or preds.get(f"{k}_on_{role}") or preds.get(f"{k}_inside_{role}") or preds.get(f"{k}_in_{role}") for k in self.backend.custom_spec.get('roles', {})):
-                            return
+                        self.released_placement_outcome(held_name,primitive,role,exc)
                         return
                 else:
                     # A fresh explicit navigation call has its own recorded
                     # work budget; it never changes the selected object ID.
                     getattr(self,'_approach_stops',{}).pop(row.get('approach_role',role),None)
                     force_approach=True
+
+    def released_placement_outcome(self,held_name,primitive,role,exc):
+        """Accept a reported placement failure only if the released item is there.
+
+        A failed release can leave the hand empty with the item on a door or the
+        floor. Previously any empty hand counted as success, so the failure only
+        surfaced phases later. Check the released item's own native relation.
+        """
+        from omnigibson import object_states
+        live={obj.name:obj for obj in self.backend.env.scene.objects}
+        item=live.get(held_name);target=live.get(self.backend.custom_spec['roles'].get(role))
+        state=object_states.Inside if primitive=='place_inside' else object_states.OnTop
+        placed=False
+        if item is not None and target is not None and state in item.states:
+            try:placed=bool(item.states[state].get_value(target))
+            except Exception:placed=False
+        self.ref.log('workflow_released_placement_check',primitive=primitive,role=role,
+                     item=held_name,placed=placed,code=exc.code)
+        if not placed:
+            raise SkillError('reference_placement_lost',
+                f'{held_name} is not {"inside" if primitive=="place_inside" else "on"} {role} '
+                f'after a failed release ({exc.code}); the hand is empty')
 
     def run(self,order,negative=None):
         from ..records import write_json

@@ -139,6 +139,43 @@ are proposals only, with unchanged collision and settling acceptance checks.
     return result
 
 
+def inward_margin_deficit(center, extent, low, high, approach, *, margin=.10, bucket=.02):
+    """Bucketed shortfall of the item's distance from the cavity's near side.
+
+    The near side is the volume face the robot approaches from, i.e. the
+    opening of a front-loading appliance. A model clicks the visible exterior,
+    so the nearest-to-click proposal sat at the opening edge and slid onto the
+    open door (C4 dishwasher mug, oven rack). Like a person pushing a dish in,
+    prefer at least ``margin`` of inward clearance, capped at half the free
+    depth so shallow containers centre the item instead of hugging the back.
+    Ordering only; every physical and Inside check is unchanged.
+    """
+    if approach is None:
+        return 0, None
+    ax, ay = approach
+    along = lambda x, y: x*ax + y*ay
+    near = min(along(a, b) for a in (low[0], high[0]) for b in (low[1], high[1]))
+    far = max(along(a, b) for a in (low[0], high[0]) for b in (low[1], high[1]))
+    half = (abs(ax)*extent[0] + abs(ay)*extent[1]) / 2
+    clearance = along(center[0], center[1]) - half - near
+    required = min(margin, max(0., far - near - 2*half) / 2)
+    return round(max(0., required - clearance) / bucket), clearance
+
+
+def approach_direction(backend, volume_center):
+    """Horizontal unit vector from the robot base toward the receiving volume."""
+    robot = getattr(backend, 'robot', None)
+    if robot is None:
+        return None
+    try:
+        base = robot.get_position_orientation()[0]
+        dx, dy = float(volume_center[0]) - float(base[0]), float(volume_center[1]) - float(base[1])
+    except Exception:
+        return None
+    norm = math.hypot(dx, dy)
+    return (dx/norm, dy/norm) if norm > 1e-6 else None
+
+
 def select_inside_release(backend, held, target, contents, *, point=None, residents=(), exclude_positions=()):
     """Choose one pose from current geometry without moving or simulating bodies."""
     from omnigibson.utils import transform_utils as T
@@ -176,6 +213,8 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
         vr = T.quat2mat(vq)
         cavity = (volume.visual_boundary_points_world - vp) @ vr
         volume_geometry.append((volume, vlo, vhi, vp, vr, cavity.amin(0).tolist(), cavity.amax(0).tolist()))
+    approaches = {volume.prim_path: approach_direction(backend, (vlo + vhi) / 2)
+                  for volume, vlo, *_ in volume_geometry}
     proposals = []; seen = set(); ray_cache = {}
     clearance = .025 + .5 * 9.81 * backend.og.sim.get_physics_dt() ** 2
 
@@ -242,14 +281,19 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                             closure_geometry, volume, resting_center, extent.tolist()), 6)
                         distance = float(torch.linalg.vector_norm(center - point)) if point is not None else float(center[2])
                         domain_rank = {'support_inset': 0, 'support_full_volume': 1, 'inset': 2, 'full_volume': 3}[effective_kind]
+                        inward_deficit, inward_clearance = inward_margin_deficit(
+                            resting_center, extent.tolist(), vlo.tolist(), vhi.tolist(),
+                            approaches[volume.prim_path])
                         priority = (
                             round(protrusion, 5),
                             closed_overlap,
                             domain_rank,
+                            inward_deficit,
                             label == 'unladen_face_proposal',
                             distance,
                         )
-                        proposals.append((priority, position, quat, center, extent, volume, effective_kind, label))
+                        proposals.append((priority, position, quat, center, extent, volume, effective_kind, label,
+                                          inward_clearance))
     pose_score = backend._inside_pose_overlap_ranker(held, assembly)
     envelope_score = backend._inside_overlap_ranker(assembly)
     selected = None; best = None; scored = 0
@@ -270,10 +314,11 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
         if overlap == 0: break
     if selected is None:
         raise SkillError('sampling_error', 'No receiving pose in the selected container')
-    _, position, quat, _, _, volume, kind, label = selected
+    _, position, quat, _, _, volume, kind, label, inward_clearance = selected
     return dict(pose=(position, quat), volume=volume.prim_path, domain=kind,
                 orientation_source=label, candidates=len(proposals), scored=scored,
-                proposal_overlap_score=best[0])
+                proposal_overlap_score=best[0],
+                inward_clearance_m=None if inward_clearance is None else round(inward_clearance, 4))
 
 
 def closure_preference_available(backend):
