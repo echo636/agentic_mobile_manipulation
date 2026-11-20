@@ -9,14 +9,17 @@ from manipulation_agent.executors import articulation_hold as AH
 
 
 class FakeJoint:
-    def __init__(self, name, lo, hi, q):
-        self.joint_name, self.lower_limit, self.upper_limit, self.q, self.still = name, lo, hi, q, 0
+    def __init__(self, name, q):
+        self.joint_name, self.q, self.v, self.sets = name, q, 0.0, 0
 
     def get_state(self):
-        return ([self.q], [0.0], [0.0])
+        return ([self.q], [self.v], [0.0])
 
-    def keep_still(self):
-        self.still += 1
+    def set_pos(self, q):
+        self.q = q; self.sets += 1
+
+    def set_vel(self, v):
+        self.v = v
 
 
 class FakeToggle:
@@ -31,35 +34,37 @@ class FakeToggle:
 
 @pytest.fixture
 def door(monkeypatch):
-    j = FakeJoint('j_link_0', 0.0, 1.5708, 0.0)
+    j = FakeJoint('j_link_0', 0.0)
     monkeypatch.setattr(AH, '_joints', lambda obj: [j])
     monkeypatch.delenv('MAS_ARTICULATION_HOLD', raising=False)
-    return SimpleNamespace(name='clothes_dryer_xsuyua_0'), j
+    AH._HELD.clear()
+    yield SimpleNamespace(name='clothes_dryer_xsuyua_0'), j
+    AH._HELD.clear()
 
 
-def test_close_narrows_limits_inside_open_threshold(door):
+def test_held_door_pushed_open_is_put_back(door):
     obj, j = door
-    backend = SimpleNamespace()
-    rec = AH.lock_closed(backend, obj)
-    assert (j.lower_limit, j.upper_limit) == (0.0, AH.HOLD_HALF_WIDTH)
-    assert AH.HOLD_HALF_WIDTH < 0.0785          # T2 dryer Open threshold
-    assert rec[0]['original_limits'] == [0.0, 1.5708] and j.still == 1
+    rec = AH.lock_closed(SimpleNamespace(), obj)
+    assert rec[0]['closed_position'] == 0.0 and AH.HOLD_TOLERANCE < 0.0785   # T2 dryer Open threshold
+    j.q, j.v = 0.0669, 3.3            # the T2 habit failure: garments push the door open after close
+    assert AH.enforce() == 1 and (j.q, j.v) == (0.0, 0.0)
+    j.q = 0.003                        # within tolerance: left alone (no jitter)
+    assert AH.enforce() == 0 and j.q == 0.003
 
 
-def test_open_restores_original_limits(door):
+def test_explicit_open_releases_the_hold(door):
     obj, j = door
-    backend = SimpleNamespace()
-    AH.lock_closed(backend, obj)
-    AH.lock_closed(backend, obj)                # closing twice keeps the true original limits
-    out = AH.unlock(backend, obj)
-    assert (j.lower_limit, j.upper_limit) == (0.0, 1.5708) and out[0]['restored_limits'] == [0.0, 1.5708]
-    assert AH.unlock(backend, obj) == []       # nothing held any more
+    AH.lock_closed(SimpleNamespace(), obj)
+    assert AH.unlock(SimpleNamespace(), obj) == [{'joint': 'j_link_0', 'released': True}]
+    j.q = 1.5708
+    assert AH.enforce() == 0 and j.q == 1.5708
+    assert AH.unlock(SimpleNamespace(), obj) == []
 
 
 def test_switch_off_restores_v12b_behaviour(door, monkeypatch):
     obj, j = door
     monkeypatch.setenv('MAS_ARTICULATION_HOLD', 'off')
-    assert AH.lock_closed(SimpleNamespace(), obj) == [] and j.upper_limit == 1.5708
+    assert AH.lock_closed(SimpleNamespace(), obj) == [] and AH._HELD == {}
     assert AH.install_toggle_guard() is False
 
 

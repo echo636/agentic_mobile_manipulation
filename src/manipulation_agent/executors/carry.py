@@ -248,6 +248,12 @@ class ControlledCarry:
         particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in payload]]) if state is Open else []
         from .particle_payload import particle_link_motion, particle_containment_observation
         moved_particles=particle_link_motion(particles)
+        # rc1 articulation_hold (benchmark side): an explicit open releases a door held closed by an earlier close
+        # (before the open goal is computed); contact physics can no longer push a held door open.
+        from .articulation_hold import unlock
+        hold_record = {}
+        if primitive=='open':
+            hold_record['released'] = unlock(self, obj)
         open_goal=None
         opening_feedback={}
         if primitive=='open':
@@ -278,11 +284,8 @@ class ControlledCarry:
         self._active_open_joints = operated_open_joints
         # rc1 articulation_hold (benchmark side): an explicit open releases a door held closed by an earlier close;
         # contact physics can no longer push a closed door open or finger contact re-toggle a switch.
-        from .articulation_hold import lock_closed, unlock, install_toggle_guard
+        from .articulation_hold import lock_closed, install_toggle_guard
         install_toggle_guard()
-        hold_record = {}
-        if primitive == 'open':
-            hold_record['released'] = unlock(self, obj)
         try:
             # Apply the native annotated opening to the selected panel; close fully.
             if open_goal is not None:

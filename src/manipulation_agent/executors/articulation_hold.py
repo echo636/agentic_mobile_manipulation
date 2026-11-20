@@ -1,9 +1,10 @@
 """rc1 (2026-11-20, benchmark side): keep explicit close / toggle results from being undone by contact physics.
 
 Two unintended flips are blocked, nothing else:
-1. A door closed by the `close` primitive is held closed: the operated joints' runtime limits are narrowed to the closed
-   position (+-HOLD_HALF_WIDTH rad, well inside OmniGibson's open threshold) until the next explicit `open` of that
-   object restores the original limits. Contents pressing on the door can no longer push it open; they stay inside.
+1. A door closed by the `close` primitive is held closed: before every physics step a held joint pushed more than
+   HOLD_TOLERANCE away from its closed position is put back with zero velocity, until the next explicit `open` of that
+   object releases it. Contents pressing on the door can no longer push it open. (Narrowing joint limits was tried in
+   the first dev snapshot and rejected: OmniGibson derives Open thresholds and open goals from the limits.)
 2. Finger contact no longer toggles switches: OmniGibson's ToggledOn counts steps with a robot finger inside the toggle
    marker and flips the state after CAN_TOGGLE_STEPS; that counter is held at 0. Legal changes are unchanged:
    requires_closed still switches an appliance off when its door is opened, explicit toggle_on/off and task processes
@@ -12,7 +13,10 @@ Switch: MAS_ARTICULATION_HOLD=off restores v12b behaviour (default on).
 """
 import os
 
-HOLD_HALF_WIDTH = 0.005   # rad / m; OmniGibson Open threshold for the T2 dryer is 0.0785 rad
+HOLD_TOLERANCE = 0.005   # rad / m a held joint may drift before it is put back; the T2 dryer's Open threshold is
+                         # 0.0785 rad. Joint limits are NOT narrowed: Open thresholds are derived from them.
+_HELD = {}               # (object name, joint name) -> (joint, closed position)
+_SUBSCRIPTION = None
 
 
 def enabled():
@@ -25,41 +29,57 @@ def _joints(obj):
     return list(info[1]) if info and info[1] else []
 
 
+def enforce():
+    """Before every physics step: put each held door joint back to its closed position with zero velocity if contact
+    pushed it more than HOLD_TOLERANCE. Returns the number of corrections (for tests and diagnostics)."""
+    fixed = 0
+    for joint, q in list(_HELD.values()):
+        try:
+            cur = float(joint.get_state()[0][0])
+        except Exception:
+            continue
+        if abs(cur - q) > HOLD_TOLERANCE:
+            joint.set_pos(q)
+            joint.set_vel(0.0)
+            fixed += 1
+    return fixed
+
+
+def _subscribe():
+    global _SUBSCRIPTION
+    if _SUBSCRIPTION is not None:
+        return True
+    try:
+        import omnigibson as og
+        _SUBSCRIPTION = og.sim._physics_context._physx_interface.subscribe_physics_on_step_events(
+            lambda _: enforce(), pre_step=True, order=1)
+        return True
+    except Exception:          # simulator-free unit tests
+        return False
+
+
 def lock_closed(backend, obj):
-    """Narrow the operated joints' limits around their current (closed) positions. Returns the record kept for unlock."""
+    """Hold the operated joints at their current (closed) positions until the next explicit open of this object."""
     if not enabled():
         return []
-    held = backend.__dict__.setdefault('_articulation_held', {})
     out = []
     for joint in _joints(obj):
         key = (obj.name, getattr(joint, 'joint_name', None))
-        if not all(hasattr(joint, a) for a in ('lower_limit', 'upper_limit', 'get_state', 'keep_still')):
-            out.append({'joint': key[1], 'skipped': 'joint_without_runtime_limits'})   # stub joints in unit tests
+        if not all(hasattr(joint, a) for a in ('get_state', 'set_pos', 'set_vel')):
+            out.append({'joint': key[1], 'skipped': 'joint_without_state_api'})   # stub joints in unit tests
             continue
-        lo, hi = float(joint.lower_limit), float(joint.upper_limit)
-        if key in held:                      # already held: keep the original limits
-            lo, hi = held[key]
         q = float(joint.get_state()[0][0])
-        joint.keep_still()
-        new_lo, new_hi = max(lo, q - HOLD_HALF_WIDTH), min(hi, q + HOLD_HALF_WIDTH)
-        joint.lower_limit = new_lo
-        joint.upper_limit = new_hi
-        held[key] = (lo, hi)
-        out.append({'joint': joint.joint_name, 'closed_position': q, 'original_limits': [lo, hi], 'held_limits': [new_lo, new_hi]})
+        _HELD[key] = (joint, q)
+        out.append({'joint': key[1], 'closed_position': q, 'tolerance': HOLD_TOLERANCE, 'step_hook': _subscribe()})
     return out
 
 
 def unlock(backend, obj):
-    """Restore original limits before an explicit open of this object."""
-    held = backend.__dict__.get('_articulation_held') or {}
+    """Release the hold before an explicit open of this object."""
     out = []
-    for joint in _joints(obj):
-        key = (obj.name, joint.joint_name)
-        if key in held:
-            lo, hi = held.pop(key)
-            joint.lower_limit = lo
-            joint.upper_limit = hi
-            out.append({'joint': joint.joint_name, 'restored_limits': [lo, hi]})
+    for key in [k for k in _HELD if k[0] == obj.name]:
+        _HELD.pop(key)
+        out.append({'joint': key[1], 'released': True})
     return out
 
 
