@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "after_dinner_three_zone_reset",
- "instance_id": "after_dinner_three_zone_reset_seed0_r4",
+ "instance_id": "after_dinner_three_zone_reset_seed0_r5",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -14,7 +14,7 @@
   "island": "bar_udatjt_0",
   "storage": "countertop_kelzer_0",
   "fridge": "fridge_dszchb_0",
-  "oven": "oven_ffitak_0",
+  "oven": "c4_oven",
   "dishwasher": "c4_dishwasher",
   "kitchen_floor": "floors_kxcpgy_0",
   "cabinet": "bottom_cabinet_fancyy_0",
@@ -46,11 +46,36 @@
  "scene_exclusions": [
   "water_glass_bbpraa_0",
   "table_lamp_uupwiq_0",
-  "dishwasher_ynrhuk_0"
+  "dishwasher_ynrhuk_0",
+  "oven_ffitak_0"
  ],
  "construction_asset_scales": [],
  "asset_imports": [],
  "native_assets": [
+  {
+   "name": "c4_oven",
+   "category": "oven",
+   "model": "nvqqkv",
+   "usd_sha256": "028cb02e5f005d1112846c92e2999af412d2333421b482d175888cda2ac5a9ee",
+   "prim_type": 0,
+   "fixed_base": true,
+   "scale": [
+    1.04,
+    0.87,
+    1.05
+   ],
+   "position": [
+    89.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
   {
    "name": "c4_dishwasher",
    "category": "dishwasher",
@@ -623,6 +648,22 @@
    "kwargs": {
     "fully": true
    }
+  },
+  {
+   "object": "oven",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.43,
+    -1.78
+   ],
+   "support_probe_height": 1.2,
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
   },
   {
    "object": "oven",
