@@ -661,7 +661,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if ref not in self.image_files: raise KeyError(ref)
         return self.image_files[ref].read_bytes(),'image/jpeg'
 
-    def _ground(self,target, *, require_object=True, reject_particles=False):
+    def _ground(self,target, *, require_object=True, reject_particles=False, primitive=None):
         """Use the chosen pixel's depth backprojection directly as the target.
 
         Navigation needs only this point. Manipulation resolves visual geometry
@@ -689,6 +689,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'object_resolution_required':require_object,'selected_pixel':target['point'],
             'raster_pixel':[px,py],'pixel_center':[px+.5,py+.5],
             'image_ref':target['image_ref'],'audience':'executor_private'}
+        point,depth=self._glass_passthrough(point,start,direction,depth,primitive,diagnostic)
         obj=None
         if require_object:
             from .visual_mesh_grounding import query_visual_surface
@@ -716,6 +717,65 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             diagnostic.update(visual,selected_object_prim=obj.prim_path)
         with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
         return obj,point,diagnostic
+
+    def _glass_passthrough(self,point,start,direction,depth,primitive,diagnostic):
+        """rc1 A4 (benchmark side, glass_passthrough.py): a click on a fixed glass pane resolves to the surface the RGB
+        shows behind it. The selected pixel is unchanged; only the depth artefact of the pane is corrected."""
+        from . import glass_passthrough as GP
+        if not GP.enabled():
+            return point,depth
+        try:
+            from .visual_mesh_grounding import query_visual_surface
+            from omnigibson.object_states import Open,ToggledOn
+            first,visual=query_visual_surface(self,point,reject_particles=False,camera_position=start)
+            name,link=GP.split_mesh_path(visual.get('visual_mesh'))
+            if not GP.is_glass_link(link):
+                return point,depth
+            links=getattr(first,'links',{}) or {}
+            aabb=links[link].aabb if link in links else None
+            states=getattr(first,'states',{}) or {}
+            ok,reason=GP.decide(primitive,link,bool(getattr(first,'fixed_base',False)),aabb,Open in states,ToggledOn in states)
+            record={'object':name,'link':link,'decision':reason,'depth_before':depth}
+            diagnostic['through_glass']=record
+            if not ok:
+                return point,depth
+            if primitive in GP.GRASP_PLACE and Open in states and not states[Open].get_value():
+                record['blocked_by_closed']=True
+                raise SkillError('container_closed','Grasp through closed container rejected' if primitive=='grasp'
+                                 else 'Placement into closed container rejected')
+            import omnigibson.lazy as lazy
+            norm=float(self.torch.linalg.norm(direction))
+            unit=(direction/norm).tolist()
+            hits=[]
+            origin=[float(v) for v in start.tolist()]
+            def collect(hit):
+                pos=[float(v) for v in hit.position]
+                hits.append((math.dist(pos,origin),str(hit.rigid_body)));return True
+            lazy.omni.physx.get_physx_scene_query_interface().raycast_all(
+                tuple(float(v) for v in start.tolist()),tuple(unit),depth*norm+20.,collect)
+            registry={o.name:o for o in self.env.scene.objects}
+            def passable(body):
+                bname,blink=GP.split_mesh_path(body+'/')
+                bobj=registry.get(bname)
+                if bobj is None or not GP.is_glass_link(blink) or not getattr(bobj,'fixed_base',False):
+                    return False
+                blinks=getattr(bobj,'links',{}) or {}
+                return not (blink in blinks and GP.horizontal(blinks[blink].aabb))
+            nxt=GP.next_surface(hits,depth*norm,passable)
+            if nxt is None:
+                record['behind']=None
+                raise SkillError('no_surface_at_point','No supported visible surface at selected pixel')
+            depth=nxt[0]/norm;point=start+direction*depth
+            record.update(depth_after=depth,behind_body=nxt[1])
+            diagnostic.update(hit_position=point.tolist(),depth_linear=depth)
+            return point,depth
+        except SkillError as exc:
+            diagnostic.update(status='failed',code=exc.code,detail=str(exc))
+            with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
+            raise
+        except Exception as exc:   # simulator-free doubles or a failed query: v12b behaviour, recorded privately
+            diagnostic['through_glass']={'unavailable':type(exc).__name__}
+            return point,depth
 
     def _turn(self,degrees,max_steps):
         from .visual_target import rotate
@@ -1025,7 +1085,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         frame=self.current_frames.get(target['image_ref'])
         if frame is None:return target,None
         try:
-            obj,_,_=self._ground(target,require_object=True,reject_particles=primitive=='grasp')
+            obj,_,_=self._ground(target,require_object=True,reject_particles=primitive=='grasp',primitive=primitive)
         except SkillError as exc:
             if exc.code=='stale_image_ref':raise
             obj=None
@@ -1065,7 +1125,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             if len(verified)>MAX_VERIFIED_CANDIDATES:break
             for cx,cy,d in candidate_order(pixels)[:4]:
                 trial={'image_ref':target['image_ref'],'point':[cx/(W-1),cy/(H-1)]}
-                try:owner,_,_=self._ground(trial,require_object=True,reject_particles=primitive=='grasp')
+                try:owner,_,_=self._ground(trial,require_object=True,reject_particles=primitive=='grasp',primitive=primitive)
                 except SkillError:continue
                 if owner is o:
                     verified[o.name]=(cx,cy,d);chosen[o.name]=trial;break
@@ -1130,7 +1190,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 with (self.output/'selection_snap.jsonl').open('a') as stream:
                     stream.write(json.dumps({'at':now(),'audience':'executor_private','status':'snap_error',
                                              'error':repr(exc)[:300]})+'\n')
-        obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to',reject_particles=primitive=='grasp')
+        obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to',reject_particles=primitive=='grasp',primitive=primitive)
         if obj is not None and not isinstance(obj,SimpleNamespace):
             self._last_selected_category=str(getattr(obj,'category','') or '') or None
         if primitive in {'open','close','toggle_on','toggle_off'}:

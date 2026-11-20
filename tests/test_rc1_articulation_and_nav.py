@@ -214,3 +214,46 @@ def test_door_never_reads_open_after_any_step_during_hold(door, monkeypatch):
     phys.step(lambda: setattr(j, 'q', 1.5708))                    # explicit open: released, physics free
     assert j.q == 1.5708
     monkeypatch.setattr(AH, '_SUBSCRIPTION', None)
+
+
+# ---- rc1 A4 glass pass-through (glass_passthrough.py) ----
+from manipulation_agent.executors import glass_passthrough as GP
+
+VERTICAL_PANE = ([0.0, 0.0, 0.5], [1.0, 0.01, 1.5])     # thin along y
+GLASS_TOP = ([0.0, 0.0, 0.40], [1.0, 0.6, 0.41])         # thin along z (coffee-table top)
+
+
+def test_glass_link_names():
+    for link in ('glass', 'movingpartglass', 'Glass_2', 'pane', 'pane2'):
+        assert GP.is_glass_link(link), link
+    for link in ('base_link', 'panel', 'link_1', 'lid', None):
+        assert not GP.is_glass_link(link), link
+    assert GP.split_mesh_path('/World/scene_0/door_vudhlc_2/glass/visuals/vudhlc__glass') == ('door_vudhlc_2', 'glass')
+
+
+def test_decision_rules(monkeypatch):
+    monkeypatch.delenv('MAS_GLASS_PASSTHROUGH', raising=False)
+    # fixed pane, placement/grasp/navigation -> through
+    for prim in ('place_on_top', 'place_inside', 'grasp', 'navigate_to'):
+        assert GP.decide(prim, 'glass', True, VERTICAL_PANE, True, False) == (True, 'pass_through')
+    # movable glass objects are never passed through
+    assert GP.decide('grasp', 'glass', False, VERTICAL_PANE, False, False) == (False, 'movable_object')
+    # horizontal glass (table top, shelf) is a real surface
+    assert GP.decide('place_on_top', 'glass', True, GLASS_TOP, False, False) == (False, 'horizontal_pane')
+    # operating a glass door / appliance by clicking its pane still selects it
+    for prim in GP.OPERATE:
+        assert GP.decide(prim, 'glass', True, VERTICAL_PANE, True, False) == (False, 'operates_glass_owner')
+        assert GP.decide(prim, 'glass', True, VERTICAL_PANE, False, True) == (False, 'operates_glass_owner')
+    # a fixed window (no Open/ToggledOn): open on it is passed through like any other click
+    assert GP.decide('open', 'glass', True, VERTICAL_PANE, False, False) == (True, 'pass_through')
+    assert GP.decide('grasp', 'base_link', True, VERTICAL_PANE, True, False) == (False, 'not_glass')
+    monkeypatch.setenv('MAS_GLASS_PASSTHROUGH', 'off')
+    assert GP.decide('place_on_top', 'glass', True, VERTICAL_PANE, True, False) == (False, 'switch_off')
+
+
+def test_next_surface_skips_panes_and_robot_side_hits():
+    passable = lambda body: body.endswith('/glass') or body.endswith('/pane2')
+    hits = [(0.2, '/World/robot/link'), (2.0, '/World/scene_0/door/glass'), (2.1, '/World/scene_0/window/pane2'),
+            (3.4, '/World/scene_0/tbns_staging_table/base_link'), (5.0, '/World/scene_0/walls/base_link')]
+    assert GP.next_surface(hits, 2.0, passable) == (3.4, '/World/scene_0/tbns_staging_table/base_link')
+    assert GP.next_surface([(2.0, '/World/scene_0/door/glass')], 2.0, passable) is None
