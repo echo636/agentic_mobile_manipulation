@@ -172,7 +172,8 @@ class CustomTaskBackend(RGBBackend):
         # a scene_exclusions entity is present -- both mean a construction field changed without a rebuild.
         mismatch=construction_mismatch(self.custom_spec,position,orientation,
                                        {getattr(o,'name',None) for o in self.env.scene.objects})
-        record.update(construction_check=mismatch or 'passed')
+        record.update(construction_check=mismatch or 'passed',
+                      start_check_switch=os.environ.get('MAS_START_CHECK','on'))  # 'off' -> episode not for tables
         record['status']='passed' if record['upright'] and not mismatch else 'failed'
         write_json(self.output/'custom_robot_start_validation.json',record)
         if not record['upright']:
