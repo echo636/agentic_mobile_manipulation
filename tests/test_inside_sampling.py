@@ -67,6 +67,14 @@ class InwardMarginTests(unittest.TestCase):
         front,_=inward_margin_deficit((.05,.1,.05),extent,low,high,approach)
         self.assertEqual((centre,back),(0,0));self.assertGreater(front,0)
 
+    def test_rest_on_earlier_mug_is_detected_beside_is_not(self):
+        from manipulation_agent.executors.inside_sampling import rests_on_resident
+        mug1=((7.26,-1.88,.16),(7.36,-1.78,.26))
+        extent=(.10,.10,.10)
+        self.assertTrue(rests_on_resident((7.31,-1.83,.31),extent,[mug1]))
+        self.assertFalse(rests_on_resident((7.15,-1.83,.21),extent,[mug1]))
+        self.assertFalse(rests_on_resident((7.31,-1.83,.21),extent,[]))
+
     def test_without_robot_pose_ordering_is_unchanged(self):
         from manipulation_agent.executors.inside_sampling import inward_margin_deficit, approach_direction
         self.assertIsNone(approach_direction(SimpleNamespace(),(0.,0.,0.)))
@@ -214,6 +222,33 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertLess(float((candidate['pose'][0] + held.offset)[0]), .30)
         self.assertGreaterEqual(candidate['inward_clearance_m'], .10)
         self.assertAlmostEqual(float((legacy['pose'][0] + held.offset)[0]), .38, places=4)
+        self.assertEqual(state, {'steps': 0, 'loads': 0})
+
+    def test_single_release_puts_item_beside_resident_not_on_top(self):
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        b, held, target, _, state, _, modules = self.fixture()
+        torch = b.torch
+        corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+        volume = target.links['volume']
+        volume.visual_boundary_points_world = corners(volume.visual_aabb)
+        b.env = SimpleNamespace(scene=SimpleNamespace())
+        b._collision_vertices = lambda obj: corners(obj.aabb)
+        # An earlier item occupies x,y in [-.1,.1] up to z=.2. The click is high
+        # (z=.5), so its top (.3) is nearer than the free floor beside it (.1).
+        resident = SimpleNamespace(aabb=(torch.tensor([-.1, -.1, 0.]), torch.tensor([.1, .1, .2])))
+        b._inside_support_centers = lambda *args, **kwargs: [(0., 0., .33), (-.3, .25, .13)]
+        b._inside_pose_overlap_ranker = lambda *args: lambda position, quat: 0
+        b._inside_overlap_ranker = lambda *args: lambda *args: 0
+        with patch.dict('sys.modules', modules), \
+             patch('manipulation_agent.executors.inside_sampling.assembly_orientations',
+                   return_value=[('carried_pose', held.quat, 0.)]), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',
+                   return_value=None):
+            beside = select_inside_release(b, held, target, [], point=torch.tensor([0., 0., .5]),
+                                           residents=[(resident, None, None)])
+            alone = select_inside_release(b, held, target, [], point=torch.tensor([0., 0., .5]))
+        self.assertAlmostEqual(float((beside['pose'][0] + held.offset)[0]), -.3, places=4)
+        self.assertAlmostEqual(float((alone['pose'][0] + held.offset)[0]), 0., places=4)
         self.assertEqual(state, {'steps': 0, 'loads': 0})
 
     def test_single_release_prefers_inset_resting_pose_over_lip_edge_standing_proposal(self):

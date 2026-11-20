@@ -139,6 +139,29 @@ are proposals only, with unchanged collision and settling acceptance checks.
     return result
 
 
+def rests_on_resident(resting_center, extent, resident_bounds, *, footprint_share=.2, tolerance=.02):
+    """True when the item's footprint would sit over an existing content's top.
+
+    Residents are valid supports (a cookie on a sandwich), but a click on an
+    appliance front is higher than its floor, so the 3-D click distance used
+    to prefer the top of an earlier mug over free rack space; the stacked mug
+    toppled out (C4 dishwasher). People put a dish beside, not on, another
+    when there is room. Ordering only: stacking stays available when full.
+    """
+    half = [e/2 for e in extent]
+    bottom = resting_center[2] - half[2]
+    footprint = max(extent[0]*extent[1], 1e-12)
+    for low, high in resident_bounds:
+        if bottom < high[2] - tolerance:
+            continue
+        overlap = 1.
+        for i in (0, 1):
+            overlap *= max(0., min(resting_center[i]+half[i], high[i]) - max(resting_center[i]-half[i], low[i]))
+        if overlap/footprint > footprint_share:
+            return True
+    return False
+
+
 def inward_margin_deficit(center, extent, low, high, approach, *, margin=.10, bucket=.02):
     """Bucketed shortfall of the item's distance from the cavity's near side.
 
@@ -215,6 +238,7 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
         volume_geometry.append((volume, vlo, vhi, vp, vr, cavity.amin(0).tolist(), cavity.amax(0).tolist()))
     approaches = {volume.prim_path: approach_direction(backend, (vlo + vhi) / 2)
                   for volume, vlo, *_ in volume_geometry}
+    resident_bounds = [tuple(v.tolist() for v in row[0].aabb) for row in residents]
     proposals = []; seen = set(); ray_cache = {}
     clearance = .025 + .5 * 9.81 * backend.og.sim.get_physics_dt() ** 2
 
@@ -284,9 +308,11 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                         inward_deficit, inward_clearance = inward_margin_deficit(
                             resting_center, extent.tolist(), vlo.tolist(), vhi.tolist(),
                             approaches[volume.prim_path])
+                        stacked = rests_on_resident(resting_center, extent.tolist(), resident_bounds)
                         priority = (
                             round(protrusion, 5),
                             closed_overlap,
+                            stacked,
                             domain_rank,
                             inward_deficit,
                             label == 'unladen_face_proposal',
