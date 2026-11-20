@@ -26,7 +26,14 @@ class Backend:
 
 @pytest.fixture(autouse=True)
 def switch_on(monkeypatch):
+    monkeypatch.setenv('MAS_CARRIER_REGISTRY', 'on')     # default is off since 2026-11-20 21:00; these test the on path
+
+
+def test_default_is_off(monkeypatch):
     monkeypatch.delenv('MAS_CARRIER_REGISTRY', raising=False)
+    assert CR.enabled() is False
+    b = Backend(); cup, tray = Obj('cup'), Obj('tray')
+    assert CR.register_after_place(b, cup, tray, 'place_on_top') is None and b.records == []
 
 
 def test_registry_register_unregister_descendants():

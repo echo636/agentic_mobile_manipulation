@@ -6,7 +6,8 @@ carrier), and dropped if they touched anything else. While held they stayed on t
 robot had just placed on a tray could be left behind (two touching items each have a non-member contact) and the
 placement receipt still reported success.
 
-After (switch MAS_CARRIER_REGISTRY, default on; off = v12b behaviour):
+After (switch MAS_CARRIER_REGISTRY, default OFF since 2026-11-20 21:00 -- tray probe on/off showed no difference and the
+motivating defect #24 was voided by the recount; on = registry, off/unset = v12b behaviour):
 1. A successful place_on_top / place_inside onto a MOVABLE object (not fixed_base) registers held -> target. No task
    role is read; any movable support counts. A registration that would make a cycle is refused.
 2. Grasping a carrier carries every registered descendant (layer by layer) without the external-contact filter, unless
@@ -31,7 +32,7 @@ PIN_ANGLE_TOL_RAD = math.radians(3.0)
 
 
 def enabled():
-    return os.environ.get('MAS_CARRIER_REGISTRY', 'on') != 'off'
+    return os.environ.get('MAS_CARRIER_REGISTRY', 'off') == 'on'
 
 
 class Registry:
