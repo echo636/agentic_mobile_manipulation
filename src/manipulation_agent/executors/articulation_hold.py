@@ -32,7 +32,10 @@ def lock_closed(backend, obj):
     held = backend.__dict__.setdefault('_articulation_held', {})
     out = []
     for joint in _joints(obj):
-        key = (obj.name, joint.joint_name)
+        key = (obj.name, getattr(joint, 'joint_name', None))
+        if not all(hasattr(joint, a) for a in ('lower_limit', 'upper_limit', 'get_state', 'keep_still')):
+            out.append({'joint': key[1], 'skipped': 'joint_without_runtime_limits'})   # stub joints in unit tests
+            continue
         lo, hi = float(joint.lower_limit), float(joint.upper_limit)
         if key in held:                      # already held: keep the original limits
             lo, hi = held[key]
@@ -81,8 +84,10 @@ def install_toggle_guard():
     global _INSTALLED
     if _INSTALLED or not enabled():
         return False
-    from omnigibson.object_states.toggle import ToggledOn
-    from omnigibson.object_states import Open
+    try:
+        from omnigibson.object_states import Open, ToggledOn   # same class objects as object_states.toggle.ToggledOn
+    except ImportError:        # simulator-free unit tests with stub modules
+        return False
 
     def _update(self):
         toggle_step(self, lambda: bool(self.obj.states[Open].get_value()))
