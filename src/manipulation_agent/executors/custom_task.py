@@ -613,6 +613,15 @@ class CustomTaskBackend(RGBBackend):
                 break
         return False
 
+    def _stacking_movable(self, objects):
+        """Role objects that may form a layer of a stacked_on_top chain.
+        rc1 A7 (2026-11-20, benchmark side, defect #26): fixed objects never form a layer -- neither fixed_base nor
+        declared fixed_supports (furniture the robot cannot move). Before, a fixed support with fixed_base false (e.g. a
+        nightstand standing on a floor) counted as a movable layer, so an item resting on it counted as on the floor."""
+        fixed = getattr(self, 'fixed_support_names', ()) or ()
+        return [o for o in objects if o is not None and not getattr(o, 'fixed_base', False)
+                and getattr(o, 'name', None) not in fixed]
+
     def _predicate_values(self, *, stacked=None):
         from omnigibson import object_states
         stacked = getattr(self, 'stacked_on_top', False) if stacked is None else stacked
@@ -622,8 +631,8 @@ class CustomTaskBackend(RGBBackend):
         if self._initial_entity_names is None:
             self._initial_entity_names = set(live)
         roles = {key:live.get(name) for key,name in self.custom_spec['roles'].items()}
-        movable = ([o for o in roles.values() if o is not None and not getattr(o, 'fixed_base', False)
-                    and object_states.OnTop in o.states] if stacked else [])
+        movable = ([o for o in self._stacking_movable(roles.values()) if object_states.OnTop in o.states]
+                   if stacked else [])
         result = {}
         for key, row in self.custom_spec['evaluation']['predicates'].items():
             obj = roles[row['object']]

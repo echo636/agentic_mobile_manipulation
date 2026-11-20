@@ -152,6 +152,26 @@ def test_furniture_breaks_the_chain_and_footprint_is_required():
     assert not b._stacked_on_top(apple, plate, [apple, hotdog, plate])
 
 
+def test_rc1_a7_fixed_supports_never_form_a_stacking_layer():
+    lotion, nightstand, floor, apple, plate = map(_O, ('lotion', 'nightstand', 'floor', 'apple', 'plate'))
+    nightstand.fixed_base = False                       # scene-authored furniture without fixed_base
+    b = _backend({('lotion', 'nightstand'), ('nightstand', 'floor'), ('apple', 'plate'), ('plate', 'floor')})
+    b.fixed_support_names = frozenset({'nightstand'})
+    movable = b._stacking_movable([lotion, nightstand, floor, apple, plate])
+    assert [o.name for o in movable] == ['lotion', 'floor', 'apple', 'plate']
+    assert not b._stacked_on_top(lotion, floor, movable)   # on a fixed support: not on the floor
+    assert b._stacked_on_top(apple, floor, movable)        # a movable plate still forms a layer
+    b.fixed_support_names = frozenset()                    # before A7 / no declaration: old behaviour
+    assert b._stacked_on_top(lotion, floor, b._stacking_movable([lotion, nightstand, floor]))
+
+
+def test_rc1_a7_fixed_base_objects_excluded():
+    counter = _O('counter'); counter.fixed_base = True
+    cup = _O('cup')
+    b = _backend(set())
+    assert [o.name for o in b._stacking_movable([counter, cup, None])] == ['cup']
+
+
 # ---- benchmark side: simulator wall-clock values never reach the model ----
 
 def test_model_bound_payloads_drop_wall_clock_fields():
