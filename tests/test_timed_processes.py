@@ -136,6 +136,42 @@ def _sample_spec():
     }
 
 
+def _stove_spec():
+    """Cooktop process with an overcook window (v3): done after 60 s, burns 30 s later if still heating."""
+    spec = _sample_spec()
+    spec['roles'].update({'stove': 'stove_0', 'steak': 'steak_0'})
+    spec['timed_processes'].append({
+        'id': 'sear_steak',
+        'appliance': 'stove',
+        'items': ['steak'],
+        'containment': 'OnTop',
+        'require_closed': False,
+        'require_toggled_on': True,
+        'duration_seconds': 60.0,
+        'set_object_state': 'Cooked',
+        'overcook_after_seconds': 30.0,
+        'running_message': 'The steak is sizzling on the cooktop.',
+        'completed_message': 'The steak on the cooktop is done.',
+        'stopped_early_message': 'The cooktop stopped before the steak was done.',
+        'overcooked_message': 'A burning smell: the steak on the cooktop has burnt.',
+    })
+    spec['evaluation']['predicates'].update({
+        'steak_seared': {'object': 'steak', 'state': 'ProcessComplete', 'process': 'sear_steak'},
+        'steak_overcooked': {'object': 'steak', 'state': 'ProcessOvercooked', 'process': 'sear_steak'},
+    })
+    spec['evaluation']['terminal']['all_done'] = {
+        'all': ['hotdog1_cooked', 'hotdog2_cooked', 'cup1_washed', 'steak_seared', {'not': 'steak_overcooked'}]}
+    return spec
+
+
+def _start_stove(b):
+    stove = b.mock_objects['stove_0']
+    steak = b.mock_objects['steak_0']
+    steak.mock_relations['OnTop'].add(stove)
+    b.run_action('toggle_on', selected='stove_0', body=lambda: stove.mock_states.__setitem__('ToggledOn', True))
+    return stove, steak
+
+
 class TimedProcessesTests(unittest.TestCase):
     def test_spec_validation_accepts_valid_and_rejects_bad_references(self):
         spec = _sample_spec()
@@ -320,6 +356,69 @@ class TimedProcessesTests(unittest.TestCase):
         info = validate_workflow_plan(spec)
         self.assertEqual(info['phase_count'], 4)
 
+
+    def test_overcook_window_validation(self):
+        self.assertEqual(validate_spec(_stove_spec())['status'], 'passed')
+        for mutate, msg in (
+                (lambda r: r.__setitem__('overcook_after_seconds', 0), 'overcook_after_seconds'),
+                (lambda r: r.pop('overcooked_message'), 'overcooked_message'),
+                (lambda r: r.pop('overcook_after_seconds'), 'requires overcook_after_seconds'),
+        ):
+            spec = _stove_spec()
+            mutate(spec['timed_processes'][2])
+            with self.assertRaisesRegex(ValueError, msg):
+                validate_timed_processes(spec)
+        spec = _stove_spec()
+        spec['evaluation']['predicates']['steak_overcooked'] = {
+            'object': 'cup1', 'state': 'ProcessOvercooked', 'process': 'wash_dishes'}
+        with self.assertRaisesRegex(ValueError, 'ProcessOvercooked'):
+            validate_spec(spec)
+        # Tasks without the field behave as before: nothing ever overcooks.
+        b = _MockBackend(_sample_spec(), tempfile.mkdtemp())
+        self.assertEqual(b.timed.rules[0]['overcook_after_seconds'], None)
+
+    def test_overcook_burns_when_left_heating_and_reports_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b = _MockBackend(_stove_spec(), tmp)
+            stove, steak = _start_stove(b)
+            # 25 m walk + manipulation elsewhere twice: 2 x (50 s + 10 s) = 120 s > 60 + 30
+            out = b.run_action('grasp', travel_m=25.0, selected='cup_1')
+            self.assertTrue(b.timed.is_completed('sear_steak', 'steak'))
+            self.assertIn('The steak on the cooktop is done. If it keeps heating, it will burn in about 30 s.',
+                          out['public_process']['message'])
+            self.assertFalse(b.timed.is_overcooked('sear_steak', 'steak'))
+            out = b.run_action('place_on_top', travel_m=25.0, selected='dishwasher_0')
+            self.assertTrue(b.timed.is_overcooked('sear_steak', 'steak'))
+            self.assertTrue(steak.mock_states['Burnt'])
+            self.assertIn('the steak on the cooktop has burnt', out['public_process']['message'])
+            # Burnt is permanent, even after switching off.
+            b.run_action('toggle_off', selected='stove_0', body=lambda: stove.mock_states.__setitem__('ToggledOn', False))
+            self.assertTrue(b.timed.is_overcooked('sear_steak', 'steak'))
+            self.assertTrue(b.timed.summary(b)['processes']['sear_steak']['overcooked']['steak'])
+
+    def test_overcook_avoided_by_switching_off_or_removing_in_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b = _MockBackend(_stove_spec(), tmp)
+            stove, steak = _start_stove(b)
+            b.run_action('wait', wait_s=65.0)
+            self.assertTrue(b.timed.is_completed('sear_steak', 'steak'))
+            out = b.run_action('wait', wait_s=10.0)
+            self.assertIn('It is still heating and will burn in about 15 s.', out['public_process']['message'])
+            b.run_action('toggle_off', selected='stove_0', body=lambda: stove.mock_states.__setitem__('ToggledOn', False))
+            b.run_action('wait', wait_s=120.0)
+            self.assertFalse(b.timed.is_overcooked('sear_steak', 'steak'))
+            self.assertTrue(steak.mock_states['Cooked'])
+            self.assertFalse(steak.mock_states['Burnt'])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            b = _MockBackend(_stove_spec(), tmp)
+            stove, steak = _start_stove(b)
+            b.run_action('wait', wait_s=70.0)
+            # Lift the steak off the still-lit cooktop: holding it stops the heating.
+            b.held = steak
+            b.run_action('grasp', selected='steak_0')
+            b.run_action('navigate_to', travel_m=60.0)
+            self.assertFalse(b.timed.is_overcooked('sear_steak', 'steak'))
 
 if __name__ == '__main__':
     unittest.main()

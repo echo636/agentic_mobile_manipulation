@@ -54,6 +54,7 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
     validate_timed_processes(spec)
     validate_tool_cleanliness(spec)
     proc_items = {row['id']: set(row['items']) for row in spec.get('timed_processes', [])}
+    overcook_procs = {row['id'] for row in spec.get('timed_processes', []) if 'overcook_after_seconds' in row}
     evaluation = spec['evaluation']
     TemporalGoalEvaluator(evaluation)
     for key, row in evaluation['predicates'].items():
@@ -61,10 +62,12 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
             raise ValueError('Predicate references unknown entity: ' + key)
         if not isinstance(row.get('state'), str) or not row['state']:
             raise ValueError('Predicate needs an explicit state: ' + key)
-        if row['state'] == 'ProcessComplete':
+        if row['state'] in ('ProcessComplete', 'ProcessOvercooked'):
             proc = row.get('process')
             if proc not in proc_items or row['object'] not in proc_items[proc]:
-                raise ValueError('ProcessComplete predicate references unknown process/item: ' + key)
+                raise ValueError(row['state'] + ' predicate references unknown process/item: ' + key)
+            if row['state'] == 'ProcessOvercooked' and proc not in overcook_procs:
+                raise ValueError('ProcessOvercooked predicate needs a process with overcook_after_seconds: ' + key)
     values = dict.fromkeys(evaluation['predicates'], False)
     if not spec.get('initial_assertions'):
         raise ValueError('A custom task needs initial assertions')

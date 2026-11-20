@@ -42,7 +42,7 @@
 | 规划约束机制 | Benchmark 侧实现模块（对所有模型固定） | 必须配齐的公开事实回执 / 指令要求（防暗箱陷阱） |
 |---|---|---|
 | **路程与操作真实计费** | [robot_clock.py](../src/manipulation_agent/executors/robot_clock.py)：A* 真实路径长度 $\div 0.5\text{ m/s}$ + 转向角 $\div 60^\circ/\text{s}$ + 每次非导航操作 $10\text{ s}$ + `wait` 秒数 | 任务公开指令写明需要优化完成效率；回执在开启辅助设施时可公开显示累计用时（不泄露最优解） |
-| **后台耗时过程与防超时** | [timed_processes.py](../src/manipulation_agent/executors/timed_processes.py)：满足“物品在内 + 关门 + 开启”后随 `robot_clock` 自动读秒，支持串联上游条件与超时烤焦 | 公开指令写明设备所需加工秒数；动作回执 `effect.process` 如实返回运行中或完成提示音 |
+| **后台耗时过程与防超时** | [timed_processes.py](../src/manipulation_agent/executors/timed_processes.py)：满足“物品在内 + 关门 + 开启”后随 `robot_clock` 自动读秒；可选过火窗口 `overcook_after_seconds`（v3，2026-11-20 补齐，评估谓词 `ProcessOvercooked`）。**串联上游条件尚未实现**（2026-11-20 核对：原文“支持串联上游条件与超时烤焦”与代码不符，当时两者都没有） | 公开指令写明设备所需加工秒数与过火规则；动作回执 `effect.process` 如实返回运行中、完成提示音、距烤糊剩余秒数与烤糊提示 |
 | **敞口载具多件合运** | [carry.py](../src/manipulation_agent/executors/carry.py)：抓起托盘/盘子/衣篮时，物理支撑在其上的刚体随载具同步移动；载具面积自然限制单趟容量 $C \in [2, 6]$ | 公开指令**绝对禁止提示“用托盘合批”**（策略留给智能体自己想）；参考流程必须同时允许“不用托盘单拿”合法通关 |
 | **不可逆先后与清空守卫** | [custom_tasks.py](../src/manipulation_agent/tasks/custom_tasks.py) `TemporalGoalEvaluator` 的四类守卫：`state_guards`、`transition_guards`、`motion_guards`、`milestones` | **所有守卫规则 100% 原文写进 `public_context` / `public_instruction`**，绝不允许出现“评估器偷判违规但指令没说”的暗雷 |
 | **工具状态追踪与重置** | [tool_cleanliness.py](../src/manipulation_agent/executors/tool_cleanliness.py)：追踪抹布/刀具脏污等级 $D \in \{0,1,2,3\}$，$D > L$ 触发交叉污染，`soak` 水源重置 $D \leftarrow 0$ | 因为仿真 RGB 里抹布脏了不变色，在 `grasp` / `wipe` / `soak` 回执 `effect.tool_cleanliness` 中**如实返回工具当前污渍等级**（基准侧事实回执） |

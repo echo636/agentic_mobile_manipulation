@@ -681,6 +681,10 @@ class CustomTaskBackend(RGBBackend):
                 result[key] = bool(self.timed_processes
                                    and self.timed_processes.is_completed(row['process'], row['object']))
                 continue
+            if row['state'] == 'ProcessOvercooked':
+                result[key] = bool(self.timed_processes
+                                   and self.timed_processes.is_overcooked(row['process'], row['object']))
+                continue
             if row['state'] in ('CrossContaminationViolation', 'ToolCleanlinessViolation'):
                 result[key] = bool(self.tool_cleanliness and self.tool_cleanliness.has_violation())
                 continue

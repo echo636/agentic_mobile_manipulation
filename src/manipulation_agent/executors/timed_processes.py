@@ -18,6 +18,14 @@ text also states the process's own timing, as a real appliance panel or a person
 who set the timer would know it: the total duration when a run starts, the
 remaining time while it runs, and the completed portion when it stops early. No simulator module is
 imported at module import time so CPU unit tests run without OmniGibson.
+
+Overcook window (v3, 2026-11-20, benchmark side, all tiers; off unless a process declares it): with
+``overcook_after_seconds`` an item that stays under running conditions for longer than
+``duration_seconds + overcook_after_seconds`` is overcooked for good (``ProcessOvercooked`` predicate;
+native ``Burnt`` is also set when the object has that state). Stoves and ovens keep heating after the
+food is done; self-stopping appliances (microwave, dishwasher) simply do not declare the field. The
+public text says, like a cook watching the pan, how long until it burns once it is done, and reports
+the burning itself (``overcooked_message``) on the next successful action.
 """
 from __future__ import annotations
 
@@ -28,7 +36,7 @@ from typing import Any
 from ..records import now
 from ..runtime.robot_clock import clock_of
 
-VERSION = 'timed_processes_robot_clock_v2_public_timing'
+VERSION = 'timed_processes_robot_clock_v3_overcook_window'
 ALLOWED_CONTAINMENT = frozenset({'Inside', 'OnTop'})
 ALLOWED_OBJECT_STATES = frozenset({None, 'Cooked'})
 
@@ -72,6 +80,15 @@ def validate_timed_processes(spec: dict[str, Any]) -> None:
             msg = row.get(msg_key)
             if not isinstance(msg, str) or not msg.strip():
                 raise ValueError(f'timed_process {pid} missing nonempty {msg_key}')
+        if 'overcook_after_seconds' in row:
+            grace = row['overcook_after_seconds']
+            if type(grace) not in (int, float) or not math.isfinite(grace) or grace <= 0:
+                raise ValueError(f'timed_process {pid} overcook_after_seconds must be a positive finite number')
+            msg = row.get('overcooked_message')
+            if not isinstance(msg, str) or not msg.strip():
+                raise ValueError(f'timed_process {pid} with overcook_after_seconds needs a nonempty overcooked_message')
+        elif 'overcooked_message' in row:
+            raise ValueError(f'timed_process {pid} overcooked_message requires overcook_after_seconds')
 
 
 def normalize_rule(raw: dict[str, Any]) -> dict[str, Any]:
@@ -88,6 +105,9 @@ def normalize_rule(raw: dict[str, Any]) -> dict[str, Any]:
         'running_message': raw['running_message'].strip(),
         'completed_message': raw['completed_message'].strip(),
         'stopped_early_message': raw['stopped_early_message'].strip(),
+        'overcook_after_seconds': (float(raw['overcook_after_seconds'])
+                                   if raw.get('overcook_after_seconds') is not None else None),
+        'overcooked_message': (raw.get('overcooked_message') or '').strip(),
     }
 
 
@@ -102,6 +122,9 @@ class TimedProcesses:
             r['id']: {item: 0.0 for item in r['items']} for r in self.rules
         }
         self.completed: dict[str, dict[str, bool]] = {
+            r['id']: {item: False for item in r['items']} for r in self.rules
+        }
+        self.overcooked: dict[str, dict[str, bool]] = {
             r['id']: {item: False for item in r['items']} for r in self.rules
         }
         self.clock_seen = 0.0
@@ -122,6 +145,15 @@ class TimedProcesses:
 
     def is_completed(self, process_id: str, item_role: str) -> bool:
         return bool(self.completed.get(process_id, {}).get(item_role, False))
+
+    def is_overcooked(self, process_id: str, item_role: str) -> bool:
+        return bool(self.overcooked.get(process_id, {}).get(item_role, False))
+
+    def _burnt_items(self) -> set[str]:
+        return {item for rule in self.rules for item in rule['items'] if self.overcooked[rule['id']][item]}
+
+    def _overcook_left(self, rule: dict[str, Any], item: str) -> float:
+        return rule['duration_seconds'] + rule['overcook_after_seconds'] - self.elapsed[rule['id']][item]
 
     # ------------------------------------------------------------------ scene queries
     def _live_map(self, backend: Any) -> dict[str, Any]:
@@ -191,6 +223,20 @@ class TimedProcesses:
         return self._is_contained(item, appliance, rule['containment'])
 
     # ------------------------------------------------------------------ state sync
+    def _sync_burnt(self, item_obj: Any) -> None:
+        if hasattr(item_obj, 'mock_states'):
+            item_obj.mock_states['Burnt'] = True
+            return
+        from omnigibson.object_states import Burnt, MaxTemperature, Temperature
+        if Burnt not in item_obj.states or item_obj.states[Burnt].get_value():
+            return
+        burn_temp = float(item_obj.states[Burnt].burn_temperature)
+        for state_cls in (Temperature, MaxTemperature):
+            if state_cls in item_obj.states and float(item_obj.states[state_cls].get_value()) < burn_temp + 5.0:
+                item_obj.states[state_cls].set_value(burn_temp + 10.0)
+        for st in item_obj.states.values():
+            st.clear_cache()
+
     def _sync_cooked(self, item_obj: Any, done: bool) -> None:
         if hasattr(item_obj, 'mock_states'):
             item_obj.mock_states['Cooked'] = bool(done)
@@ -224,12 +270,16 @@ class TimedProcesses:
             live = self._live_map(backend)
             if not live:
                 return
+            burnt = self._burnt_items()
             for rule in self.rules:
-                if rule['set_object_state'] == 'Cooked':
-                    for item_role in rule['items']:
-                        item_obj = self._role_obj(backend, item_role, live)
-                        if item_obj is not None:
-                            self._sync_cooked(item_obj, self.completed[rule['id']][item_role])
+                for item_role in rule['items']:
+                    item_obj = self._role_obj(backend, item_role, live)
+                    if item_obj is None:
+                        continue
+                    if item_role in burnt:
+                        self._sync_burnt(item_obj)
+                    elif rule['set_object_state'] == 'Cooked':
+                        self._sync_cooked(item_obj, self.completed[rule['id']][item_role])
         except Exception as exc:
             self._anomaly('sync_states', exc)
 
@@ -281,6 +331,7 @@ class TimedProcesses:
         live = self._live_map(backend)
         active_now: dict[tuple[str, str], bool] = {}
         just_completed_rules: set[str] = set()
+        just_overcooked_rules: set[str] = set()
 
         for rule in self.rules:
             pid = rule['id']
@@ -299,12 +350,27 @@ class TimedProcesses:
                 if not self.completed[pid][item] and self.elapsed[pid][item] >= rule['duration_seconds']:
                     self.completed[pid][item] = True
                     just_completed_rules.add(pid)
+                if (rule['overcook_after_seconds'] is not None and self.completed[pid][item]
+                        and not self.overcooked[pid][item] and self._overcook_left(rule, item) <= 0.0):
+                    self.overcooked[pid][item] = True
+                    just_overcooked_rules.add(pid)
 
         self.sync_all_states(backend)
 
         for rule in self.rules:
-            if rule['id'] in just_completed_rules and rule['completed_message'] not in self.pending_messages:
-                self.pending_messages.append(rule['completed_message'])
+            pid = rule['id']
+            if pid in just_overcooked_rules:
+                if rule['overcooked_message'] not in self.pending_messages:
+                    self.pending_messages.append(rule['overcooked_message'])
+            elif pid in just_completed_rules:
+                msg = rule['completed_message']
+                if rule['overcook_after_seconds'] is not None:
+                    left = min((self._overcook_left(rule, item) for item in rule['items']
+                                if active_now[(pid, item)] and not self.overcooked[pid][item]), default=None)
+                    if left is not None:
+                        msg = f'{msg} If it keeps heating, it will burn in about {max(left, 0.0):.0f} s.'
+                if msg not in self.pending_messages:
+                    self.pending_messages.append(msg)
 
         selected_prim = str(((details or {}).get('private_grounding') or {}).get('selected_object_prim') or '')
         transient_messages: list[str] = []
@@ -318,8 +384,17 @@ class TimedProcesses:
             )
             if unfinished_running_now:
                 any_unfinished_running = True
-            if error is not None or pid in just_completed_rules:
+            if error is not None or pid in just_completed_rules or pid in just_overcooked_rules:
                 continue
+            if rule['overcook_after_seconds'] is not None and not unfinished_running_now:
+                left = [self._overcook_left(rule, item) for item in rule['items']
+                        if active_now[(pid, item)] and self.completed[pid][item] and not self.overcooked[pid][item]]
+                if left and (primitive in {'wait', 'toggle_on', 'look'}
+                             or self._selected_matches_rule(backend, rule, selected_prim, live)):
+                    transient_messages.append(
+                        f"{rule['completed_message']} It is still heating and will burn in about "
+                        f"{max(min(left), 0.0):.0f} s.")
+                    continue
             stopped_unfinished = any(
                 snap['active_before'].get((pid, item), False)
                 and not snap['done_before'].get((pid, item), False)
@@ -388,6 +463,7 @@ class TimedProcesses:
                     for pid, items in self.elapsed.items()
                 },
                 'completed': {pid: dict(items) for pid, items in self.completed.items()},
+                'overcooked': {pid: dict(items) for pid, items in self.overcooked.items()},
                 'active': {
                     pid: {item: active_now.get((pid, item), False) for item in rule['items']}
                     for rule in self.rules for pid in (rule['id'],)
@@ -410,6 +486,8 @@ class TimedProcesses:
                     'duration_seconds': rule['duration_seconds'],
                     'elapsed_s': {k: round(v, 3) for k, v in self.elapsed[rule['id']].items()},
                     'completed': dict(self.completed[rule['id']]),
+                    'overcook_after_seconds': rule['overcook_after_seconds'],
+                    'overcooked': dict(self.overcooked[rule['id']]),
                     'active': ({item: self.is_item_active(backend, rule['id'], item, live=live)
                                 for item in rule['items']} if backend is not None and live else None),
                 }
