@@ -167,10 +167,19 @@ class CustomTaskBackend(RGBBackend):
         record={'position':position,'orientation':orientation,
                 'upright':math.isfinite(up_z) and up_z>=math.cos(math.radians(10.)),
                 'validation_level':'read-only initial robot posture; not route feasibility or task success'}
-        record['status']='passed' if record['upright'] else 'failed'
+        # rc1 (2026-11-20 22:00, KNOWN_ISSUES #15): the start lives in the frozen scene (base joints); robot_start is
+        # only used when the scene is built. Refuse to start when the loaded start differs from robot_start, and when
+        # a scene_exclusions entity is present -- both mean a construction field changed without a rebuild.
+        mismatch=construction_mismatch(self.custom_spec,position,orientation,
+                                       {getattr(o,'name',None) for o in self.env.scene.objects})
+        record.update(construction_check=mismatch or 'passed')
+        record['status']='passed' if record['upright'] and not mismatch else 'failed'
         write_json(self.output/'custom_robot_start_validation.json',record)
-        if record['status']!='passed':
+        if not record['upright']:
             raise RuntimeError('Prepared robot must be upright')
+        if mismatch and os.environ.get('MAS_START_CHECK','on')!='off':
+            raise RuntimeError('Loaded scene does not match the task input: '+json.dumps(mismatch)+
+                               '. A construction field (robot_start / scene_exclusions) changed; rebuild the frozen scene.')
 
     def _prepare_task_instance(self):
         """Called before camera setup / first policy observation."""
@@ -1052,3 +1061,21 @@ class CustomTaskBackend(RGBBackend):
         if getattr(self, 'stacked_on_top', False):
             result['evaluator_relaxations'] = [self.STACKED_ON_TOP_VERSION]
         return result
+
+def construction_mismatch(spec, position, orientation, scene_names, *, max_position_m=.05, max_yaw_degrees=5.):
+    """Pure check (unit-tested): loaded robot start vs robot_start, and excluded entities still in the scene."""
+    out={}
+    start=spec.get('robot_start')
+    if start:
+        def yaw(q):
+            return math.degrees(math.atan2(2*(q[3]*q[2]+q[0]*q[1]),1-2*(q[1]**2+q[2]**2)))
+        dp=math.hypot(position[0]-start['position'][0],position[1]-start['position'][1])
+        dy=abs((yaw(orientation)-yaw(start['orientation'])+180.)%360.-180.)
+        if dp>max_position_m or dy>max_yaw_degrees:
+            out['robot_start']={'loaded_xy':[round(position[0],3),round(position[1],3)],'loaded_yaw_deg':round(yaw(orientation),1),
+                                'input_xy':list(start['position'][:2]),'input_yaw_deg':round(yaw(start['orientation']),1),
+                                'position_error_m':round(dp,3),'yaw_error_deg':round(dy,1)}
+    present=sorted(set(spec.get('scene_exclusions',[]))&set(scene_names))
+    if present:
+        out['scene_exclusions_present']=present
+    return out
