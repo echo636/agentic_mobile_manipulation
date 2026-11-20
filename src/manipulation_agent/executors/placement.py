@@ -315,6 +315,8 @@ class CheckedPlacement:
         footprint. Candidate ranking is geometric; release and settling happen once.
         """
         import math
+        import os
+        import numpy as np
         from .surface_geometry import rotated_surface_geometry
         from omnigibson.utils.sampling_utils import raytest
         from omnigibson.utils import transform_utils as T
@@ -326,6 +328,20 @@ class CheckedPlacement:
             from .surface_geometry import native_resting_orientation
             quaternion, rotation = native_resting_orientation(
                 orientation.detach().cpu().numpy(), orientations)
+            geometry = (geometry-origin) @ rotation.T + origin
+            orientation = self.torch.as_tensor(quaternion, dtype=orientation.dtype,
+                                                device=orientation.device)
+        elif not center_footprint and os.environ.get('MAS_PLACE_LEVEL', 'on') != 'off':
+            # rc1 A8 (switch MAS_PLACE_LEVEL, default on; off = v12b): no authored resting poses -> level the
+            # held object to its pre-grasp roll/pitch (asset upright if unknown), keeping the held heading.
+            from .surface_geometry import level_to_reference
+            reference = (getattr(self, '_pregrasp_orientations', None) or {}).get(id(held))
+            source = 'pregrasp_pose' if reference is not None else 'asset_upright'
+            reference = reference if reference is not None else [0., 0., 0., 1.]
+            quaternion, rotation, tilt = level_to_reference(orientation.detach().cpu().numpy(), reference)
+            self._placement_record({'status': 'rc1_A8_level', 'held': held.name, 'target': target.name,
+                                    'reference': source, 'tilt_degrees': round(tilt, 2),
+                                    'applied': bool((rotation != np.eye(3)).any())})
             geometry = (geometry-origin) @ rotation.T + origin
             orientation = self.torch.as_tensor(quaternion, dtype=orientation.dtype,
                                                 device=orientation.device)

@@ -65,6 +65,9 @@ class ControlledCarry:
             return {'primitive': 'grasp', 'postcondition': 'selected_object_already_held'}
         arm = self.primitives.arm
         original = obj.get_position_orientation()
+        # rc1 A8: remember the resting orientation before this grasp; place_on_top levels to it
+        self._pregrasp_orientations = {**(getattr(self, '_pregrasp_orientations', None) or {}),
+                                       id(obj): [float(v) for v in original[1]]}
         # rc1 A6 (carrier_registry.py): grasping a registered item on its own takes it off its carrier; grasping a
         # carrier carries its registered contents (no external-contact filter), unregistered ones keep the v12b rule.
         from . import carrier_registry as CR

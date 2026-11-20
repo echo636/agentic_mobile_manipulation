@@ -179,6 +179,26 @@ def native_resting_orientation(current, orientations):
     return selected.as_quat(), (selected * current.inv()).as_matrix()
 
 
+def level_to_reference(current, reference, minimum_tilt_degrees=3., maximum_tilt_degrees=45.):
+    """rc1 A8 (2026-11-20): put a held object down level instead of at its in-hand tilt.
+
+    current, reference: xyzw quaternions (held now; the object's resting pose before it was grasped, or the
+    asset's default upright pose when no record exists). Returns (quaternion, rotation, tilt_degrees) where the
+    result keeps the held world heading and the reference's roll/pitch; rotation maps current -> result. Tilts
+    below minimum_tilt_degrees are left unchanged (identity), as are corrections above maximum_tilt_degrees
+    (a wrong reference must never turn a loaded carrier over). Before this, objects without authored resting
+    poses were released at their in-hand tilt, so the lowest-patch anchor fell on a corner (0.21-0.24 m off
+    the click for trays) and the corner landed first.
+    """
+    import numpy as np
+    from scipy.spatial.transform import Rotation
+    quaternion, rotation = native_resting_orientation(current, {'reference': {'rotation': list(reference), 'prob': 1.}})
+    tilt = float(np.degrees(Rotation.from_matrix(rotation).magnitude()))
+    if tilt < minimum_tilt_degrees or tilt > maximum_tilt_degrees:
+        return np.asarray(current, dtype=float), np.eye(3), tilt
+    return quaternion, rotation, tilt
+
+
 def overlapping_surface_probes(lower_faces, support_faces, height, maximum=32):
     """Find interior witnesses of overlapping physical faces near a support plane.
 
