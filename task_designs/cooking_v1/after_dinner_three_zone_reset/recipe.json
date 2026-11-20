@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "after_dinner_three_zone_reset",
- "instance_id": "after_dinner_three_zone_reset_seed0_r2",
+ "instance_id": "after_dinner_three_zone_reset_seed0_r3",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -23,6 +23,7 @@
   "utility_counter": "countertop_fjkase_0",
   "washer": "washer_ynwamu_0",
   "nightstand": "nightstand_wbxekb_2",
+  "bed": "bed_rrcvaq_1",
   "utility_entry_door": "sliding_door_tprpvb_12",
   "utility_exit_door": "sliding_door_tprpvb_7",
   "bedroom_door": "sliding_door_tprpvb_1",
@@ -1226,7 +1227,7 @@
      "load_tray_living"
     ]
    },
-   "start_washer_from_tray": {
+   "napkins_into_washer_from_tray": {
     "actions": [
      {
       "primitive": "open",
@@ -1247,7 +1248,14 @@
      {
       "primitive": "place_inside",
       "role": "washer"
-     },
+     }
+    ],
+    "after": [
+     "tray_to_utility"
+    ]
+   },
+   "start_washer": {
+    "actions": [
      {
       "primitive": "close",
       "role": "washer"
@@ -1258,7 +1266,7 @@
      }
     ],
     "after": [
-     "tray_to_utility"
+     "napkins_into_washer_from_tray"
     ]
    },
    "collect_mugs_on_tray": {
@@ -1269,10 +1277,10 @@
      },
      {
       "primitive": "place_on_top",
-      "role": "nightstand",
+      "role": "bed",
       "xy": [
-       20.56,
-       13.76
+       21.25,
+       13.45
       ]
      },
      {
@@ -1301,7 +1309,7 @@
      }
     ],
     "after": [
-     "start_washer_from_tray"
+     "napkins_into_washer_from_tray"
     ]
    },
    "tray_to_kitchen": {
@@ -1314,7 +1322,7 @@
       "primitive": "place_on_top",
       "role": "storage",
       "xy": [
-       6.55,
+       6.3,
        -1.95
       ]
      }
@@ -1623,13 +1631,14 @@
   },
   "orders": {
    "optimal_tray_late_pie": [
-    "open_dishwasher",
     "tray_to_living_table",
     "load_tray_living",
     "tray_to_utility",
-    "start_washer_from_tray",
+    "napkins_into_washer_from_tray",
+    "start_washer",
     "collect_mugs_on_tray",
     "tray_to_kitchen",
+    "open_dishwasher",
     "load_dishwasher_from_tray",
     "start_pie",
     "unload_and_serve_pie",
@@ -1651,7 +1660,7 @@
   },
   "negative_omissions": {
    "omit_pie_unload": "unload_and_serve_pie",
-   "omit_napkin_wash": "start_washer_from_tray",
+   "omit_napkin_wash": "start_washer",
    "omit_oven_close": "close_oven"
   }
  },

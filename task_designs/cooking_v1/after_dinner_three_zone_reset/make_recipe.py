@@ -109,7 +109,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'after_dinner_three_zone_reset',
-        'instance_id': 'after_dinner_three_zone_reset_seed0_r2',
+        'instance_id': 'after_dinner_three_zone_reset_seed0_r3',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -131,6 +131,7 @@ def build_recipe() -> dict:
             'washer': 'washer_ynwamu_0',
             # children's bedroom (childs_room_1)
             'nightstand': 'nightstand_wbxekb_2',
+            'bed': 'bed_rrcvaq_1',
             # doors on the routes
             'utility_entry_door': 'sliding_door_tprpvb_12',
             'utility_exit_door': 'sliding_door_tprpvb_7',
@@ -386,28 +387,33 @@ def build_reference_plan() -> dict:
                         {'primitive': 'place_on_top', 'role': 'utility_counter', 'xy': [21.95, 1.20]}],
             'after': ['load_tray_living'],
         },
-        'start_washer_from_tray': {
+        'napkins_into_washer_from_tray': {
             'actions': [{'primitive': 'open', 'role': 'washer'},
                         {'primitive': 'grasp', 'role': 'napkin1'},
                         {'primitive': 'place_inside', 'role': 'washer'},
                         {'primitive': 'grasp', 'role': 'napkin2'},
-                        {'primitive': 'place_inside', 'role': 'washer'},
-                        {'primitive': 'close', 'role': 'washer'},
-                        {'primitive': 'toggle_on', 'role': 'washer'}],
+                        {'primitive': 'place_inside', 'role': 'washer'}],
             'after': ['tray_to_utility'],
+        },
+        'start_washer': {
+            'actions': [{'primitive': 'close', 'role': 'washer'},
+                        {'primitive': 'toggle_on', 'role': 'washer'}],
+            'after': ['napkins_into_washer_from_tray'],
         },
         'collect_mugs_on_tray': {
             'actions': [{'primitive': 'grasp', 'role': 'tray'},
-                        {'primitive': 'place_on_top', 'role': 'nightstand', 'xy': [20.56, 13.76]},
+                        # r3: the 48 cm nightstand next to the bed left tray items touching the bed and
+                        # they stayed behind when the tray was lifted; the bed top is wide and free
+                        {'primitive': 'place_on_top', 'role': 'bed', 'xy': [21.25, 13.45]},
                         {'primitive': 'grasp', 'role': 'mug1'},
                         {'primitive': 'place_on_top', 'role': 'tray', 'uv': TRAY_SLOTS['mug1']},
                         {'primitive': 'grasp', 'role': 'mug2'},
                         {'primitive': 'place_on_top', 'role': 'tray', 'uv': TRAY_SLOTS['mug2']}],
-            'after': ['start_washer_from_tray'],
+            'after': ['napkins_into_washer_from_tray'],
         },
         'tray_to_kitchen': {
             'actions': [{'primitive': 'grasp', 'role': 'tray'},
-                        {'primitive': 'place_on_top', 'role': 'storage', 'xy': [6.55, -1.95]}],
+                        {'primitive': 'place_on_top', 'role': 'storage', 'xy': [6.30, -1.95]}],
             'after': ['collect_mugs_on_tray'],
         },
         'load_dishwasher_from_tray': {
@@ -479,8 +485,10 @@ def build_reference_plan() -> dict:
     }
     orders = {
         'optimal_tray_late_pie': [
-            'open_dishwasher', 'tray_to_living_table', 'load_tray_living', 'tray_to_utility',
-            'start_washer_from_tray', 'collect_mugs_on_tray', 'tray_to_kitchen', 'load_dishwasher_from_tray',
+            'tray_to_living_table', 'load_tray_living', 'tray_to_utility',
+            'napkins_into_washer_from_tray', 'start_washer', 'collect_mugs_on_tray', 'tray_to_kitchen',
+            # r3: open right before loading (r1b: opened at the start, found closed after the tour)
+            'open_dishwasher', 'load_dishwasher_from_tray',
             'start_pie', 'unload_and_serve_pie', 'close_oven', 'final_wait_dishes_washed',
         ],
         'habit_sequential': [
@@ -496,7 +504,7 @@ def build_reference_plan() -> dict:
         'orders': orders,
         'negative_omissions': {
             'omit_pie_unload': 'unload_and_serve_pie',      # pie stays in the running oven: burns, not served
-            'omit_napkin_wash': 'start_washer_from_tray',    # napkins never washed
+            'omit_napkin_wash': 'start_washer',              # napkins in the washer, never washed
             'omit_oven_close': 'close_oven',                 # oven door left open
         },
     }
