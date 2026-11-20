@@ -51,6 +51,39 @@ def room_of_points(scene, points):
     out[ok] = torch.as_tensor(ins)[row[ok], col[ok]].long()
     return out
 
+
+# rc1 (benchmark side, 2026-11-20): room lookup on the scene's full-resolution (0.01 m) instance layout instead of the
+# 0.1 m resized SegmentationMap, whose wall-side cells can carry the neighbouring room's id (v12b T2 cabinet case).
+SAME_ROOM_WIDE_M = 3.0          # second search radius for a standing cell in the target's room
+DETOUR_RATIO, DETOUR_MIN_M = 3.0, 30.0   # no same-room cell: refuse a route longer than both
+_FINE_ROOM_MAPS = {}
+
+
+def fine_room_of_points(scene, points, floor=0):
+    """Room-instance id (0 = no room) of each world xy point from layout/floor_insseg_<floor>.png at its native
+    resolution (SegmentationMap.map_default_resolution, 0.01 m), same centring as SegmentationMap. None if missing."""
+    try:
+        seg = scene.seg_map
+        res = float(seg.map_default_resolution)
+        path = os.path.join(seg.scene_dir, 'layout', f'floor_insseg_{int(floor)}.png')
+    except Exception:
+        return None
+    if path not in _FINE_ROOM_MAPS:
+        import cv2
+        img = cv2.imread(path, cv2.IMREAD_GRAYSCALE) if os.path.exists(path) else None
+        _FINE_ROOM_MAPS[path] = img
+    img = _FINE_ROOM_MAPS[path]
+    if img is None:
+        return None
+    import torch
+    xy = torch.as_tensor(points, dtype=torch.float64).reshape(-1, 2)
+    idx = (xy / res + img.shape[0] / 2.0).int()
+    row, col = idx[:, 1].long(), idx[:, 0].long()
+    ok = (row >= 0) & (row < img.shape[0]) & (col >= 0) & (col < img.shape[1])
+    out = torch.zeros(len(xy), dtype=torch.long)
+    out[ok] = torch.as_tensor(img)[row[ok], col[ok]].long()
+    return out
+
 class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
@@ -138,6 +171,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
+        # rc1 articulation_hold: finger contact never toggles switches (requires_closed and explicit toggles unchanged).
+        from .articulation_hold import install_toggle_guard; install_toggle_guard()
         base_z = float(self.robot.get_position_orientation()[0][2])
         floor_z = min(self.env.scene.trav_map.floor_heights, key=lambda z: abs(z-base_z))
         self._base_floor_clearance = base_z-floor_z
@@ -739,37 +774,47 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             # and local manipulation must stay near the selected object.
             points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
             distances=self.torch.linalg.norm(points-hint,dim=1)
-            # v12b (benchmark side): stand in the selected target's room when that room has a connected walkable
-            # cell within the fallback reach, so a target beside an exterior wall or seen through glass is not
-            # approached from the other side of the wall. No such cell (or target on a room boundary, such as a
-            # door): the previous rule applies unchanged.
-            same=room_of_points(self.env.scene,points)
-            target_room=room_of_points(self.env.scene,hint[None])
+            # rc1 (benchmark side): first the v12 rule on all connected cells. If that stance is already in the
+            # selected target's room (0.01 m room layout) it is kept unchanged. Otherwise stand in the target's room:
+            # cells within the fallback reach, then within SAME_ROOM_WIDE_M. No cell of the target's room at all:
+            # the v12 stance is kept, but a route longer than DETOUR_RATIO x the straight distance and DETOUR_MIN_M
+            # is refused below with the existing navigation_unreachable receipt (no detour around the house).
+            def select(cand, dist, bound):
+                within=dist<=self.local_limits.reach_m
+                fallback=None
+                if bool(within.any()):
+                    cand=cand[within];dist=dist[within]
+                    scores=abs(dist-1.25)
+                else:
+                    # The eroded static map can keep the base farther from a deep
+                    # table or a furnished corner than the nominal reach. Stand at
+                    # the closest walkable cell instead of refusing the target;
+                    # the wider bound applies only when no nearer cell exists.
+                    within=dist<=bound
+                    cand=cand[within];dist=dist[within]
+                    if not len(cand):
+                        raise SkillError('navigation_unreachable','No native walkable destination within target reach')
+                    scores=dist
+                    fallback=float(dist.min())
+                near=scores<=scores.min()+trav.map_resolution
+                cand=cand[near]
+                return cand[self.torch.argmin(self.torch.linalg.norm(cand-start,dim=1))],fallback
+            endpoint,reach_fallback=select(points,distances,self.local_limits.fallback_reach_m)
+            rooms=fine_room_of_points(self.env.scene,points,floor)
+            target_room=fine_room_of_points(self.env.scene,hint[None],floor)
             room_filter='not_applied'
-            if same is not None and target_room is not None and int(target_room[0])!=0:
-                mask=(same==int(target_room[0]))
-                if bool((mask & (distances<=self.local_limits.fallback_reach_m)).any()):
-                    points=points[mask];distances=distances[mask];room_filter='same_room'
+            if rooms is not None and target_room is not None and int(target_room[0])!=0:
+                tr=int(target_room[0])
+                if int(fine_room_of_points(self.env.scene,endpoint[None],floor)[0])==tr:
+                    room_filter='kept_v12'
                 else:
                     room_filter='no_cell_in_target_room'
-            within=distances<=self.local_limits.reach_m
-            if bool(within.any()):
-                points=points[within];distances=distances[within]
-                scores=abs(distances-1.25)
-            else:
-                # The eroded static map can keep the base farther from a deep
-                # table or a furnished corner than the nominal reach. Stand at
-                # the closest walkable cell instead of refusing the target;
-                # the wider bound applies only when no nearer cell exists.
-                within=distances<=self.local_limits.fallback_reach_m
-                points=points[within];distances=distances[within]
-                if not len(points):
-                    raise SkillError('navigation_unreachable','No native walkable destination within target reach')
-                scores=distances
-                reach_fallback=float(distances.min())
-            near=scores<=scores.min()+trav.map_resolution
-            points=points[near]
-            endpoint=points[self.torch.argmin(self.torch.linalg.norm(points-start,dim=1))]
+                    for bound,tag in ((self.local_limits.fallback_reach_m,'same_room'),(SAME_ROOM_WIDE_M,'same_room_wide')):
+                        mask=(rooms==tr)&(distances<=bound)
+                        if bool(mask.any()):
+                            endpoint,reach_fallback=select(points[mask],distances[mask],bound)
+                            room_filter=tag
+                            break
             operation=getattr(self,'_local_operation',None)
             if reach_fallback is not None and operation is not None:
                 operation.reach_m=min(self.local_limits.fallback_reach_m,reach_fallback+2*float(trav.map_resolution))
@@ -788,6 +833,12 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             path,length=trav.get_shortest_path(floor,start,endpoint,entire_path=True,robot=self.robot)
             if path is None:
                 raise SkillError('navigation_unreachable','Native pathfinder found no route to the destination')
+            if not floor_click and room_filter=='no_cell_in_target_room':
+                straight=float(self.torch.linalg.norm(hint-start))
+                record.update(detour_check={'path_m':float(length),'straight_m':straight})
+                if float(length)>DETOUR_RATIO*straight and float(length)>DETOUR_MIN_M:
+                    record.update(room_filter='unreachable_detour')
+                    raise SkillError('navigation_unreachable','No native walkable destination within target reach')
             route=[start.tolist(),*path.cpu().tolist(),endpoint.tolist()]
             heading=hint-(start if floor_click and floor_snap is None else endpoint)
             yaw=math.atan2(float(heading[1]),float(heading[0]))

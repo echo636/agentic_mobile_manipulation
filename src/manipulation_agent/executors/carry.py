@@ -276,6 +276,13 @@ class ControlledCarry:
                 info = getattr(obj.states[Open], 'relevant_joints_info', None)
                 operated_open_joints = set(info[1]) if info and info[1] else ()
         self._active_open_joints = operated_open_joints
+        # rc1 articulation_hold (benchmark side): an explicit open releases a door held closed by an earlier close;
+        # contact physics can no longer push a closed door open or finger contact re-toggle a switch.
+        from .articulation_hold import lock_closed, unlock, install_toggle_guard
+        install_toggle_guard()
+        hold_record = {}
+        if primitive == 'open':
+            hold_record['released'] = unlock(self, obj)
         try:
             # Apply the native annotated opening to the selected panel; close fully.
             if open_goal is not None:
@@ -288,6 +295,8 @@ class ControlledCarry:
             # Position setters retain joint velocities. A closed door must not
             # inherit the preceding swing; subsequent motion remains native physics.
             if state is Open:obj.keep_still()
+            if primitive == 'close':
+                hold_record['held'] = lock_closed(self, obj)
             self._relocate_container_payload(payload)
             transported_particles=moved_particles()
             # A door setter moves only its articulated support frames. Leave
@@ -315,7 +324,7 @@ class ControlledCarry:
         # transported. Unmoved background material is not an open/close
         # postcondition and is never restored to conceal its real settling.
         verify_particles(self.env.scene,transported_particles)
-        report('passed',payload=[child.name for child,_,_ in payload])
+        report('passed',payload=[child.name for child,_,_ in payload],**({'articulation_hold':hold_record} if hold_record else {}))
         return {'primitive':primitive,'implementation':'official_state_setter_with_link_payload',
                 'fully_open_or_closed':primitive=='close','opening_policy':'native_joint_metadata' if primitive=='open' else None,
                 **opening_feedback,
