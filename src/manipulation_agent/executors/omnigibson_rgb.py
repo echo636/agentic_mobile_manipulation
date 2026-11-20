@@ -577,6 +577,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             with self.og.sim.render_on_step(False):
                 with component(self,'physics_and_metrics'):super()._step(action)
             self._restore_closed_doors(closed_doors)
+            # rc1 A6: registered carrier contents follow the held carrier, not friction (carrier_registry.py).
+            from . import carrier_registry as _CR
+            _CR.pin_contents(self)
         finally:
             self.og.sim._render_on_step = implicit_render
         try:

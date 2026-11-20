@@ -65,7 +65,12 @@ class ControlledCarry:
             return {'primitive': 'grasp', 'postcondition': 'selected_object_already_held'}
         arm = self.primitives.arm
         original = obj.get_position_orientation()
-        dependencies = self._grasp_carried_dependencies(obj, self._grasp_dependencies(obj))
+        # rc1 A6 (carrier_registry.py): grasping a registered item on its own takes it off its carrier; grasping a
+        # carrier carries its registered contents (no external-contact filter), unregistered ones keep the v12b rule.
+        from . import carrier_registry as CR
+        CR.unregister_on_grasp(self, obj)
+        registered = CR.grasp_contents(self, obj)
+        dependencies = self._grasp_carried_dependencies(obj, self._grasp_dependencies(obj), registered)
         contents = [(child, T.relative_pose_transform(*child.get_position_orientation(), *original))
                     for child, _, _ in dependencies]
         particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
@@ -76,6 +81,7 @@ class ControlledCarry:
         relocate_particles(self.env.scene, particles)
         self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
         self._grasped_payload = (obj, list(dependencies), list(contents))
+        self._grasped_registered_ids = {id(child) for child, _, _ in registered}
         if max_steps > 0:
             self._step(self.primitives._empty_action())
         if self._get_held() is not obj:
@@ -89,15 +95,21 @@ class ControlledCarry:
                 'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': True,
                 'payload_transfer': 'once_at_grasp', 'subsequent_motion': 'native_physics'}
 
-    def _grasp_carried_dependencies(self, obj, dependencies):
-        """Carry an OnTop rider only when the grasped assembly alone supports it."""
-        if not dependencies or not hasattr(self, '_placement_contacts') or not hasattr(self, 'robot'):
-            return list(dependencies)
+    def _grasp_carried_dependencies(self, obj, dependencies, registered=()):
+        """Carry an OnTop rider only when the grasped assembly alone supports it.
+        rc1 A6: `registered` contents (carrier_registry) are always carried and count as assembly members; the
+        external-contact filter applies only to the unregistered ones."""
+        registered = list(registered)
+        reg_ids = {id(child) for child, _, _ in registered}
+        dependencies = [d for d in dependencies if id(d[0]) not in reg_ids]
+        if (not dependencies and not registered) or not hasattr(self, '_placement_contacts') or not hasattr(self, 'robot'):
+            return list(dependencies) + registered
         kept, left = list(dependencies), []
-        rejected = set()
+        rejected = set(reg_ids)
         while True:
-            kept += self._contact_riders(obj, kept, rejected)
-            members = [obj, *[child for child, _, _ in kept]]
+            kept += self._contact_riders(obj, kept + registered, rejected)
+            kept = [d for d in kept if id(d[0]) not in reg_ids]
+            members = [obj, *[child for child, _, _ in kept], *[child for child, _, _ in registered]]
             allowed = {link.prim_path for body in (*members, self.robot) for link in body.links.values()}
             ids = {id(body) for body in members}
             keep, drop = [], []
@@ -117,7 +129,7 @@ class ControlledCarry:
                                left=[{'object': child.name, 'parent': parent.name, 'relation': kind,
                                       'external_contacts': sorted(external)[:12]}
                                      for child, parent, kind, external in left])
-        return kept
+        return kept + registered
 
     def _rider_candidates(self, members):
         """Loose rigid bodies whose AABB meets the assembly's AABB (+2 cm)."""
@@ -222,16 +234,22 @@ class ControlledCarry:
             self.env.scene,[held,*[child for child,_ in contents]],include_supported=True))
         try:
             if held.prim_type == PrimType.CLOTH and primitive in {'place_on_top', 'place_next_to'}:
-                return self._place_cloth_surface(primitive, held, target, max_steps, point,
-                                                 yaw_degrees, roll_degrees=roll_degrees)
-            if primitive=='place_inside':
-                return self._checked_place_inside(target,max_steps,point=point)
-            if primitive=='place_under':
-                return self._checked_place_under(target,max_steps)
-            if primitive=='place_on_top':
-                return self._checked_place_on_top(target,max_steps,point,yaw_degrees,
-                                                   roll_degrees=roll_degrees)
-            return self._checked_place_next_to(target,max_steps,point,yaw_degrees)
+                result = self._place_cloth_surface(primitive, held, target, max_steps, point,
+                                                   yaw_degrees, roll_degrees=roll_degrees)
+            elif primitive=='place_inside':
+                result = self._checked_place_inside(target,max_steps,point=point)
+            elif primitive=='place_under':
+                result = self._checked_place_under(target,max_steps)
+            elif primitive=='place_on_top':
+                result = self._checked_place_on_top(target,max_steps,point,yaw_degrees,
+                                                    roll_degrees=roll_degrees)
+            else:
+                result = self._checked_place_next_to(target,max_steps,point,yaw_degrees)
+            if primitive in {'place_on_top','place_inside'}:
+                # rc1 A6: a passed placement onto a movable object registers held -> target (carrier_registry.py).
+                from . import carrier_registry as CR
+                CR.register_after_place(self, held, target, primitive)
+            return result
         finally:
             self._placement_particle_payload=(None,[])
 
@@ -511,6 +529,7 @@ class ControlledCarry:
 
     def _carry_detach(self):
         self._grasped_payload = None
+        self._grasped_registered_ids = None
         for arm in self.robot.arm_names:
             self.robot.release_grasp_immediately(arm=arm)
 
