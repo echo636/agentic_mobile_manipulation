@@ -82,7 +82,7 @@ def apply_name(result, memory, name_here):
     if name_here is None or memory is None or not isinstance(result, dict):
         return result
     if not isinstance(name_here, str) or not name_here.strip() or len(name_here.strip()) > NAME_MAX:
-        result['place_name'] = {'recorded': False, 'message': 'The action was carried out; the name was not recorded. ' + NAME_HELP}
+        result['place_name'] = {'recorded': False, 'message': 'The name was not recorded. ' + NAME_HELP}
         return result
     error = result.get('error') if isinstance(result.get('error'), dict) else {}
     if error.get('action_step_used') is False:
@@ -91,3 +91,28 @@ def apply_name(result, memory, name_here):
     result['place_name'] = {'recorded': not note.get('ignored'), 'place': note.get('location'),
                             'name': note.get('name'), 'message': note.get('message')}
     return result
+
+
+def load_memory(path):
+    """The proxy state_memory saved by save_memory (rolling handoffs restart the proxy), or None."""
+    import pickle
+    from pathlib import Path
+    try:
+        with Path(path).open('rb') as stream:
+            return pickle.load(stream)
+    except Exception:
+        return None
+
+
+def save_memory(memory, path):
+    import os
+    import pickle
+    from pathlib import Path
+    path = Path(path)
+    tmp = path.with_name(path.name + '.tmp')
+    try:
+        with tmp.open('wb') as stream:
+            pickle.dump(memory, stream)
+        os.replace(tmp, path)
+    except Exception:
+        pass

@@ -189,3 +189,28 @@ def test_install_and_perform_return(monkeypatch):
     monkeypatch.setattr(PR, 'return_to_pose', unreachable)
     out = RPR.perform_return(h, 2, 0)
     assert out['ok'] is False and 'Use navigate_to on what you see' in out['error']['message']
+
+
+# ---------------------------------------------------------------- proxy memory is the model-visible one (2026-11-21 probe)
+def test_return_to_moves_proxy_memory_and_memory_survives_restart(tmp_path):
+    from manipulation_agent.agent.place_options import load_memory, save_memory
+    m = StateMemory()
+    m.observe('act', nav_args(1), nav_result(1)); apply_name(nav_result(1), m, 'guest room')
+    for rev in (2, 3):
+        m.observe('act', nav_args(rev), nav_result(rev))
+    fwd, obs, _, early = prepare('act', {'primitive': 'return_to', 'target': None, 'revision': 3, 'place': 'guest room'}, m, ret=True)
+    res = nav_result(4, travel_m=15.0); res['effect']['primitive'] = 'return_to'      # the bridge receipt says return_to
+    m.observe('act', obs, res)
+    assert m.current_location == 'loc_1'
+    path = tmp_path / 'place_state_memory.pkl'
+    save_memory(m, path)
+    again = load_memory(path)                                                        # a restarted proxy
+    assert again.current_location == 'loc_1' and again.public_view() == m.public_view()
+    assert again.resolve_place('guest room') == ('loc_1', 4)
+    assert load_memory(tmp_path / 'missing.pkl') is None
+
+
+def test_bad_name_message_does_not_claim_the_action():
+    m = StateMemory(); res = {'ok': False, 'error': {'code': 'invalid_arguments', 'message': 'x'}}
+    apply_name(res, m, 'y' * 41)
+    assert res['place_name']['message'].startswith('The name was not recorded.')
