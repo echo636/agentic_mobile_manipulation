@@ -420,5 +420,61 @@ class TimedProcessesTests(unittest.TestCase):
             b.run_action('navigate_to', travel_m=60.0)
             self.assertFalse(b.timed.is_overcooked('sear_steak', 'steak'))
 
+    def test_switch_off_when_complete_validation(self):
+        spec = _sample_spec()
+        spec['timed_processes'][1]['switch_off_when_complete'] = True
+        self.assertEqual(validate_spec(spec)['status'], 'passed')
+        for mutate, msg in (
+                (lambda r: r.__setitem__('switch_off_when_complete', 'yes'), 'must be boolean'),
+                (lambda r: r.update(overcook_after_seconds=30.0, overcooked_message='Burnt.'), 'cannot both'),
+                (lambda r: r.__setitem__('require_toggled_on', False), 'requires require_toggled_on'),
+        ):
+            spec = _sample_spec()
+            spec['timed_processes'][1]['switch_off_when_complete'] = True
+            mutate(spec['timed_processes'][1])
+            with self.assertRaisesRegex(ValueError, msg):
+                validate_timed_processes(spec)
+        # Without the field nothing switches itself off (T1-T7 behaviour).
+        with tempfile.TemporaryDirectory() as tmp:
+            b = _MockBackend(_sample_spec(), tmp)
+            dw = b.mock_objects['dishwasher_0']
+            b.mock_objects['cup_1'].mock_relations['Inside'].add(dw)
+            dw.mock_states['ToggledOn'] = True
+            b.run_action('wait', wait_s=60.0)
+            self.assertTrue(b.timed.is_completed('wash_dishes', 'cup1'))
+            self.assertTrue(dw.mock_states['ToggledOn'])
+
+    def test_switch_off_when_complete_stops_appliance_after_the_running_load(self):
+        spec = _sample_spec()
+        spec['roles']['cup2'] = 'cup_2'
+        rule = spec['timed_processes'][1]
+        rule['items'] = ['cup1', 'cup2']
+        rule['switch_off_when_complete'] = True
+        with tempfile.TemporaryDirectory() as tmp:
+            b = _MockBackend(spec, tmp)
+            dw = b.mock_objects['dishwasher_0']
+            cup1, cup2 = b.mock_objects['cup_1'], b.mock_objects['cup_2']
+            cup1.mock_relations['Inside'].add(dw)          # cup2 forgotten outside
+            b.run_action('toggle_on', selected='dishwasher_0',
+                         body=lambda: dw.mock_states.__setitem__('ToggledOn', True))
+            out = b.run_action('wait', wait_s=40.0)
+            self.assertTrue(b.timed.is_completed('wash_dishes', 'cup1'))
+            self.assertFalse(dw.mock_states['ToggledOn'])
+            self.assertIn('dishwasher finished its cycle', out['public_process']['message'])
+            self.assertEqual(b.timed.summary(b)['auto_switched_off'][0]['process'], 'wash_dishes')
+            # The forgotten cup needs a second run; the finished one is not re-counted.
+            cup2.mock_relations['Inside'].add(dw)
+            b.run_action('toggle_on', selected='dishwasher_0',
+                         body=lambda: dw.mock_states.__setitem__('ToggledOn', True))
+            b.run_action('wait', wait_s=20.0)
+            self.assertTrue(dw.mock_states['ToggledOn'])
+            self.assertFalse(b.timed.is_completed('wash_dishes', 'cup2'))
+            b.run_action('wait', wait_s=20.0)
+            self.assertTrue(b.timed.is_completed('wash_dishes', 'cup2'))
+            self.assertFalse(dw.mock_states['ToggledOn'])
+            b.run_action('wait', wait_s=60.0)
+            self.assertAlmostEqual(b.timed.elapsed['wash_dishes']['cup2'], 40.0, places=3)
+
+
 if __name__ == '__main__':
     unittest.main()

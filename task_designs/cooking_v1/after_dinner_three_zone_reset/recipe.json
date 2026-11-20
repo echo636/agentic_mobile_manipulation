@@ -1,0 +1,1610 @@
+{
+ "schema_version": 3,
+ "id": "after_dinner_three_zone_reset",
+ "instance_id": "after_dinner_three_zone_reset_seed0_r0",
+ "status": "complete_recipe_physics_pending",
+ "benchmark_ready": false,
+ "official_submission_eligible": false,
+ "base": {
+  "task": "preparing_lunch_box",
+  "instance": 301,
+  "seed": 0
+ },
+ "roles": {
+  "island": "bar_udatjt_0",
+  "storage": "countertop_kelzer_0",
+  "fridge": "fridge_dszchb_0",
+  "oven": "oven_ffitak_0",
+  "dishwasher": "dishwasher_ynrhuk_0",
+  "cabinet": "bottom_cabinet_fancyy_0",
+  "floor": "floors_qgmjvd_0",
+  "table": "coffee_table_rlsebe_0",
+  "utility_counter": "countertop_fjkase_0",
+  "washer": "washer_ynwamu_0",
+  "nightstand": "nightstand_wbxekb_2",
+  "utility_entry_door": "sliding_door_tprpvb_12",
+  "utility_exit_door": "sliding_door_tprpvb_7",
+  "bedroom_door": "sliding_door_tprpvb_1",
+  "tray": "c4_tray",
+  "pie": "c4_pie",
+  "bowl1": "c4_bowl1",
+  "bowl2": "c4_bowl2",
+  "glass1": "c4_glass1",
+  "glass2": "c4_glass2",
+  "mug1": "c4_mug1",
+  "mug2": "c4_mug2",
+  "napkin1": "c4_napkin1",
+  "napkin2": "c4_napkin2",
+  "unused_tea": "bottle_of_tea_208",
+  "unused_board": "chopping_board_211",
+  "unused_half_apple_a": "half_apple_212",
+  "unused_half_apple_b": "half_apple_213",
+  "unused_cookie": "chocolate_chip_cookie_207",
+  "unused_sandwich": "club_sandwich_209",
+  "unused_box": "packing_box_210"
+ },
+ "scene_exclusions": [
+  "water_glass_bbpraa_0",
+  "table_lamp_uupwiq_0"
+ ],
+ "construction_asset_scales": [],
+ "asset_imports": [
+  {
+   "name": "c4_glass1",
+   "source_task": "setting_the_table",
+   "source_object": "water_glass_bbpraa_0",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    134.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.25,
+    1.25,
+    1.15
+   ]
+  },
+  {
+   "name": "c4_glass2",
+   "source_task": "setting_the_table",
+   "source_object": "water_glass_bbpraa_0",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    137.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.25,
+    1.25,
+    1.15
+   ]
+  }
+ ],
+ "native_assets": [
+  {
+   "name": "c4_tray",
+   "category": "tray",
+   "model": "coqeme",
+   "usd_sha256": "f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd",
+   "prim_type": 0,
+   "position": [
+    95.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    3.38,
+    2.16,
+    1.5
+   ]
+  },
+  {
+   "name": "c4_pie",
+   "category": "apple_pie",
+   "model": "ejrgdj",
+   "usd_sha256": "7aac29938fc20a2163025b318bc37b916ed3aeb91f765bca7e9a8143582d6e30",
+   "prim_type": 0,
+   "position": [
+    98.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.4,
+    1.4,
+    1.4
+   ]
+  },
+  {
+   "name": "c4_bowl1",
+   "category": "bowl",
+   "model": "ajzltc",
+   "usd_sha256": "9b6bb0e23e537cccaa2bc372997bceb1d0e7cc4f6a520119de03ea75b1a739ad",
+   "prim_type": 0,
+   "position": [
+    101.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.3,
+    1.3,
+    1.3
+   ]
+  },
+  {
+   "name": "c4_bowl2",
+   "category": "bowl",
+   "model": "ajzltc",
+   "usd_sha256": "9b6bb0e23e537cccaa2bc372997bceb1d0e7cc4f6a520119de03ea75b1a739ad",
+   "prim_type": 0,
+   "position": [
+    104.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.3,
+    1.3,
+    1.3
+   ]
+  },
+  {
+   "name": "c4_mug1",
+   "category": "mug",
+   "model": "ppdqbj",
+   "usd_sha256": "13d62119f1ef0d3e44f105335d2a967b98e727f2ebf02d5e6524035767b45efa",
+   "prim_type": 0,
+   "position": [
+    107.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "c4_mug2",
+   "category": "mug",
+   "model": "ppdqbj",
+   "usd_sha256": "13d62119f1ef0d3e44f105335d2a967b98e727f2ebf02d5e6524035767b45efa",
+   "prim_type": 0,
+   "position": [
+    110.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "c4_napkin1",
+   "category": "rag",
+   "model": "oocmed",
+   "usd_sha256": "732677fea4ca1e96c8b71f843249e2b5740287542aae48245871d7a6daeb7068",
+   "prim_type": 0,
+   "position": [
+    113.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    0.5,
+    0.5,
+    10.0
+   ]
+  },
+  {
+   "name": "c4_napkin2",
+   "category": "rag",
+   "model": "oocmed",
+   "usd_sha256": "732677fea4ca1e96c8b71f843249e2b5740287542aae48245871d7a6daeb7068",
+   "prim_type": 0,
+   "position": [
+    116.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    0.5,
+    0.5,
+    10.0
+   ]
+  }
+ ],
+ "timed_processes": [
+  {
+   "id": "wash_dishes",
+   "appliance": "dishwasher",
+   "items": [
+    "bowl1",
+    "bowl2",
+    "glass1",
+    "glass2",
+    "mug1",
+    "mug2"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 300.0,
+   "switch_off_when_complete": true,
+   "running_message": "The dishwasher is running a wash cycle.",
+   "completed_message": "The dishwasher beeped: the wash cycle is finished and it has switched itself off.",
+   "stopped_early_message": "The dishwasher stopped before the wash cycle finished."
+  },
+  {
+   "id": "wash_napkins",
+   "appliance": "washer",
+   "items": [
+    "napkin1",
+    "napkin2"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 240.0,
+   "switch_off_when_complete": true,
+   "running_message": "The washing machine is running a wash cycle.",
+   "completed_message": "The washing machine beeped: the wash cycle is finished and it has switched itself off.",
+   "stopped_early_message": "The washing machine stopped before the wash cycle finished."
+  },
+  {
+   "id": "warm_pie",
+   "appliance": "oven",
+   "items": [
+    "pie"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 180.0,
+   "overcook_after_seconds": 120.0,
+   "running_message": "The oven is on; the pie inside is warming.",
+   "completed_message": "The oven timer beeped: the pie is warm.",
+   "stopped_early_message": "The oven stopped before the pie was warm.",
+   "overcooked_message": "A burning smell comes from the oven: the apple pie has burnt."
+  }
+ ],
+ "initial_layout": [
+  {
+   "object": "utility_entry_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "utility_exit_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "bedroom_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "fridge",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "unused_board",
+   "target": "fridge",
+   "place_on_support": true,
+   "xy": [
+    7.7,
+    -1.85
+   ],
+   "support_probe_height": 1.0,
+   "initial_relation": "Inside",
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_tea",
+   "target": "fridge",
+   "place_on_support": true,
+   "xy": [
+    7.98,
+    -1.85
+   ],
+   "support_probe_height": 1.0,
+   "initial_relation": "Inside"
+  },
+  {
+   "object": "fridge",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "unused_half_apple_a",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.22,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_half_apple_b",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.42,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_cookie",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.62,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_sandwich",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.86,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_box",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    9.22,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "cabinet",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "pie",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    6.3,
+    0.05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "tray",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    7.0,
+    0.08
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "bowl1",
+   "target": "table",
+   "place_on_support": true,
+   "xy": [
+    12.22,
+    0.3
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "bowl2",
+   "target": "table",
+   "place_on_support": true,
+   "xy": [
+    12.22,
+    0.61
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "glass1",
+   "target": "table",
+   "place_on_support": true,
+   "xy": [
+    12.22,
+    0.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "glass2",
+   "target": "table",
+   "place_on_support": true,
+   "xy": [
+    12.47,
+    0.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "napkin1",
+   "target": "table",
+   "place_on_support": true,
+   "xy": [
+    12.47,
+    0.3
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "napkin2",
+   "target": "table",
+   "place_on_support": true,
+   "xy": [
+    12.47,
+    0.61
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "mug1",
+   "target": "nightstand",
+   "place_on_support": true,
+   "xy": [
+    20.44,
+    14.14
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "mug2",
+   "target": "nightstand",
+   "place_on_support": true,
+   "xy": [
+    20.66,
+    14.14
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "dishwasher",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "dishwasher",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "washer",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "washer",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "oven",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "oven",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  }
+ ],
+ "initial_assertions": {
+  "bowl1_initial": "initial_bowl1_OnTop",
+  "bowl2_initial": "initial_bowl2_OnTop",
+  "glass1_initial": "initial_glass1_OnTop",
+  "glass2_initial": "initial_glass2_OnTop",
+  "mug1_initial": "initial_mug1_OnTop",
+  "mug2_initial": "initial_mug2_OnTop",
+  "napkin1_initial": "initial_napkin1_OnTop",
+  "napkin2_initial": "initial_napkin2_OnTop",
+  "pie_on_island": "initial_pie_OnTop",
+  "tray_on_island": "initial_tray_OnTop",
+  "dishwasher_closed": {
+   "not": "dishwasher_open"
+  },
+  "washer_closed": {
+   "not": "washer_open"
+  },
+  "oven_closed": {
+   "not": "oven_open"
+  },
+  "oven_off": {
+   "not": "oven_on"
+  },
+  "dishwasher_off": {
+   "not": "dishwasher_on"
+  },
+  "washer_off": {
+   "not": "washer_on"
+  },
+  "fridge_closed": {
+   "not": "fridge_open"
+  },
+  "hand_empty": "hand_empty"
+ },
+ "future_roles": [],
+ "replacements": [],
+ "public_instruction": "After dinner, wash the used dishes and the cloth napkins, warm the apple pie and serve it on the living-room coffee table, and leave the appliances off and closed.",
+ "public_context": [
+  "Wash all six used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls and two drinking glasses on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
+  "Wash both cloth napkins from the living-room coffee table in the white washing machine under the counter in the south-east utility room until its wash cycle has finished. A cycle takes about 4 minutes once the door is closed and it is switched on, and the machine switches itself off at the end. The napkins may stay in the washing machine afterwards.",
+  "Warm the apple pie from the kitchen island in the black built-in oven to the right of the refrigerator and serve it on the living-room coffee table (directly on the table or on the serving tray resting on the table). Warming takes about 3 minutes with the oven door closed and the oven switched on. The oven does not switch itself off: if the warm pie stays in the running oven for more than about 2 more minutes it burns, and a burnt pie cannot be served.",
+  "Leave the oven switched off and the oven, dishwasher and washing machine doors closed. A 48 x 48 cm serving tray is available on the kitchen island.",
+  "Finish with no object held."
+ ],
+ "requirements": [
+  {
+   "id": "dishes_washed",
+   "text": "Wash all six used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls and two drinking glasses on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
+   "terminal": [
+    "dishes_washed"
+   ]
+  },
+  {
+   "id": "napkins_washed",
+   "text": "Wash both cloth napkins from the living-room coffee table in the white washing machine under the counter in the south-east utility room until its wash cycle has finished. A cycle takes about 4 minutes once the door is closed and it is switched on, and the machine switches itself off at the end. The napkins may stay in the washing machine afterwards.",
+   "terminal": [
+    "napkins_washed"
+   ]
+  },
+  {
+   "id": "pie_served",
+   "text": "Warm the apple pie from the kitchen island in the black built-in oven to the right of the refrigerator and serve it on the living-room coffee table (directly on the table or on the serving tray resting on the table). Warming takes about 3 minutes with the oven door closed and the oven switched on. The oven does not switch itself off: if the warm pie stays in the running oven for more than about 2 more minutes it burns, and a burnt pie cannot be served.",
+   "terminal": [
+    "pie_served"
+   ]
+  },
+  {
+   "id": "appliances_safe",
+   "text": "Leave the oven switched off and the oven, dishwasher and washing machine doors closed. A 48 x 48 cm serving tray is available on the kitchen island.",
+   "terminal": [
+    "appliances_safe"
+   ]
+  },
+  {
+   "id": "hand_empty",
+   "text": "Finish with no object held.",
+   "terminal": [
+    "hand_empty"
+   ]
+  }
+ ],
+ "evaluation": {
+  "predicates": {
+   "bowl1_washed": {
+    "object": "bowl1",
+    "state": "ProcessComplete",
+    "process": "wash_dishes"
+   },
+   "bowl2_washed": {
+    "object": "bowl2",
+    "state": "ProcessComplete",
+    "process": "wash_dishes"
+   },
+   "glass1_washed": {
+    "object": "glass1",
+    "state": "ProcessComplete",
+    "process": "wash_dishes"
+   },
+   "glass2_washed": {
+    "object": "glass2",
+    "state": "ProcessComplete",
+    "process": "wash_dishes"
+   },
+   "mug1_washed": {
+    "object": "mug1",
+    "state": "ProcessComplete",
+    "process": "wash_dishes"
+   },
+   "mug2_washed": {
+    "object": "mug2",
+    "state": "ProcessComplete",
+    "process": "wash_dishes"
+   },
+   "napkin1_washed": {
+    "object": "napkin1",
+    "state": "ProcessComplete",
+    "process": "wash_napkins"
+   },
+   "napkin2_washed": {
+    "object": "napkin2",
+    "state": "ProcessComplete",
+    "process": "wash_napkins"
+   },
+   "pie_warmed": {
+    "object": "pie",
+    "state": "ProcessComplete",
+    "process": "warm_pie"
+   },
+   "pie_overcooked": {
+    "object": "pie",
+    "state": "ProcessOvercooked",
+    "process": "warm_pie"
+   },
+   "pie_ontop_table": {
+    "object": "pie",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "pie_ontop_tray": {
+    "object": "pie",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "tray_ontop_table": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "bowl1_inside_dishwasher": {
+    "object": "bowl1",
+    "state": "Inside",
+    "target": "dishwasher"
+   },
+   "bowl2_inside_dishwasher": {
+    "object": "bowl2",
+    "state": "Inside",
+    "target": "dishwasher"
+   },
+   "glass1_inside_dishwasher": {
+    "object": "glass1",
+    "state": "Inside",
+    "target": "dishwasher"
+   },
+   "glass2_inside_dishwasher": {
+    "object": "glass2",
+    "state": "Inside",
+    "target": "dishwasher"
+   },
+   "mug1_inside_dishwasher": {
+    "object": "mug1",
+    "state": "Inside",
+    "target": "dishwasher"
+   },
+   "mug2_inside_dishwasher": {
+    "object": "mug2",
+    "state": "Inside",
+    "target": "dishwasher"
+   },
+   "napkin1_inside_washer": {
+    "object": "napkin1",
+    "state": "Inside",
+    "target": "washer"
+   },
+   "napkin2_inside_washer": {
+    "object": "napkin2",
+    "state": "Inside",
+    "target": "washer"
+   },
+   "bowl1_ontop_tray": {
+    "object": "bowl1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "bowl2_ontop_tray": {
+    "object": "bowl2",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "glass1_ontop_tray": {
+    "object": "glass1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "glass2_ontop_tray": {
+    "object": "glass2",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "mug1_ontop_tray": {
+    "object": "mug1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "mug2_ontop_tray": {
+    "object": "mug2",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "napkin1_ontop_tray": {
+    "object": "napkin1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "napkin2_ontop_tray": {
+    "object": "napkin2",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "dishwasher_open": {
+    "object": "dishwasher",
+    "state": "Open"
+   },
+   "washer_open": {
+    "object": "washer",
+    "state": "Open"
+   },
+   "oven_open": {
+    "object": "oven",
+    "state": "Open"
+   },
+   "fridge_open": {
+    "object": "fridge",
+    "state": "Open"
+   },
+   "oven_on": {
+    "object": "oven",
+    "state": "ToggledOn"
+   },
+   "dishwasher_on": {
+    "object": "dishwasher",
+    "state": "ToggledOn"
+   },
+   "washer_on": {
+    "object": "washer",
+    "state": "ToggledOn"
+   },
+   "hand_empty": {
+    "object": "pie",
+    "state": "HandEmpty"
+   },
+   "initial_bowl1_OnTop": {
+    "object": "bowl1",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "initial_bowl2_OnTop": {
+    "object": "bowl2",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "initial_glass1_OnTop": {
+    "object": "glass1",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "initial_glass2_OnTop": {
+    "object": "glass2",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "initial_napkin1_OnTop": {
+    "object": "napkin1",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "initial_napkin2_OnTop": {
+    "object": "napkin2",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "initial_mug1_OnTop": {
+    "object": "mug1",
+    "state": "OnTop",
+    "target": "nightstand"
+   },
+   "initial_mug2_OnTop": {
+    "object": "mug2",
+    "state": "OnTop",
+    "target": "nightstand"
+   },
+   "initial_pie_OnTop": {
+    "object": "pie",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_tray_OnTop": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "island"
+   }
+  },
+  "terminal": {
+   "dishes_washed": {
+    "all": [
+     "bowl1_washed",
+     "bowl2_washed",
+     "glass1_washed",
+     "glass2_washed",
+     "mug1_washed",
+     "mug2_washed"
+    ]
+   },
+   "napkins_washed": {
+    "all": [
+     "napkin1_washed",
+     "napkin2_washed"
+    ]
+   },
+   "pie_served": {
+    "all": [
+     "pie_warmed",
+     {
+      "not": "pie_overcooked"
+     },
+     {
+      "any": [
+       "pie_ontop_table",
+       {
+        "all": [
+         "pie_ontop_tray",
+         "tray_ontop_table"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "appliances_safe": {
+    "all": [
+     {
+      "not": "oven_on"
+     },
+     {
+      "not": "oven_open"
+     },
+     {
+      "not": "dishwasher_open"
+     },
+     {
+      "not": "washer_open"
+     },
+     {
+      "not": "fridge_open"
+     }
+    ]
+   },
+   "hand_empty": "hand_empty"
+  },
+  "score_type": "custom_joint_terminal_and_public_history_v2"
+ },
+ "acceptance_cases": {
+  "reference_orders": [
+   "optimal_tray_late_pie",
+   "habit_sequential"
+  ],
+  "physical_negative_cases": [
+   "omit_pie_unload",
+   "omit_napkin_wash",
+   "omit_oven_close"
+  ],
+  "fresh_restore_repetitions": 2,
+  "max_reference_action_attempts": 300
+ },
+ "reference_plan": {
+  "kind": "full_workflow",
+  "allow_strategy_variants": true,
+  "phases": {
+   "open_dishwasher": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "dishwasher"
+     }
+    ],
+    "after": []
+   },
+   "tray_to_living_table": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "tray"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "xy": [
+       12.84,
+       0.61
+      ]
+     }
+    ],
+    "after": []
+   },
+   "load_tray_living": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "bowl1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.18,
+       0.27
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "bowl2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.5,
+       0.27
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "napkin1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.82,
+       0.27
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.18,
+       0.73
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.5,
+       0.73
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "napkin2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.82,
+       0.73
+      ]
+     }
+    ],
+    "after": [
+     "tray_to_living_table"
+    ]
+   },
+   "tray_to_utility": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "tray"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "utility_counter",
+      "xy": [
+       21.95,
+       1.2
+      ]
+     }
+    ],
+    "after": [
+     "load_tray_living"
+    ]
+   },
+   "start_washer_from_tray": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "washer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "napkin1"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "washer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "napkin2"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "washer"
+     },
+     {
+      "primitive": "close",
+      "role": "washer"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "washer"
+     }
+    ],
+    "after": [
+     "tray_to_utility"
+    ]
+   },
+   "collect_mugs_on_tray": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "tray"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "nightstand",
+      "xy": [
+       20.56,
+       13.76
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "mug1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.82,
+       0.27
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "mug2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.82,
+       0.73
+      ]
+     }
+    ],
+    "after": [
+     "start_washer_from_tray"
+    ]
+   },
+   "tray_to_kitchen": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "tray"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "storage",
+      "xy": [
+       6.55,
+       -1.95
+      ]
+     }
+    ],
+    "after": [
+     "collect_mugs_on_tray"
+    ]
+   },
+   "load_dishwasher_from_tray": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "bowl1"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "bowl2"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass1"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass2"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "mug1"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "mug2"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "close",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "dishwasher"
+     }
+    ],
+    "after": [
+     "open_dishwasher",
+     "tray_to_kitchen"
+    ]
+   },
+   "dishes_single_trips": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "bowl1"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "bowl2"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass1"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass2"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "mug1"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "grasp",
+      "role": "mug2"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dishwasher"
+     }
+    ],
+    "after": [
+     "open_dishwasher"
+    ]
+   },
+   "start_dishwasher": {
+    "actions": [
+     {
+      "primitive": "close",
+      "role": "dishwasher"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "dishwasher"
+     }
+    ],
+    "after": [
+     "dishes_single_trips"
+    ]
+   },
+   "idle_wait_dishwasher": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "bowl1_washed",
+        "bowl2_washed",
+        "glass1_washed",
+        "glass2_washed",
+        "mug1_washed",
+        "mug2_washed"
+       ]
+      },
+      "seconds": 60.0,
+      "attempts": 8
+     }
+    ],
+    "after": [
+     "start_dishwasher"
+    ]
+   },
+   "napkins_single_trips": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "washer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "napkin1"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "washer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "napkin2"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "washer"
+     },
+     {
+      "primitive": "close",
+      "role": "washer"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "washer"
+     }
+    ],
+    "after": []
+   },
+   "idle_wait_washer": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "napkin1_washed",
+        "napkin2_washed"
+       ]
+      },
+      "seconds": 60.0,
+      "attempts": 8
+     }
+    ],
+    "after": [
+     "napkins_single_trips"
+    ]
+   },
+   "start_pie": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "grasp",
+      "role": "pie"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "oven"
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "oven"
+     }
+    ],
+    "after": []
+   },
+   "unload_and_serve_pie": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "pie_warmed",
+      "seconds": 20.0,
+      "attempts": 15
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "oven"
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "grasp",
+      "role": "pie",
+      "approach_role": "oven"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "xy": [
+       12.4,
+       0.61
+      ]
+     }
+    ],
+    "after": [
+     "start_pie"
+    ]
+   },
+   "close_oven": {
+    "actions": [
+     {
+      "primitive": "close",
+      "role": "oven"
+     }
+    ],
+    "after": [
+     "unload_and_serve_pie"
+    ]
+   },
+   "final_wait_dishes_washed": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "bowl1_washed",
+        "bowl2_washed",
+        "glass1_washed",
+        "glass2_washed",
+        "mug1_washed",
+        "mug2_washed"
+       ]
+      },
+      "seconds": 30.0,
+      "attempts": 20
+     }
+    ],
+    "after": []
+   }
+  },
+  "orders": {
+   "optimal_tray_late_pie": [
+    "open_dishwasher",
+    "tray_to_living_table",
+    "load_tray_living",
+    "tray_to_utility",
+    "start_washer_from_tray",
+    "collect_mugs_on_tray",
+    "tray_to_kitchen",
+    "load_dishwasher_from_tray",
+    "start_pie",
+    "unload_and_serve_pie",
+    "close_oven",
+    "final_wait_dishes_washed"
+   ],
+   "habit_sequential": [
+    "open_dishwasher",
+    "dishes_single_trips",
+    "start_dishwasher",
+    "idle_wait_dishwasher",
+    "napkins_single_trips",
+    "idle_wait_washer",
+    "start_pie",
+    "unload_and_serve_pie",
+    "close_oven",
+    "final_wait_dishes_washed"
+   ]
+  },
+  "negative_omissions": {
+   "omit_pie_unload": "unload_and_serve_pie",
+   "omit_napkin_wash": "start_washer_from_tray",
+   "omit_oven_close": "close_oven"
+  }
+ },
+ "settle_steps": 30
+}

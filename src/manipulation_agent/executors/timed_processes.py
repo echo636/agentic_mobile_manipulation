@@ -26,6 +26,11 @@ native ``Burnt`` is also set when the object has that state). Stoves and ovens k
 food is done; self-stopping appliances (microwave, dishwasher) simply do not declare the field. The
 public text says, like a cook watching the pan, how long until it burns once it is done, and reports
 the burning itself (``overcooked_message``) on the next successful action.
+
+Self-stopping appliances (v4, 2026-11-20, benchmark side, all tiers; off unless declared): with
+``switch_off_when_complete`` the appliance switches itself off as soon as every item running in it has
+finished its cycle (a dishwasher or washing machine ends its programme). Items that were not inside
+during that run are not waited for; they need another run. Mutually exclusive with the overcook window.
 """
 from __future__ import annotations
 
@@ -36,7 +41,7 @@ from typing import Any
 from ..records import now
 from ..runtime.robot_clock import clock_of
 
-VERSION = 'timed_processes_robot_clock_v3_overcook_window'
+VERSION = 'timed_processes_robot_clock_v4_auto_off'
 ALLOWED_CONTAINMENT = frozenset({'Inside', 'OnTop'})
 ALLOWED_OBJECT_STATES = frozenset({None, 'Cooked'})
 
@@ -89,6 +94,13 @@ def validate_timed_processes(spec: dict[str, Any]) -> None:
                 raise ValueError(f'timed_process {pid} with overcook_after_seconds needs a nonempty overcooked_message')
         elif 'overcooked_message' in row:
             raise ValueError(f'timed_process {pid} overcooked_message requires overcook_after_seconds')
+        if 'switch_off_when_complete' in row:
+            if type(row['switch_off_when_complete']) is not bool:
+                raise ValueError(f'timed_process {pid} switch_off_when_complete must be boolean')
+            if row['switch_off_when_complete'] and 'overcook_after_seconds' in row:
+                raise ValueError(f'timed_process {pid} cannot both switch off when complete and overcook')
+            if row['switch_off_when_complete'] and row.get('require_toggled_on', True) is not True:
+                raise ValueError(f'timed_process {pid} switch_off_when_complete requires require_toggled_on')
 
 
 def normalize_rule(raw: dict[str, Any]) -> dict[str, Any]:
@@ -108,6 +120,7 @@ def normalize_rule(raw: dict[str, Any]) -> dict[str, Any]:
         'overcook_after_seconds': (float(raw['overcook_after_seconds'])
                                    if raw.get('overcook_after_seconds') is not None else None),
         'overcooked_message': (raw.get('overcooked_message') or '').strip(),
+        'switch_off_when_complete': bool(raw.get('switch_off_when_complete', False)),
     }
 
 
@@ -127,6 +140,7 @@ class TimedProcesses:
         self.overcooked: dict[str, dict[str, bool]] = {
             r['id']: {item: False for item in r['items']} for r in self.rules
         }
+        self.auto_switched_off: list[dict[str, Any]] = []
         self.clock_seen = 0.0
         self.pending_messages: list[str] = []
         self.anomalies: list[str] = []
@@ -181,6 +195,14 @@ class TimedProcesses:
             return bool(obj.mock_states.get('ToggledOn', False))
         from omnigibson.object_states import ToggledOn
         return bool(ToggledOn in obj.states and obj.states[ToggledOn].get_value())
+
+    def _switch_off(self, obj: Any) -> None:
+        if hasattr(obj, 'mock_states'):
+            obj.mock_states['ToggledOn'] = False
+            return
+        from omnigibson.object_states import ToggledOn
+        if ToggledOn in obj.states:
+            obj.states[ToggledOn].set_value(False)
 
     def _is_contained(self, item_obj: Any, appliance_obj: Any, mode: str) -> bool:
         if hasattr(item_obj, 'mock_relations'):
@@ -355,6 +377,21 @@ class TimedProcesses:
                     self.overcooked[pid][item] = True
                     just_overcooked_rules.add(pid)
 
+        for rule in self.rules:
+            pid = rule['id']
+            if (rule['switch_off_when_complete'] and pid in just_completed_rules
+                    and not any(active_now[(pid, item)] and not self.completed[pid][item]
+                                for item in rule['items'])):
+                try:
+                    appliance = self._role_obj(backend, rule['appliance'], live)
+                    if appliance is not None:
+                        self._switch_off(appliance)
+                        self.auto_switched_off.append({'process': pid, 'clock_s': round(now_s, 3)})
+                except Exception as exc:
+                    self._anomaly('auto_switch_off', exc)
+                for item in rule['items']:
+                    active_now[(pid, item)] = False
+
         self.sync_all_states(backend)
 
         for rule in self.rules:
@@ -488,10 +525,12 @@ class TimedProcesses:
                     'completed': dict(self.completed[rule['id']]),
                     'overcook_after_seconds': rule['overcook_after_seconds'],
                     'overcooked': dict(self.overcooked[rule['id']]),
+                    'switch_off_when_complete': rule['switch_off_when_complete'],
                     'active': ({item: self.is_item_active(backend, rule['id'], item, live=live)
                                 for item in rule['items']} if backend is not None and live else None),
                 }
                 for rule in self.rules
             },
+            'auto_switched_off': list(self.auto_switched_off),
             'anomalies': list(self.anomalies),
         }
