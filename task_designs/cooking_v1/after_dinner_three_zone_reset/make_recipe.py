@@ -478,9 +478,14 @@ def build_reference_plan() -> dict:
             'actions': [{'primitive': 'close', 'role': 'oven'}],
             'after': ['unload_and_serve_pie'],
         },
-        # dishes only: the omit_napkin_wash negative must still run to its end
+        # dishes only (the omit_napkin_wash negative must still run to its end); r3c: if the pie was never
+        # taken out, keep waiting until it burns, so the omit_pie_unload negative exercises the overcook
+        # rule in the simulator (r3b: that negative ended after 250 s of oven time, before the 300 s mark).
+        # Equivalent to the r3b condition whenever the pie has been served.
         'final_wait_dishes_washed': {
-            'actions': [{'primitive': 'wait_for', 'condition': dishes_washed, 'seconds': 30.0, 'attempts': 20}],
+            'actions': [{'primitive': 'wait_for',
+                         'condition': {'any': ['pie_overcooked', {'all': [dishes_washed, served('pie')]}]},
+                         'seconds': 30.0, 'attempts': 20}],
             'after': [],
         },
     }

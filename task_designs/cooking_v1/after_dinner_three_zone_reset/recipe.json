@@ -1614,13 +1614,33 @@
      {
       "primitive": "wait_for",
       "condition": {
-       "all": [
-        "bowl1_washed",
-        "bowl2_washed",
-        "glass1_washed",
-        "glass2_washed",
-        "mug1_washed",
-        "mug2_washed"
+       "any": [
+        "pie_overcooked",
+        {
+         "all": [
+          {
+           "all": [
+            "bowl1_washed",
+            "bowl2_washed",
+            "glass1_washed",
+            "glass2_washed",
+            "mug1_washed",
+            "mug2_washed"
+           ]
+          },
+          {
+           "any": [
+            "pie_ontop_table",
+            {
+             "all": [
+              "pie_ontop_tray",
+              "tray_ontop_table"
+             ]
+            }
+           ]
+          }
+         ]
+        }
        ]
       },
       "seconds": 30.0,
