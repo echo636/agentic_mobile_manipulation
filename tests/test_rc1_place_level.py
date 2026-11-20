@@ -37,9 +37,18 @@ def test_flat_tray_tilted_8_degrees_is_levelled_and_anchor_returns_to_centre():
 
 
 def test_small_tilt_unchanged():
-    held = R.from_euler('xyz', [2., 0., 10.], degrees=True).as_quat()
+    held = R.from_euler('xyz', [0.3, 0., 10.], degrees=True).as_quat()
     q, rot, tilt = level_to_reference(held, [0, 0, 0, 1])
-    assert tilt < 3 and np.allclose(rot, np.eye(3)) and np.allclose(q, held)
+    assert tilt < 0.5 and np.allclose(rot, np.eye(3)) and np.allclose(q, held)
+
+
+def test_one_and_a_half_degrees_is_levelled():
+    # 2026-11-21: thepatio tray tilted 1.6-2.8 deg fell / missed its surface with the old 3 deg floor
+    held = R.from_euler('xyz', [1.5, 0., 10.], degrees=True).as_quat()
+    q, rot, tilt = level_to_reference(held, [0, 0, 0, 1])
+    assert 1.4 < tilt < 1.6 and not np.allclose(rot, np.eye(3))
+    roll, pitch, yaw = R.from_quat(q).as_euler('xyz', degrees=True)
+    assert abs(roll) < 1e-6 and abs(pitch) < 1e-6 and yaw == pytest.approx(10., abs=0.1)
 
 
 def test_lying_object_stays_lying():

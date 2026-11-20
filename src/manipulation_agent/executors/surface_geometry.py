@@ -179,19 +179,27 @@ def native_resting_orientation(current, orientations):
     return selected.as_quat(), (selected * current.inv()).as_matrix()
 
 
-def level_to_reference(current, reference, minimum_tilt_degrees=3., maximum_tilt_degrees=45.):
+# rc1 A8 (2026-11-21 02:01, coordinator): 3 deg was too lax for wide flat carriers -- a 0.54 m tray tilted 1.6-2.8 deg
+# already put its lowest-patch anchor on a corner (21.9 cm off, fell, no surface). Constant, no switch.
+A8_MIN_TILT_DEGREES = 0.5
+A8_MAX_TILT_DEGREES = 45.
+
+
+def level_to_reference(current, reference, minimum_tilt_degrees=None, maximum_tilt_degrees=None):
     """rc1 A8 (2026-11-20): put a held object down level instead of at its in-hand tilt.
 
     current, reference: xyzw quaternions (held now; the object's resting pose before it was grasped, or the
     asset's default upright pose when no record exists). Returns (quaternion, rotation, tilt_degrees) where the
     result keeps the held world heading and the reference's roll/pitch; rotation maps current -> result. Tilts
-    below minimum_tilt_degrees are left unchanged (identity), as are corrections above maximum_tilt_degrees
+    below minimum_tilt_degrees (A8_MIN_TILT_DEGREES) are left unchanged (identity), as are corrections above maximum_tilt_degrees
     (a wrong reference must never turn a loaded carrier over). Before this, objects without authored resting
     poses were released at their in-hand tilt, so the lowest-patch anchor fell on a corner (0.21-0.24 m off
     the click for trays) and the corner landed first.
     """
     import numpy as np
     from scipy.spatial.transform import Rotation
+    minimum_tilt_degrees = A8_MIN_TILT_DEGREES if minimum_tilt_degrees is None else minimum_tilt_degrees
+    maximum_tilt_degrees = A8_MAX_TILT_DEGREES if maximum_tilt_degrees is None else maximum_tilt_degrees
     quaternion, rotation = native_resting_orientation(current, {'reference': {'rotation': list(reference), 'prob': 1.}})
     tilt = float(np.degrees(Rotation.from_matrix(rotation).magnitude()))
     if tilt < minimum_tilt_degrees or tilt > maximum_tilt_degrees:
