@@ -112,3 +112,26 @@ def test_fine_room_lookup_uses_native_resolution(tmp_path):
 def test_detour_thresholds():
     from manipulation_agent.executors import omnigibson_rgb as R
     assert (R.DETOUR_RATIO, R.DETOUR_MIN_M, R.SAME_ROOM_WIDE_M) == (3.0, 30.0, 3.0)
+
+
+def test_close_check_reads_state_after_clamp(door):
+    # T2 door-hold probe trial 3 (hold on): one env step after close the garments had pushed the door to 0.0974 rad at
+    # 9.4 rad/s (> Open threshold 0.0785) before the next pre-step clamp. clamp_now puts it back at once and reports the
+    # pre-clamp angle for private diagnostics; the stability check then reads the held state.
+    obj, j = door
+    AH.lock_closed(SimpleNamespace(), obj)
+    j.q, j.v = 0.0974, 9.37
+    rec = AH.clamp_now(obj)
+    assert rec == [{'joint': 'j_link_0', 'pre_clamp_position': 0.0974, 'closed_position': 0.0, 'clamped': True}]
+    assert (j.q, j.v) == (0.0, 0.0)
+    j.q = 0.003
+    assert AH.clamp_now(obj)[0]['clamped'] is False and j.q == 0.003
+    assert AH.clamp_now(SimpleNamespace(name='other_object')) == []
+
+
+def test_clamp_now_without_hold_does_nothing(door, monkeypatch):
+    obj, j = door
+    monkeypatch.setenv('MAS_ARTICULATION_HOLD', 'off')
+    AH.lock_closed(SimpleNamespace(), obj)          # switch off: nothing held (v12b behaviour)
+    j.q = 0.2
+    assert AH.clamp_now(obj) == [] and j.q == 0.2

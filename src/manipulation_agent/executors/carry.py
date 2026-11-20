@@ -310,12 +310,20 @@ class ControlledCarry:
             capture('after_setter')
             self._step(self.primitives._empty_action())
             capture('after_step')
+            if primitive == 'close' and any(h.get('step_hook') for h in hold_record.get('held') or []):
+                # rc1 A1: with the hold active, "did not remain stable" means the hold failed. The pre-step hook
+                # runs before the next physics step, so apply it now and read the state it maintains; the angle
+                # contact pushed the door to within the step stays in private diagnostics.
+                from .articulation_hold import clamp_now
+                hold_record['after_step_clamp'] = clamp_now(obj)
+                obj.states[state].clear_cache();obj.state_updated()
+                capture('after_hold_clamp')
             actual=opened_joints(obj,controlled_joints) if primitive=='open' else bool(obj.states[state].get_value())
         finally:
             self._active_open_joints = ()
         if actual!=wanted:
             report('failed',reason='state_reopened_or_reclosed_after_step',
-                   payload=[child.name for child,_,_ in payload])
+                   payload=[child.name for child,_,_ in payload],**({'articulation_hold':hold_record} if hold_record else {}))
             raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
         self._verify_container_payload(obj,payload,stage='articulation_contents_unconfirmed')
         if particles:

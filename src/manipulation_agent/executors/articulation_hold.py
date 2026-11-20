@@ -45,6 +45,27 @@ def enforce():
     return fixed
 
 
+def clamp_now(obj):
+    """Apply the hold to this object's held joints immediately (no physics step) and report, per joint, the position
+    contact physics had pushed it to before the clamp. Used by `close` so that its stability check reads the state the
+    hold maintains (the pre-step hook only runs before the next physics step); the pre-clamp position goes to private
+    diagnostics only."""
+    out = []
+    for (name, jname), (joint, q) in list(_HELD.items()):
+        if name != getattr(obj, 'name', None):
+            continue
+        try:
+            cur = float(joint.get_state()[0][0])
+        except Exception:
+            continue
+        clamped = abs(cur - q) > HOLD_TOLERANCE
+        if clamped:
+            joint.set_pos(q)
+            joint.set_vel(0.0)
+        out.append({'joint': jname, 'pre_clamp_position': cur, 'closed_position': q, 'clamped': clamped})
+    return out
+
+
 def _subscribe():
     global _SUBSCRIPTION
     if _SUBSCRIPTION is not None:
