@@ -257,3 +257,48 @@ def test_next_surface_skips_panes_and_robot_side_hits():
             (3.4, '/World/scene_0/tbns_staging_table/base_link'), (5.0, '/World/scene_0/walls/base_link')]
     assert GP.next_surface(hits, 2.0, passable) == (3.4, '/World/scene_0/tbns_staging_table/base_link')
     assert GP.next_surface([(2.0, '/World/scene_0/door/glass')], 2.0, passable) is None
+
+
+# ---- rc1 A5 placement settle fallback (placement_settle.py) ----
+from manipulation_agent.executors import placement_settle as PS
+
+
+def _cands(n):
+    return [{'pose': ([float(i), 0.0, 0.5], [0, 0, 0, 1])} for i in range(n)]
+
+
+def test_settle_fallback_same_pose_success():
+    first, = _cands(1)
+    seen, recs = [], []
+    ok, attempts = PS.run(lambda c: (seen.append(c['pose'][0][0]) or True, {}), lambda tried: None, first,
+                          lambda a, ok: recs.append((a, ok)))
+    assert ok and seen == [0.0] and attempts[0]['candidate'] == 'same_pose' and recs[0][1] is True
+
+
+def test_settle_fallback_tries_at_most_two_next_candidates_and_excludes_tried():
+    first, c1, c2, c3 = _cands(4)
+    pool = [c1, c2, c3]
+    asked = []
+    def nxt(tried):
+        asked.append([t[0] for t in tried])
+        return next((c for c in pool if c['pose'][0] not in tried), None)
+    ok, attempts = PS.run(lambda c: (False, {}), nxt, first, lambda a, ok: None)
+    assert not ok and [a['candidate'] for a in attempts] == ['same_pose', 'next_1', 'next_2']
+    assert asked == [[0.0], [0.0, 1.0]]          # each request excludes every pose already tried
+
+
+def test_settle_fallback_second_candidate_succeeds_and_none_left():
+    first, c1 = _cands(2)
+    ok, attempts = PS.run(lambda c: (c is c1, {}), lambda tried: c1 if len(tried) == 1 else None, first, lambda a, ok: None)
+    assert ok and [a['candidate'] for a in attempts] == ['same_pose', 'next_1']
+    ok, attempts = PS.run(lambda c: (False, {}), lambda tried: None, first, lambda a, ok: None)
+    assert not ok and [a['candidate'] for a in attempts] == ['same_pose', 'none_left']
+
+
+def test_first_failure_kind_and_switch(monkeypatch):
+    assert PS.first_failure_kind('place_inside', False, None) == 'left_target'
+    assert PS.first_failure_kind('place_on_top', True, {}) == 'on_target_check_failed'
+    assert PS.first_failure_kind('place_on_top', False, {'support_ray_hits_selected_object': True, 'bottom_near_support': True}) == 'on_target_check_failed'
+    assert PS.first_failure_kind('place_on_top', False, {'support_ray_hits_selected_object': False}) == 'left_target'
+    monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'off')
+    assert PS.enabled() is False

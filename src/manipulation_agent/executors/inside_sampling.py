@@ -118,7 +118,7 @@ are proposals only, with unchanged collision and settling acceptance checks.
     return result
 
 
-def select_inside_release(backend, held, target, contents, *, point=None, residents=()):
+def select_inside_release(backend, held, target, contents, *, point=None, residents=(), exclude_positions=()):
     """Choose one pose from current geometry without moving or simulating bodies."""
     from omnigibson.utils import transform_utils as T
     from .closure_clearance import closed_geometry_overlap, closed_geometry_proposals
@@ -236,6 +236,10 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
     for candidate in sorted(proposals, key=lambda row: row[0]):
         check()
         priority, position, quat, center, extent, *_ = candidate
+        # rc1 A5: a pose already tried by the placement settle fallback is skipped (within 1 cm).
+        if any(float(torch.linalg.norm(position - torch.as_tensor(q, dtype=position.dtype, device=position.device))) < 0.01
+               for q in exclude_positions):
+            continue
         overlap = (pose_score(position, quat) if pose_score is not None else 0)
         if particles: overlap += envelope_score(center.tolist(), extent.tolist())
         scored += 1

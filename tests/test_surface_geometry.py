@@ -374,6 +374,14 @@ class PlacementRejectionTransactions(unittest.TestCase):
         self.assertEqual(error.exception.code, 'unsupported_geometry')
 
     def test_surface_release_failure_keeps_physical_result_without_retry_or_rollback(self):
+        # rc1 A5: with MAS_PLACEMENT_SETTLE=off the v12b single-release behaviour is unchanged (this test); the
+        # settle fallback itself is covered in tests/test_rc1_articulation_and_nav.py.
+        import os
+        from unittest.mock import patch as _patch
+        with _patch.dict(os.environ, {'MAS_PLACEMENT_SETTLE': 'off'}):
+            self._surface_release_failure_v12b()
+
+    def _surface_release_failure_v12b(self):
         import torch
         import sys
         from types import ModuleType, SimpleNamespace

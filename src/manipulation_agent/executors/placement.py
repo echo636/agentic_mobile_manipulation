@@ -570,8 +570,10 @@ class CheckedPlacement:
                 'method':'selected_open_cavity_and_actual_upward_rim_collision_faces'})
         return proposals
 
-    def _select_surface_candidate(self, held, target, point, yaw_degrees, payload, *, roll_degrees=None):
-        """Choose geometry without moving, stepping, or snapshotting the scene."""
+    def _select_surface_candidate(self, held, target, point, yaw_degrees, payload, *, roll_degrees=None,
+                                  exclude_positions=()):
+        """Choose geometry without moving, stepping, or snapshotting the scene.
+        rc1 A5: poses in exclude_positions (already tried by the settle fallback, within 1 cm) are skipped."""
         if point is None:
             raise SkillError('placement_surface_unavailable', 'Select a receiving surface for placement')
         is_cloth = (
@@ -579,9 +581,14 @@ class CheckedPlacement:
             or getattr(held, 'prim_type', None) == 1
             or hasattr(getattr(held, 'root_link', None), 'compute_particle_positions')
         )
-        candidates = self._surface_candidates(held, target, point, yaw_degrees, payload,
-                                              roll_degrees=roll_degrees,
-                                              center_footprint=is_cloth)
+        def fresh(rows):
+            return [row for row in rows if not any(
+                float(self.torch.linalg.norm(row['pose'][0] - self.torch.as_tensor(q, dtype=row['pose'][0].dtype,
+                                                                                  device=row['pose'][0].device))) < 0.01
+                for q in exclude_positions)]
+        candidates = fresh(self._surface_candidates(held, target, point, yaw_degrees, payload,
+                                                    roll_degrees=roll_degrees,
+                                                    center_footprint=is_cloth))
         base = self._thin_support_base(held, target, point, payload)
         ranker = self._inside_pose_overlap_ranker(held, [held, *payload], support_objects=(target,),
                                                   support_paths=base)
@@ -596,9 +603,9 @@ class CheckedPlacement:
         # occupied. Envelope overlap ranks proposals, never certifies failure.
         candidate = min(candidates, key=score, default=None)
         if candidate is None or candidate['proposal_overlap_score']:
-            alternatives = self._surface_fallback_candidates(
+            alternatives = fresh(self._surface_fallback_candidates(
                 held, target, point, yaw_degrees, payload, roll_degrees=roll_degrees,
-                center_footprint=is_cloth)
+                center_footprint=is_cloth))
             candidate = min([*candidates, *alternatives], key=score, default=None)
         if candidate is None:
             raise SkillError('placement_surface_unavailable', 'No upward receiving surface near the selected point')
@@ -696,27 +703,55 @@ class CheckedPlacement:
             'proposal_overlap_score': candidate.get('proposal_overlap_score'),
             'surface_kind': candidate.get('surface_kind', 'selected_surface')})
         self._carry_detach()
-        held.set_position_orientation(*candidate['pose'])
-        self._relocate_contents(held, contents)
-        held.keep_still()
-        for item in (held, *payload):
-            if hasattr(item, 'wake'):
-                item.wake()
-        resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
-        self._settle_surface_contacts(held, target, payload, max_steps, resting=resting)
-        try:
+
+        def release_and_check(cand):
+            vpoint = cand.get('verification_point', point)
+            held.set_position_orientation(*cand['pose'])
+            self._relocate_contents(held, contents)
+            held.keep_still()
+            for item in (held, *payload):
+                if hasattr(item, 'wake'):
+                    item.wake()
+            resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
+            self._settle_surface_contacts(held, target, payload, max_steps, resting=resting)
             contacts = self._placement_contacts(held, payload)
             touching = any(link.prim_path in contacts for link in target.links.values())
             supported, support = self._selected_surface_support(
-                held, target, verification_point, touching, payload, resting=resting.report())
-            # Residual motion is diagnostic; losing the requested support is
-            # a failed result. Never retry or rewind either outcome here.
+                held, target, vpoint, touching, payload, resting=resting.report())
+            # Residual motion is diagnostic; losing the requested support is a failed result. No rewind here;
+            # the rc1 A5 settle fallback below re-runs this same release and check (placement_settle.py).
             supported = all(value for key, value in support['checks'].items() if key != 'settled')
+            official = bool(held.states[OnTop].get_value(target))
             self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
                 'position': held.get_position_orientation()[0].tolist(),
-                'official_on_top': bool(held.states[OnTop].get_value(target)),
+                'official_on_top': official,
                 'selected_surface_support': support, 'supported': supported,
-                'verification_point': verification_point.tolist(), 'grasp_released': self._get_held() is None})
+                'verification_point': vpoint.tolist(), 'grasp_released': self._get_held() is None})
+            return supported, {'official_on_top': official, 'checks': dict(support['checks']),
+                               'failed_checks': [k for k, v in support['checks'].items() if not v and k != 'settled'],
+                               'position': held.get_position_orientation()[0].tolist()}
+        try:
+            supported, first = release_and_check(candidate)
+            if not supported:
+                # rc1 A5: same pose, same settling, same checks; then up to 2 next candidates (placement_settle.py).
+                from . import placement_settle as PS
+                if PS.enabled():
+                    def next_candidate(tried):
+                        # The selector reads the held object's current pose and shape; put the assembly back at the
+                        # first selected pose (no physics step) so the next proposals are built from that pose.
+                        held.set_position_orientation(*candidate['pose']); self._relocate_contents(held, contents)
+                        try:
+                            return self._select_surface_candidate(held, target, point, yaw_degrees, payload,
+                                                                  roll_degrees=roll_degrees, exclude_positions=tried)
+                        except SkillError:
+                            return None
+                    def record(attempts, ok):
+                        self._placement_record({'status': 'settle_fallback', 'primitive': 'place_on_top',
+                            'target': target.name, 'held': held.name, 'carried': [o.name for o in payload],
+                            'first_failure': PS.first_failure_kind('place_on_top', first['official_on_top'], first['checks']),
+                            'first_failed_checks': first['failed_checks'], 'first_position': first['position'],
+                            'attempts': attempts, 'result': 'passed' if ok else 'failed'})
+                    supported, _ = PS.run(release_and_check, next_candidate, candidate, record)
             if not supported:
                 raise SkillError('postcondition_error', 'Object did not settle on the selected surface',
                                  changed=True, stage='released_placement_unconfirmed')
@@ -832,18 +867,42 @@ class CheckedPlacement:
             **{k: v for k, v in candidate.items() if k != 'pose'},
             'position': candidate['pose'][0].tolist(), 'orientation': candidate['pose'][1].tolist()})
         self._carry_detach()
-        held.set_position_orientation(*candidate['pose'])
-        self._relocate_contents(held, contents)
-        held.keep_still()
         payload_objs = [obj for obj, _ in contents]
-        for item in (held, *payload_objs):
-            if hasattr(item, 'wake'):
-                item.wake()
-        self._settle_surface_contacts(held, target, payload_objs, max_steps)
-        try:
+
+        def release_and_check(cand):
+            held.set_position_orientation(*cand['pose'])
+            self._relocate_contents(held, contents)
+            held.keep_still()
+            for item in (held, *payload_objs):
+                if hasattr(item, 'wake'):
+                    item.wake()
+            self._settle_surface_contacts(held, target, payload_objs, max_steps)
             inside = bool(held.states[Inside].get_value(target))
             self._placement_record({'status': 'inside_result', 'held': held.name, 'target': target.name,
                 'official_inside': inside, 'position': held.get_position_orientation()[0].tolist()})
+            return inside, {'official_inside': inside, 'position': held.get_position_orientation()[0].tolist()}
+        try:
+            inside, first = release_and_check(candidate)
+            if not inside:
+                # rc1 A5: same pose, same settling, same official Inside; then up to 2 next candidates.
+                from . import placement_settle as PS
+                if PS.enabled():
+                    def next_candidate(tried):
+                        # The selector reads the held object's current pose and shape; put the assembly back at the
+                        # first selected pose (no physics step) so the next proposals are built from that pose.
+                        held.set_position_orientation(*candidate['pose']); self._relocate_contents(held, contents)
+                        try:
+                            return select_inside_release(self, held, target, contents, point=point,
+                                                         residents=residents, exclude_positions=tried)
+                        except SkillError:
+                            return None
+                    def record(attempts, ok):
+                        self._placement_record({'status': 'settle_fallback', 'primitive': 'place_inside',
+                            'target': target.name, 'held': held.name, 'carried': payload_objs and [o.name for o in payload_objs],
+                            'first_failure': PS.first_failure_kind('place_inside', False, None),
+                            'first_position': first['position'], 'attempts': attempts,
+                            'result': 'passed' if ok else 'failed'})
+                    inside, _ = PS.run(release_and_check, next_candidate, candidate, record)
             if not inside:
                 raise SkillError('postcondition_error', 'Object did not remain inside after release',
                                  changed=True, stage='released_placement_unconfirmed')
