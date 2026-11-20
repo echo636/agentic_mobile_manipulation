@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "after_dinner_three_zone_reset",
- "instance_id": "after_dinner_three_zone_reset_seed0_r3",
+ "instance_id": "after_dinner_three_zone_reset_seed0_r3b",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -669,6 +669,7 @@
     7.205,
     -1.955
    ],
+   "support_probe_height": 0.5,
    "orientation": [
     0.0,
     0.0,

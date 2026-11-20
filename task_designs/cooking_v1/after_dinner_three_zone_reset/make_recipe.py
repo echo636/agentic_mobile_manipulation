@@ -109,7 +109,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'after_dinner_three_zone_reset',
-        'instance_id': 'after_dinner_three_zone_reset_seed0_r3',
+        'instance_id': 'after_dinner_three_zone_reset_seed0_r3b',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -275,8 +275,9 @@ def build_recipe() -> dict:
             on('mug1', 'nightstand', [20.44, 14.14]),
             on('mug2', 'nightstand', [20.66, 14.14]),
             # appliances (rack-less dishwasher in the original under-counter slot)
+            # probe from below the counter: from above the ray hits the wall shelf (r3 build)
             {'object': 'dishwasher', 'target': 'kitchen_floor', 'place_on_support': True, 'xy': [7.205, -1.955],
-             'orientation': [0.0, 0.0, 0.70710678, 0.70710678]},
+             'support_probe_height': 0.5, 'orientation': [0.0, 0.0, 0.70710678, 0.70710678]},
             state('dishwasher', 'ToggledOn', False),
             state('dishwasher', 'Open', False, fully=True),
             state('washer', 'ToggledOn', False),
