@@ -69,6 +69,27 @@ FACT = obj(
     certainty={"type": "string", "enum": ["seen", "uncertain"]},
     view=VIEWS,
 )
+
+
+def carrier_decision(schema, members):
+    sighting = obj(
+        view=VIEWS,
+        end={"type": "string", "enum": ["source", "destination"]},
+        aboard=arr({"type": "string", "enum": list(members)}),
+        evidence=S,
+    )
+    return obj(
+        **schema["properties"],
+        carrier_observation={"anyOf": [sighting, {"type": "null"}]},
+    )
+
+
+CARRIER_GROUND = """Use the assigned carrier for the shared trip when feasible. In carrier_observation
+report its visible source or destination, the current camera view and the selected item ids visibly
+supported on or inside it. Describe the evidence. Use null if the carrier or its location cannot be
+identified. Check the load before transport and on arrival before unloading. Items already delivered
+can satisfy their own assertions even when the carrier is elsewhere or outside the cameras."""
+
 DECISION = obj(
     decision={"type": "string", "enum": ["act", "done", "anomaly"]},
     evidence=S,

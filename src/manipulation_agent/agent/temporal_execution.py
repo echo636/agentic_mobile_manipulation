@@ -12,6 +12,7 @@ from .temporal_graph import (
 )
 from .temporal_memory import CurrentInspection, DeltaMemory
 from .temporal_models import (
+    CARRIER_GROUND,
     COMPILE,
     DECISION,
     GRAPH,
@@ -24,6 +25,7 @@ from .temporal_models import (
     ORDER_CORRECTION,
     PATCH,
     REPAIR,
+    carrier_decision,
     method_schema,
     order_correction_schema,
 )
@@ -58,6 +60,7 @@ class DispatchController:
         self.inspection = None
         self.completed = {}
         self.carriers = {}
+        self.loaded_at = {}
         self.operations = {}
         self.uncacheable = set()
         self.pending = self.active = self.graph = self.camera = self.region = None
@@ -153,6 +156,15 @@ class DispatchController:
                 "\nThe local repair specified motor options for this work. Choose one for act. "
                 "Use primitive=none for done or anomaly. Report an anomaly if the method needs "
                 "a different action. Completion still requires current visual evidence."
+            )
+        if role == "fast" and context.get("carrier"):
+            schema = carrier_decision(schema, (n["id"] for n in context["selected"]))
+            instructions += "\n" + CARRIER_GROUND
+        if role == "fast" and context.get("unlocated_carriers"):
+            instructions += (
+                "\nIf you see a listed unlocated carrier at the current work's source or "
+                "destination, report its exact name, relation=location, region name, "
+                "certainty=seen and current view in changes."
             )
         self.log(
             "model_call",
@@ -391,11 +403,14 @@ class DispatchController:
         if result.slots:
             slot = result.slots[0]
             self.active = slot.job
+            self.loaded_at.clear()
             self.due_wait = max(0, slot.depart - math.ceil(self.clock))
         return result.status
 
     def motor(self, op, args):
         self.pending = (op, self.clock, args.get("target"))
+        if self.active and self.active.carrier and op not in ("look", "wait"):
+            self.carriers[self.active.carrier] = None
         self.log(
             "motor_request",
             op=op,
@@ -486,6 +501,13 @@ class DispatchController:
         if options:
             context["primitives"] = list(options)
             context["repaired_motor_options"] = list(options)
+        missing = [
+            name
+            for name, region in self.carriers.items()
+            if region is None and name != self.active.carrier
+        ]
+        if missing:
+            context["unlocated_carriers"] = missing
         return context
 
     def ground(self, nodes, skill, windows):
@@ -525,7 +547,81 @@ class DispatchController:
         )
 
     def record_changes(self, decision):
+        job = self.active
+        sighting = decision.get("carrier_observation")
+        if sighting is not None:
+            if (
+                not job
+                or not job.carrier
+                or sighting["end"] not in ("source", "destination")
+            ):
+                raise ValueError(
+                    "A carrier observation must refer to an endpoint of the assigned trip"
+                )
+            aboard = sighting["aboard"]
+            if (
+                sighting["view"] not in self.camera.frames
+                or not sighting["evidence"].strip()
+                or not isinstance(aboard, list)
+                or len(set(aboard)) != len(aboard)
+                or not set(aboard).issubset(job.members)
+            ):
+                raise ValueError(
+                    "A carrier observation needs a current camera, visible evidence and unique member ids"
+                )
         changes = self.memory.observe(decision["changes"], self.camera)
+        if job:
+            for fact in decision["changes"][:12]:
+                name = fact["subject"].strip()
+                location = fact["value"].strip()
+                if (
+                    name != job.carrier
+                    and name in self.carriers
+                    and self.carriers[name] is None
+                    and fact["relation"].strip() == "location"
+                    and fact["certainty"] == "seen"
+                    and location in (job.origin, job.destination)
+                ):
+                    self.carriers[name] = location
+                    self.log(
+                        "carrier_located",
+                        carrier=name,
+                        region=location,
+                        revision=self.camera.revision,
+                        view=fact["view"],
+                    )
+        if sighting is not None:
+            end = sighting["end"]
+            region = job.origin if end == "source" else job.destination
+            self.carriers[job.carrier] = region
+            changes += self.memory.observe(
+                [
+                    {
+                        "subject": job.carrier,
+                        "relation": "location",
+                        "value": region,
+                        "certainty": "seen",
+                        "view": sighting["view"],
+                    }
+                ],
+                self.camera,
+            )
+            if set(aboard) == set(job.members):
+                self.loaded_at[end] = (
+                    self.camera.revision,
+                    len(self.operations.get(job.members, ())),
+                )
+            elif end == "source":
+                self.loaded_at.clear()
+            self.log(
+                "carrier_observed",
+                carrier=job.carrier,
+                region=region,
+                revision=self.camera.revision,
+                view=sighting["view"],
+                aboard=aboard,
+                evidence=sighting["evidence"],
+            )
         if changes:
             self.log("delta", facts=changes)
         return changes
@@ -554,10 +650,29 @@ class DispatchController:
             self.memory.duration(trip["from"], job.destination, trip["seconds"], metres)
         self.region = job.destination
         self.reset_travel_sample()
-        if job.carrier:
-            self.carriers[job.carrier] = job.destination
+        cacheable = job.members not in self.uncacheable
         ops = self.operations.pop(job.members, [])
-        if job.members not in self.uncacheable:
+        if job.carrier:
+            region = self.carriers.setdefault(job.carrier, None)
+            start_rev, start_op = self.loaded_at.get("source", (-1, 0))
+            end_rev, end_op = self.loaded_at.get("destination", (-1, 0))
+            transit = any(
+                op == "navigate_to" or op.startswith("place_")
+                for op in ops[start_op:end_op]
+            )
+            shared_trip = 0 <= start_rev < end_rev and transit
+            self.log(
+                "carrier_trip",
+                carrier=job.carrier,
+                members=list(job.members),
+                region=region,
+                loaded_at_revisions={
+                    end: row[0] for end, row in self.loaded_at.items()
+                },
+                visually_supported=shared_trip,
+            )
+            cacheable = cacheable and shared_trip
+        if cacheable:
             self.memory.learn_macro(skill, ops)
         self.uncacheable.discard(job.members)
         self.memory.recent.append(

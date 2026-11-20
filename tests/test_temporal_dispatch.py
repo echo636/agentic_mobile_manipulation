@@ -575,6 +575,108 @@ def test_batch_completion_needs_item_specific_evidence():
     assert c.next()[1]["outcome"] == "blocked" and c.completed == {}
 
 
+@pytest.mark.parametrize(
+    "start,end,op,expected_location,expected_shared",
+    [
+        (None, None, "place_on_top", None, False),
+        (None, ("source", []), "place_on_top", "A", False),
+        (None, ("destination", []), "place_on_top", "B", False),
+        (("source", ["a"]), ("destination", ["a", "b"]), "navigate_to", "B", False),
+        (("source", ["a", "b"]), ("destination", ["a", "b"]), "look", "B", False),
+        (("source", ["a", "b"]), ("destination", ["a", "b"]), "navigate_to", "B", True),
+    ],
+)
+def test_delivered_items_do_not_imply_carrier_motion(
+    start, end, op, expected_location, expected_shared
+):
+    raw = graph(
+        [work("a", "A", "B", load=1), work("b", "A", "B", load=1)], carriers=[carrier()]
+    )
+    act = dict(decision(op=op), yaw=30)
+    done = dict(
+        decision("done"),
+        verified=[
+            {"id": key, "evidence": "Delivered separately visible"}
+            for key in ("a", "b")
+        ],
+    )
+    for reply, location in ((act, start), (done, end)):
+        if location:
+            side, aboard = location
+            reply["carrier_observation"] = {
+                "end": side,
+                "aboard": aboard,
+                "view": "front",
+                "evidence": "Tray visible",
+            }
+    events = []
+    c = DispatchController(
+        "deliver",
+        [op],
+        Role(raw),
+        Role(act, done),
+        log=lambda kind, **row: events.append((kind, row)),
+    )
+    c.observe(camera(0, 0))
+    assert c.next()[0] in ("look", "act")
+    c.observe(camera(1, 20))
+    assert c.next()[1]["outcome"] == "achieved"
+    assert set(c.completed) == {"a", "b"} and c.carriers == {"tray": expected_location}
+    trip = next(row for kind, row in events if kind == "carrier_trip")
+    assert trip["visually_supported"] is expected_shared
+    assert ("batch transfer" in c.memory.macros) is expected_shared
+
+
+def test_unlocated_carrier_can_be_seen_again_during_single_item_work():
+    raw = graph(
+        [work("a", "A", "B", load=1), work("b", "A", "B", load=1)], carriers=[carrier()]
+    )
+    c = DispatchController("deliver", ["look"], Role(raw), Role())
+    c.observe(camera(0, 0))
+    c.compile()
+    c.carriers["tray"] = None
+    c.choose()
+    assert not c.active.carrier
+    reply = decision("anomaly")
+    fact = {
+        "subject": "tray",
+        "relation": "location",
+        "value": "A",
+        "certainty": "uncertain",
+        "view": "left",
+    }
+    reply["changes"] = [fact]
+    c.record_changes(reply)
+    assert c.carriers["tray"] is None
+    c.record_changes({**reply, "changes": [{**fact, "certainty": "seen"}]})
+    c.choose()
+    assert c.active.carrier == "tray"
+
+
+def test_invalid_group_observation_cannot_commit_beliefs_or_locations():
+    from manipulation_agent.agent.temporal_graph import Job
+
+    c = DispatchController("deliver", [], Role(), Role())
+    c.observe(camera(0, 0))
+    c.active = Job(("a", "b"), "A", "B", 5, "tray")
+    fake = {
+        "end": "destination",
+        "aboard": ["unrelated"],
+        "view": "front",
+        "evidence": "Visible",
+    }
+    fact = {
+        "subject": "tray",
+        "relation": "location",
+        "value": "B",
+        "certainty": "seen",
+        "view": "front",
+    }
+    with pytest.raises(ValueError, match="member ids"):
+        c.record_changes({"changes": [fact], "carrier_observation": fake})
+    assert not c.carriers and not c.memory.facts and not c.loaded_at
+
+
 def test_user_requirement_survives_nonterminal_edits_and_explicit_time_is_frozen():
     raw = graph(
         [work("on"), work("v"), work("end", after=["v"])],
