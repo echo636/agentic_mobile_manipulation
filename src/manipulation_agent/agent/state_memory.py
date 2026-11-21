@@ -45,6 +45,29 @@ PLACEMENT_STATUS_MAP = {
 MACRO_TRAVEL_METERS = 1.5
 MACRO_TRAVEL_SECONDS = 3.5
 SAME_VIEW_CONTAINER_RADIUS = 0.25
+# 2026-11-21 container matching by click heading (coordinator 09:34): a click's absolute heading = the robot's odometry
+# heading when the clicked image was taken + the camera's yaw + the click's horizontal angle in the image. Two clicks at
+# one location are the same container only if their headings are within SAME_CONTAINER_HEADING_DEG and the robot stood
+# within STANCE_RADIUS_M (odometry) for both; the main rule also keeps |dy| <= 0.25. Unknown heading or stance: the
+# old same-view rule only, no fallback (split rather than merge). Odometry is never shown to the model.
+SAME_CONTAINER_HEADING_DEG = 20.0   # offline replay 2026-11-21 (sec20/container_match): 40 left 22 merged records, 20 left 10
+VIEW_YAW_DEG = {'front': 0.0, 'back': 180.0, 'left': 90.0, 'right': -90.0}
+HALF_HFOV_TAN = 1.0   # 90-degree horizontal field of view (focal 10, aperture 20)
+FALLBACK_CHECKS_Y = False             # the fallback does not use dy (open clicks the door, place_inside the inside)
+OPEN_FALLBACK_IGNORES_HEADING = False  # place_inside/close: the one open container here, whatever its heading
+STANCE_RADIUS_M = 1.0                  # same container also needs the two clicks' robot stances (odometry) this close
+PRIVATE_ODOMETRY_KEY = '_private_odometry'   # bridge -> memory only; the proxy removes it before the model
+
+
+def _click_heading(obs_heading, view, point):
+    if obs_heading is None or view not in VIEW_YAW_DEG or not point:
+        return None
+    offset = -math.degrees(math.atan((2.0 * float(point[0]) - 1.0) * HALF_HFOV_TAN))
+    return (float(obs_heading) + VIEW_YAW_DEG[view] + offset) % 360.0
+
+
+def _heading_gap(a, b):
+    return abs((float(a) - float(b) + 180.0) % 360.0 - 180.0)
 IMAGE_BLOCK_TYPES = frozenset({'input_image', 'image', 'image_url'})
 OMITTED_IMAGE_PLACEHOLDER = '[omitted historical RGB frame; state retained in StateMemory]'
 
@@ -528,24 +551,68 @@ class StateMemory:
                 if _norm_key(info.get('hint')) == norm_hint:
                     return info['id']
 
-        if view and point:
-            best_id = None
-            best_dist = SAME_VIEW_CONTAINER_RADIUS
-            for info in candidates_here:
-                if info.get('view') == view and isinstance(info.get('point'), list) and len(info['point']) == 2:
-                    if expected_current_state and info.get('state') not in {expected_current_state, 'unknown'}:
-                        continue
-                    d = math.dist(point, info['point'])
-                    if d <= best_dist:
-                        best_dist = d
-                        best_id = info['id']
-            if best_id is not None:
-                return best_id
+        heading = getattr(self, '_click_heading', None)
 
-        if expected_current_state:
+        def y_ok(info):
+            p = info.get('point')
+            return not (point and isinstance(p, list) and len(p) == 2) or abs(point[1] - p[1]) <= SAME_VIEW_CONTAINER_RADIUS
+
+        stance = getattr(self, '_click_stance', None)
+
+        def stance_ok(info):
+            if STANCE_RADIUS_M is None:
+                return True
+            other = info.get('stance')
+            return stance is not None and other is not None and math.dist(stance, other) <= STANCE_RADIUS_M
+
+        def state_ok(info):
+            return not expected_current_state or info.get('state') in {expected_current_state, 'unknown'}
+
+        # Main rule. Both headings known: same location, headings within SAME_CONTAINER_HEADING_DEG, |dy| <= 0.25
+        # (the view may differ). Otherwise the old same-view rule (same view, click distance <= 0.25).
+        best_id, best_key = None, None
+        for info in candidates_here:
+            if not state_ok(info):
+                continue
+            if heading is not None and info.get('heading') is not None:
+                gap = _heading_gap(heading, info['heading'])
+                if gap <= SAME_CONTAINER_HEADING_DEG and y_ok(info) and stance_ok(info):
+                    key = (0, gap)
+                else:
+                    continue
+            elif view and point and info.get('view') == view and isinstance(info.get('point'), list) and len(info['point']) == 2:
+                d = math.dist(point, info['point'])
+                if d <= SAME_VIEW_CONTAINER_RADIUS:
+                    key = (1, d)
+                else:
+                    continue
+            else:
+                continue
+            if best_key is None or key < best_key:
+                best_id, best_key = info['id'], key
+        if best_id is not None:
+            return best_id
+
+        # Fallback (the one container here in the expected state) only when the headings agree too: never merge
+        # two containers in different directions; when the heading is unknown, split rather than merge.
+        if expected_current_state == 'open' and OPEN_FALLBACK_IGNORES_HEADING:
+            open_here = [info for info in candidates_here if info.get('state') == 'open']
+            if len(open_here) == 1:
+                return open_here[0]['id']
+        if expected_current_state and heading is None and not point:
+            # No click at all (no spatial information either way): the old rule, the one container here in that state.
+            matching_state = [info for info in candidates_here if info.get('state') == expected_current_state]
+            if len(matching_state) == 1:
+                return matching_state[0]['id']
+            if matching_state and expected_current_state == 'open':
+                matching_state.sort(key=lambda r: int(r.get('last_step') or 0))
+                return matching_state[-1]['id']
+        if expected_current_state and heading is not None:
             matching_state = [
                 info for info in candidates_here
-                if info.get('state') == expected_current_state
+                if info.get('state') == expected_current_state and info.get('heading') is not None
+                and _heading_gap(heading, info['heading']) <= SAME_CONTAINER_HEADING_DEG
+                and (y_ok(info) or not FALLBACK_CHECKS_Y) and stance_ok(info)
             ]
             if len(matching_state) == 1:
                 return matching_state[0]['id']
@@ -572,6 +639,8 @@ class StateMemory:
             'view': view,
             'point': point,
             'hint': hint,
+            'heading': None if getattr(self, '_click_heading', None) is None else round(self._click_heading, 1),
+            'stance': getattr(self, '_click_stance', None),
         }
         return cid
 
@@ -601,6 +670,23 @@ class StateMemory:
 
     def observe(self, name: str, arguments: dict[str, Any] | None, result: dict[str, Any]) -> None:
         """Update structured external memory from one public tool call and receipt."""
+        if not isinstance(result, dict):
+            return
+        args = arguments if isinstance(arguments, dict) else {}
+        target = args.get('target') if isinstance(args.get('target'), dict) else None
+        self._click_heading = _click_heading(getattr(self, '_obs_heading', None),
+                                             _view_from_ref((target or {}).get('image_ref')), _point_pair(target))
+        self._click_stance = getattr(self, '_obs_stance', None)
+        try:
+            self._observe_public(name, arguments, result)
+        finally:
+            odo = result.get(PRIVATE_ODOMETRY_KEY)
+            if isinstance(odo, dict) and isinstance(odo.get('yaw_deg'), (int, float)) and math.isfinite(float(odo['yaw_deg'])):
+                self._obs_heading = float(odo['yaw_deg'])   # heading of the new observation (the next click's image)
+                xy = odo.get('xy')
+                self._obs_stance = [float(xy[0]), float(xy[1])] if isinstance(xy, (list, tuple)) and len(xy) == 2 else None
+
+    def _observe_public(self, name: str, arguments: dict[str, Any] | None, result: dict[str, Any]) -> None:
         if not isinstance(result, dict):
             return
         args = arguments if isinstance(arguments, dict) else {}

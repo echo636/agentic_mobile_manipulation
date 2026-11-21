@@ -1,5 +1,6 @@
 """RGB-only model boundary, workflow tools, bounded actions and private evaluation."""
 import copy
+import math
 import json
 import threading
 import time
@@ -17,7 +18,7 @@ from ..observations.surround import SurroundJobs
 from .closure import EpisodeClosure
 from ..agent.task_notes import TaskNotes, model_planning_reply
 from ..agent.schedule_planner import PublicScheduleLedger
-from ..agent.state_memory import StateMemory
+from ..agent.state_memory import StateMemory, PRIVATE_ODOMETRY_KEY
 from ..agent.task_graph_planner import TaskGraphSession
 
 # Pre-execution validation / non-mutating refusal codes that never touch physics or render a new capture.
@@ -177,6 +178,16 @@ class VisionHarness:
         recorder.event('episode_started',{'observation':self.snapshot})
 
     def tool_specs(self): return list(self.catalog.values())
+
+    def _odometry(self):
+        """The robot's own base pose (odometry) for the memory's container matching; never shown to the model."""
+        try:
+            p, q = self.backend.robot.get_position_orientation()
+            x, y, z, w = (float(v) for v in q)
+            return {'yaw_deg': round(math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))), 1),
+                    'xy': [round(float(p[0]), 3), round(float(p[1]), 3)]}
+        except Exception:
+            return None
 
     def sync_execution_clock(self): return LegacyPlanHelpers.sync_execution_clock(self)
     def start_standalone_clock(self): return LegacyPlanHelpers.start_standalone_clock(self)
@@ -413,6 +424,12 @@ class VisionHarness:
                 rt_init = self._public_robot_time()
                 if rt_init is not None and 'robot_time' not in result:
                     result['robot_time'] = rt_init
+            if name in {'initialize', 'act', 'look'}:
+                # 2026-11-21: odometry heading of the new observation, for the memory's container matching only;
+                # never shown to the model (mcp_server removes it before any text is returned).
+                odo = self._odometry()
+                if odo is not None:
+                    result[PRIVATE_ODOMETRY_KEY] = odo
             self.state_memory.observe(name, arguments if isinstance(arguments, dict) else None, result)
             if name in {'initialize', 'act', 'look'}:
                 result['state_memory'] = self.state_memory.public_view(

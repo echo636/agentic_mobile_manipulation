@@ -46,7 +46,7 @@ _startup('proxy_import')
 from .transport.bridge import rpc
 from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
-from .agent.state_memory import StateMemory
+from .agent.state_memory import StateMemory, PRIVATE_ODOMETRY_KEY
 from .agent.place_options import place_catalog, prepare as place_prepare, apply_name as place_apply_name
 from .agent.place_options import load_memory as place_load_memory, save_memory as place_save_memory
 from .agent.failure_memory import FailureMemory
@@ -494,6 +494,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         result['state_memory'] = proxy_memory.public_view(
                             include_handoff=(name == 'initialize' and proxy_memory.steps_observed > 0)
                         )
+                if isinstance(result, dict):
+                    result.pop(PRIVATE_ODOMETRY_KEY, None)   # bridge -> memory only, never to the model
                 if failures is not None and isinstance(result, dict):
                     summary = failures.observe(name, arguments if isinstance(arguments, dict) else {}, result)
                     if summary is not None:

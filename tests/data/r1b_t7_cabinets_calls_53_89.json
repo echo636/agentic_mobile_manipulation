@@ -1,0 +1,2830 @@
+[
+{
+"n": 53,
+"name": "act",
+"args": {
+"primitive": "place_on_top",
+"revision": 52,
+"target": {
+"image_ref": "rgb-00053-back",
+"point": [
+0.2,
+0.47
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_on_top",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 1,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 1.26,
+"travel_s": 7.6,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 817.6
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 53,
+"steps_remaining": 107,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 53,
+"images": [
+{
+"image_ref": "rgb-00054-front"
+},
+{
+"image_ref": "rgb-00054-back"
+},
+{
+"image_ref": "rgb-00054-left"
+},
+{
+"image_ref": "rgb-00054-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -144.9,
+"xy": [
+22.3,
+24.8
+]
+}
+},
+"truth_for_scoring_only": "bceru_guest_table"
+},
+{
+"n": 54,
+"name": "act",
+"args": {
+"primitive": "open",
+"revision": 53,
+"target": {
+"image_ref": "rgb-00054-front",
+"point": [
+0.11,
+0.2
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "open",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 1,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.99,
+"travel_s": 2.5,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 830.1
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 54,
+"steps_remaining": 106,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 54,
+"images": [
+{
+"image_ref": "rgb-00055-front"
+},
+{
+"image_ref": "rgb-00055-back"
+},
+{
+"image_ref": "rgb-00055-left"
+},
+{
+"image_ref": "rgb-00055-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -114.7,
+"xy": [
+21.85,
+23.95
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+},
+{
+"n": 55,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 54,
+"target": {
+"image_ref": "rgb-00055-right",
+"point": [
+0.32,
+0.88
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 840.1
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 55,
+"steps_remaining": 105,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 55,
+"images": [
+{
+"image_ref": "rgb-00056-front"
+},
+{
+"image_ref": "rgb-00056-back"
+},
+{
+"image_ref": "rgb-00056-left"
+},
+{
+"image_ref": "rgb-00056-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -114.7,
+"xy": [
+21.85,
+23.95
+]
+}
+},
+"truth_for_scoring_only": "bceru_crackers2"
+},
+{
+"n": 56,
+"name": "act",
+"args": {
+"primitive": "place_inside",
+"revision": 55,
+"target": {
+"image_ref": "rgb-00056-front",
+"point": [
+0.49,
+0.44
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_inside",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 1,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.41,
+"travel_s": 0.8,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 851.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 56,
+"steps_remaining": 104,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 56,
+"images": [
+{
+"image_ref": "rgb-00057-front"
+},
+{
+"image_ref": "rgb-00057-back"
+},
+{
+"image_ref": "rgb-00057-left"
+},
+{
+"image_ref": "rgb-00057-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -113.7,
+"xy": [
+21.702,
+23.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+},
+{
+"n": 57,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 56,
+"target": {
+"image_ref": "rgb-00057-right",
+"point": [
+0.68,
+0.91
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 861.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 57,
+"steps_remaining": 103,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 57,
+"images": [
+{
+"image_ref": "rgb-00058-front"
+},
+{
+"image_ref": "rgb-00058-back"
+},
+{
+"image_ref": "rgb-00058-left"
+},
+{
+"image_ref": "rgb-00058-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -113.7,
+"xy": [
+21.702,
+23.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_water2"
+},
+{
+"n": 58,
+"name": "act",
+"args": {
+"primitive": "place_inside",
+"revision": 57,
+"target": {
+"image_ref": "rgb-00058-front",
+"point": [
+0.5,
+0.61
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_inside",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 871.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 58,
+"steps_remaining": 102,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 58,
+"images": [
+{
+"image_ref": "rgb-00059-front"
+},
+{
+"image_ref": "rgb-00059-back"
+},
+{
+"image_ref": "rgb-00059-left"
+},
+{
+"image_ref": "rgb-00059-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -113.7,
+"xy": [
+21.702,
+23.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+},
+{
+"n": 59,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 58,
+"target": {
+"image_ref": "rgb-00059-right",
+"point": [
+0.75,
+0.93
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 881.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 59,
+"steps_remaining": 101,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 59,
+"images": [
+{
+"image_ref": "rgb-00060-front"
+},
+{
+"image_ref": "rgb-00060-back"
+},
+{
+"image_ref": "rgb-00060-left"
+},
+{
+"image_ref": "rgb-00060-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -113.7,
+"xy": [
+21.702,
+23.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_juice2"
+},
+{
+"n": 60,
+"name": "act",
+"args": {
+"primitive": "place_inside",
+"revision": 59,
+"target": {
+"image_ref": "rgb-00060-front",
+"point": [
+0.5,
+0.6
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_inside",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 891.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 60,
+"steps_remaining": 100,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 60,
+"images": [
+{
+"image_ref": "rgb-00061-front"
+},
+{
+"image_ref": "rgb-00061-back"
+},
+{
+"image_ref": "rgb-00061-left"
+},
+{
+"image_ref": "rgb-00061-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -113.7,
+"xy": [
+21.702,
+23.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+},
+{
+"n": 61,
+"name": "act",
+"args": {
+"primitive": "close",
+"revision": 60,
+"target": {
+"image_ref": "rgb-00061-front",
+"point": [
+0.25,
+0.28
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "close",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 901.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 61,
+"steps_remaining": 99,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 61,
+"images": [
+{
+"image_ref": "rgb-00062-front"
+},
+{
+"image_ref": "rgb-00062-back"
+},
+{
+"image_ref": "rgb-00062-left"
+},
+{
+"image_ref": "rgb-00062-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -113.7,
+"xy": [
+21.702,
+23.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+},
+{
+"n": 62,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 61,
+"target": {
+"image_ref": "rgb-00062-right",
+"point": [
+0.62,
+0.86
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 911.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 62,
+"steps_remaining": 98,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 62,
+"images": [
+{
+"image_ref": "rgb-00063-front"
+},
+{
+"image_ref": "rgb-00063-back"
+},
+{
+"image_ref": "rgb-00063-left"
+},
+{
+"image_ref": "rgb-00063-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -113.7,
+"xy": [
+21.702,
+23.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_carrier"
+},
+{
+"n": 63,
+"name": "act",
+"args": {
+"primitive": "navigate_to",
+"location": "loc_9",
+"revision": 62
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "return_to",
+"status": "completed",
+"verification": "executor_operation_only",
+"navigation_status": "reached",
+"message": "Returned to that place. Inspect the updated RGB."
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 27.72,
+"travel_s": 62.5,
+"manipulation_s": 0.0,
+"wait_s": 0.0
+},
+"total_s": 973.4
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 63,
+"steps_remaining": 97,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 63,
+"images": [
+{
+"image_ref": "rgb-00064-front"
+},
+{
+"image_ref": "rgb-00064-back"
+},
+{
+"image_ref": "rgb-00064-left"
+},
+{
+"image_ref": "rgb-00064-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -56.7,
+"xy": [
+23.675,
+0.625
+]
+}
+},
+"truth_for_scoring_only": null
+},
+{
+"n": 64,
+"name": "act",
+"args": {
+"primitive": "place_on_top",
+"revision": 63,
+"target": {
+"image_ref": "rgb-00064-left",
+"point": [
+0.25,
+0.48
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_on_top",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 1,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.29,
+"travel_s": 2.5,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 986.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 64,
+"steps_remaining": 96,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 64,
+"images": [
+{
+"image_ref": "rgb-00065-front"
+},
+{
+"image_ref": "rgb-00065-back"
+},
+{
+"image_ref": "rgb-00065-left"
+},
+{
+"image_ref": "rgb-00065-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 57.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": "countertop_ikwqer_0"
+},
+{
+"n": 65,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 64,
+"target": {
+"image_ref": "rgb-00065-right",
+"point": [
+0.62,
+0.46
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 996.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 65,
+"steps_remaining": 95,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 65,
+"images": [
+{
+"image_ref": "rgb-00066-front"
+},
+{
+"image_ref": "rgb-00066-back"
+},
+{
+"image_ref": "rgb-00066-left"
+},
+{
+"image_ref": "rgb-00066-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 57.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": "bceru_crackers3"
+},
+{
+"n": 66,
+"name": "act",
+"args": {
+"primitive": "place_on_top",
+"revision": 65,
+"target": {
+"image_ref": "rgb-00066-front",
+"point": [
+0.55,
+0.49
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_on_top",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1006.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 66,
+"steps_remaining": 94,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 66,
+"images": [
+{
+"image_ref": "rgb-00067-front"
+},
+{
+"image_ref": "rgb-00067-back"
+},
+{
+"image_ref": "rgb-00067-left"
+},
+{
+"image_ref": "rgb-00067-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 57.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": "bceru_carrier"
+},
+{
+"n": 67,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 66,
+"target": {
+"image_ref": "rgb-00067-right",
+"point": [
+0.36,
+0.56
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1016.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 67,
+"steps_remaining": 93,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 67,
+"images": [
+{
+"image_ref": "rgb-00068-front"
+},
+{
+"image_ref": "rgb-00068-back"
+},
+{
+"image_ref": "rgb-00068-left"
+},
+{
+"image_ref": "rgb-00068-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 57.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": "bceru_juice3"
+},
+{
+"n": 68,
+"name": "act",
+"args": {
+"primitive": "place_on_top",
+"revision": 67,
+"target": {
+"image_ref": "rgb-00068-front",
+"point": [
+0.45,
+0.51
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_on_top",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1026.0
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 68,
+"steps_remaining": 92,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 68,
+"images": [
+{
+"image_ref": "rgb-00069-front"
+},
+{
+"image_ref": "rgb-00069-back"
+},
+{
+"image_ref": "rgb-00069-left"
+},
+{
+"image_ref": "rgb-00069-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 57.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": "bceru_carrier"
+},
+{
+"n": 70,
+"name": "look",
+"args": {
+"revision": 69,
+"yaw_degrees": 45
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "look",
+"status": "completed",
+"verification": "executor_operation_only"
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.7,
+"manipulation_s": 0.0,
+"wait_s": 0.0
+},
+"total_s": 1026.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 70,
+"steps_remaining": 90,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 70,
+"images": [
+{
+"image_ref": "rgb-00071-front"
+},
+{
+"image_ref": "rgb-00071-back"
+},
+{
+"image_ref": "rgb-00071-left"
+},
+{
+"image_ref": "rgb-00071-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 102.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": null
+},
+{
+"n": 71,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 70,
+"target": {
+"image_ref": "rgb-00071-right",
+"point": [
+0.51,
+0.58
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1036.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 71,
+"steps_remaining": 89,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 71,
+"images": [
+{
+"image_ref": "rgb-00072-front"
+},
+{
+"image_ref": "rgb-00072-back"
+},
+{
+"image_ref": "rgb-00072-left"
+},
+{
+"image_ref": "rgb-00072-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 102.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": "bceru_water3"
+},
+{
+"n": 72,
+"name": "act",
+"args": {
+"primitive": "place_on_top",
+"revision": 71,
+"target": {
+"image_ref": "rgb-00072-front",
+"point": [
+0.96,
+0.6
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_on_top",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1046.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 72,
+"steps_remaining": 88,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 72,
+"images": [
+{
+"image_ref": "rgb-00073-front"
+},
+{
+"image_ref": "rgb-00073-back"
+},
+{
+"image_ref": "rgb-00073-left"
+},
+{
+"image_ref": "rgb-00073-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 102.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": "bceru_carrier"
+},
+{
+"n": 73,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 72,
+"target": {
+"image_ref": "rgb-00073-right",
+"point": [
+0.1,
+0.63
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": false,
+"error": {
+"code": "nothing_lifted",
+"message": "The grasp was attempted at the selected point, but nothing was lifted. Your hand is empty. Inspect the returned RGB. Common causes: the point was on a large fixed piece of furniture, a counter, wall or floor, or on the surface beside or under the item rather than on the item's own body; or the item is behind a closed door or glass panel (open that with an empty hand first); or the item is out of reach (navigate_to closer). Check the Click echo crop and all four views, then reselect.",
+"world_may_have_changed": false,
+"hand": "empty"
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 0.0,
+"wait_s": 0.0
+},
+"total_s": 1046.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 73,
+"steps_remaining": 87,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 73,
+"images": [
+{
+"image_ref": "rgb-00074-front"
+},
+{
+"image_ref": "rgb-00074-back"
+},
+{
+"image_ref": "rgb-00074-left"
+},
+{
+"image_ref": "rgb-00074-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 102.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": null
+},
+{
+"n": 74,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 73,
+"target": {
+"image_ref": "rgb-00074-front",
+"point": [
+0.95,
+0.57
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1056.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 74,
+"steps_remaining": 86,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 74,
+"images": [
+{
+"image_ref": "rgb-00075-front"
+},
+{
+"image_ref": "rgb-00075-back"
+},
+{
+"image_ref": "rgb-00075-left"
+},
+{
+"image_ref": "rgb-00075-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 102.0,
+"xy": [
+23.75,
+0.75
+]
+}
+},
+"truth_for_scoring_only": "bceru_carrier"
+},
+{
+"n": 75,
+"name": "act",
+"args": {
+"primitive": "navigate_to",
+"location": "loc_9",
+"revision": 74
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "return_to",
+"status": "completed",
+"verification": "executor_operation_only",
+"navigation_status": "reached",
+"message": "Returned to that place. Inspect the updated RGB."
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 27.62,
+"travel_s": 65.9,
+"manipulation_s": 0.0,
+"wait_s": 0.0
+},
+"total_s": 1122.6
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 75,
+"steps_remaining": 85,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 75,
+"images": [
+{
+"image_ref": "rgb-00076-front"
+},
+{
+"image_ref": "rgb-00076-back"
+},
+{
+"image_ref": "rgb-00076-left"
+},
+{
+"image_ref": "rgb-00076-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -113.8,
+"xy": [
+21.681,
+23.575
+]
+}
+},
+"truth_for_scoring_only": null
+},
+{
+"n": 76,
+"name": "act",
+"args": {
+"primitive": "place_on_top",
+"revision": 75,
+"target": {
+"image_ref": "rgb-00076-right",
+"point": [
+0.62,
+0.85
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_on_top",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1132.6
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 76,
+"steps_remaining": 84,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 76,
+"images": [
+{
+"image_ref": "rgb-00077-front"
+},
+{
+"image_ref": "rgb-00077-back"
+},
+{
+"image_ref": "rgb-00077-left"
+},
+{
+"image_ref": "rgb-00077-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -113.8,
+"xy": [
+21.681,
+23.575
+]
+}
+},
+"truth_for_scoring_only": "bceru_guest_table"
+},
+{
+"n": 77,
+"name": "act",
+"args": {
+"primitive": "open",
+"revision": 76,
+"target": {
+"image_ref": "rgb-00077-left",
+"point": [
+0.52,
+0.17
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "open",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 1,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 2.01,
+"travel_s": 6.1,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1148.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 77,
+"steps_remaining": 83,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 77,
+"images": [
+{
+"image_ref": "rgb-00078-front"
+},
+{
+"image_ref": "rgb-00078-back"
+},
+{
+"image_ref": "rgb-00078-left"
+},
+{
+"image_ref": "rgb-00078-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -14.6,
+"xy": [
+23.15,
+22.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_east"
+},
+{
+"n": 78,
+"name": "act",
+"args": {
+"primitive": "close",
+"revision": 77,
+"target": {
+"image_ref": "rgb-00078-front",
+"point": [
+0.68,
+0.2
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "close",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1158.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 78,
+"steps_remaining": 82,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 78,
+"images": [
+{
+"image_ref": "rgb-00079-front"
+},
+{
+"image_ref": "rgb-00079-back"
+},
+{
+"image_ref": "rgb-00079-left"
+},
+{
+"image_ref": "rgb-00079-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": -14.6,
+"xy": [
+23.15,
+22.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_east"
+},
+{
+"n": 79,
+"name": "act",
+"args": {
+"primitive": "open",
+"revision": 78,
+"target": {
+"image_ref": "rgb-00079-back",
+"point": [
+0.34,
+0.13
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "open",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 1,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.57,
+"travel_s": 3.9,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1172.6
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 79,
+"steps_remaining": 81,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 79,
+"images": [
+{
+"image_ref": "rgb-00080-front"
+},
+{
+"image_ref": "rgb-00080-back"
+},
+{
+"image_ref": "rgb-00080-left"
+},
+{
+"image_ref": "rgb-00080-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 178.7,
+"xy": [
+22.6,
+22.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+},
+{
+"n": 80,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 79,
+"target": {
+"image_ref": "rgb-00080-front",
+"point": [
+0.522,
+0.12
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 1,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.27,
+"travel_s": 0.6,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1183.2
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 80,
+"steps_remaining": 80,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 80,
+"images": [
+{
+"image_ref": "rgb-00081-front"
+},
+{
+"image_ref": "rgb-00081-back"
+},
+{
+"image_ref": "rgb-00081-left"
+},
+{
+"image_ref": "rgb-00081-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 176.6,
+"xy": [
+22.35,
+22.6
+]
+}
+},
+"truth_for_scoring_only": "bceru_juice1"
+},
+{
+"n": 81,
+"name": "act",
+"args": {
+"primitive": "place_on_top",
+"revision": 80,
+"target": {
+"image_ref": "rgb-00081-right",
+"point": [
+0.12,
+0.65
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_on_top",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 1,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.9,
+"travel_s": 3.4,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1196.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 81,
+"steps_remaining": 79,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 81,
+"images": [
+{
+"image_ref": "rgb-00082-front"
+},
+{
+"image_ref": "rgb-00082-back"
+},
+{
+"image_ref": "rgb-00082-left"
+},
+{
+"image_ref": "rgb-00082-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 129.8,
+"xy": [
+21.85,
+23.25
+]
+}
+},
+"truth_for_scoring_only": "floors_htolat_0"
+},
+{
+"n": 82,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 81,
+"target": {
+"image_ref": "rgb-00082-front",
+"point": [
+0.255,
+0.306
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": false,
+"error": {
+"code": "nothing_lifted",
+"message": "The grasp was attempted at the selected point, but nothing was lifted. Your hand is empty. Inspect the returned RGB. Common causes: the point was on a large fixed piece of furniture, a counter, wall or floor, or on the surface beside or under the item rather than on the item's own body; or the item is behind a closed door or glass panel (open that with an empty hand first); or the item is out of reach (navigate_to closer). Check the Click echo crop and all four views, then reselect.",
+"world_may_have_changed": false,
+"hand": "empty"
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 0.0,
+"wait_s": 0.0
+},
+"total_s": 1196.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 82,
+"steps_remaining": 78,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 82,
+"images": [
+{
+"image_ref": "rgb-00083-front"
+},
+{
+"image_ref": "rgb-00083-back"
+},
+{
+"image_ref": "rgb-00083-left"
+},
+{
+"image_ref": "rgb-00083-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 129.8,
+"xy": [
+21.85,
+23.25
+]
+}
+},
+"truth_for_scoring_only": null
+},
+{
+"n": 83,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 82,
+"target": {
+"image_ref": "rgb-00083-front",
+"point": [
+0.5,
+0.6
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1206.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 83,
+"steps_remaining": 77,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 83,
+"images": [
+{
+"image_ref": "rgb-00084-front"
+},
+{
+"image_ref": "rgb-00084-back"
+},
+{
+"image_ref": "rgb-00084-left"
+},
+{
+"image_ref": "rgb-00084-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 129.8,
+"xy": [
+21.85,
+23.25
+]
+}
+},
+"truth_for_scoring_only": "bceru_crackers3"
+},
+{
+"n": 84,
+"name": "act",
+"args": {
+"primitive": "place_inside",
+"revision": 83,
+"target": {
+"image_ref": "rgb-00084-left",
+"point": [
+0.55,
+0.38
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_inside",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1216.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 84,
+"steps_remaining": 76,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 84,
+"images": [
+{
+"image_ref": "rgb-00085-front"
+},
+{
+"image_ref": "rgb-00085-back"
+},
+{
+"image_ref": "rgb-00085-left"
+},
+{
+"image_ref": "rgb-00085-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 129.8,
+"xy": [
+21.85,
+23.25
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+},
+{
+"n": 85,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 84,
+"target": {
+"image_ref": "rgb-00085-front",
+"point": [
+0.474,
+0.68
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1226.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 85,
+"steps_remaining": 75,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 85,
+"images": [
+{
+"image_ref": "rgb-00086-front"
+},
+{
+"image_ref": "rgb-00086-back"
+},
+{
+"image_ref": "rgb-00086-left"
+},
+{
+"image_ref": "rgb-00086-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 129.8,
+"xy": [
+21.85,
+23.25
+]
+}
+},
+"truth_for_scoring_only": "bceru_water3"
+},
+{
+"n": 86,
+"name": "act",
+"args": {
+"primitive": "place_inside",
+"revision": 85,
+"target": {
+"image_ref": "rgb-00086-left",
+"point": [
+0.55,
+0.38
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_inside",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1236.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 86,
+"steps_remaining": 74,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 86,
+"images": [
+{
+"image_ref": "rgb-00087-front"
+},
+{
+"image_ref": "rgb-00087-back"
+},
+{
+"image_ref": "rgb-00087-left"
+},
+{
+"image_ref": "rgb-00087-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 129.8,
+"xy": [
+21.85,
+23.25
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+},
+{
+"n": 87,
+"name": "act",
+"args": {
+"primitive": "grasp",
+"revision": 86,
+"target": {
+"image_ref": "rgb-00087-front",
+"point": [
+0.503,
+0.687
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "grasp",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "holding_item"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1246.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 87,
+"steps_remaining": 73,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 87,
+"images": [
+{
+"image_ref": "rgb-00088-front"
+},
+{
+"image_ref": "rgb-00088-back"
+},
+{
+"image_ref": "rgb-00088-left"
+},
+{
+"image_ref": "rgb-00088-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 129.8,
+"xy": [
+21.85,
+23.25
+]
+}
+},
+"truth_for_scoring_only": "bceru_juice3"
+},
+{
+"n": 88,
+"name": "act",
+"args": {
+"primitive": "place_inside",
+"revision": 87,
+"target": {
+"image_ref": "rgb-00088-left",
+"point": [
+0.55,
+0.38
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "place_inside",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1256.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 88,
+"steps_remaining": 72,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 88,
+"images": [
+{
+"image_ref": "rgb-00089-front"
+},
+{
+"image_ref": "rgb-00089-back"
+},
+{
+"image_ref": "rgb-00089-left"
+},
+{
+"image_ref": "rgb-00089-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 129.8,
+"xy": [
+21.85,
+23.25
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+},
+{
+"n": 89,
+"name": "act",
+"args": {
+"primitive": "close",
+"revision": 88,
+"target": {
+"image_ref": "rgb-00089-left",
+"point": [
+0.58,
+0.6
+]
+},
+"placement_roll_degrees": null,
+"placement_yaw_degrees": null,
+"wait_seconds": null
+},
+"result": {
+"ok": true,
+"effect": {
+"primitive": "close",
+"status": "completed",
+"verification": "executor_operation_only",
+"local_adjustment": {
+"repositions": 0,
+"primitive_attempts": 1,
+"operation_committed": true,
+"message": "Operation completed on the selected target. Inspect the returned RGB."
+}
+},
+"robot": {
+"hand": "empty"
+},
+"robot_time": {
+"this_call": {
+"travel_m": 0.0,
+"travel_s": 0.0,
+"manipulation_s": 10.0,
+"wait_s": 0.0
+},
+"total_s": 1266.7
+},
+"execution_budget": {
+"scope": "agent_steps",
+"steps_used": 89,
+"steps_remaining": 71,
+"max_steps": 160,
+"counted_tools": [
+"act",
+"look"
+],
+"wall_time_limit_seconds": null
+},
+"observation": {
+"revision": 89,
+"images": [
+{
+"image_ref": "rgb-00090-front"
+},
+{
+"image_ref": "rgb-00090-back"
+},
+{
+"image_ref": "rgb-00090-left"
+},
+{
+"image_ref": "rgb-00090-right"
+}
+]
+},
+"_private_odometry": {
+"yaw_deg": 129.8,
+"xy": [
+21.85,
+23.25
+]
+}
+},
+"truth_for_scoring_only": "bceru_cabinet_west"
+}
+]
