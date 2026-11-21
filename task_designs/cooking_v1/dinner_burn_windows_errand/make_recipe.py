@@ -97,7 +97,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'dinner_burn_windows_errand',
-        'instance_id': 'dinner_burn_windows_errand_seed0_r4',
+        'instance_id': 'dinner_burn_windows_errand_seed0_r5',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -144,8 +144,9 @@ def build_recipe() -> dict:
             # plates/soups around it collided (c3r2/r3 negatives). Wine + two glasses fit one row of 36 cm.
             native('c3_tray', 'tray', 'coqeme',
                    'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 95.0, [2.54, 1.62, 1.5]),
+            # r5: the wine tray 40 cm (on 36 cm the bottle and a glass tipped over, c3r4)
             native('c3_tray2', 'tray', 'coqeme',
-                   'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 97.0, [2.54, 1.62, 1.5]),
+                   'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 97.0, [2.82, 1.80, 1.5]),
             native('c3_pan', 'griddle_pan', 'ryvqep',
                    '704c9e825784e54cb78730585111263a3832e79caa357c22963e87e47f8ce63e', 99.0, [1.5, 1.6, 1.0],
                    fixed=True),
@@ -338,8 +339,8 @@ def build_reference_plan() -> dict:
         'start_oven': {'actions': [act('open', 'oven'), g('veg'), act('place_inside', 'oven', xy=[8.43, -1.85]),
                                    act('close', 'oven'), act('toggle_on', 'oven')], 'after': []},
         # the far errand, inside the oven's done + 120 s window
-        'wine_errand_tray2': {'actions': [g('wine'), put('tray2', uv=[0.50, 0.20]), g('glass1'),
-                                          put('tray2', uv=[0.50, 0.50]), g('glass2'), put('tray2', uv=[0.50, 0.80]),
+        'wine_errand_tray2': {'actions': [g('wine'), put('tray2', uv=[0.25, 0.30]), g('glass1'),
+                                          put('tray2', uv=[0.25, 0.72]), g('glass2'), put('tray2', uv=[0.70, 0.50]),
                                           g('tray2'), put('table', uv=[0.75, 0.75])], 'after': []},
         'oven_off': {'actions': [wait('veg_roasted', 10.0, 40), act('toggle_off', 'oven')], 'after': ['start_oven']},
         'start_steaks': {'actions': [act('open', 'fridge'),
