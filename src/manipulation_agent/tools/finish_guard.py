@@ -28,23 +28,44 @@ STOP_OUTCOMES = ('blocked', 'aborted')
 ATTEMPTS = 3
 INTENT_CHARS = 140
 REASON_CHARS = 400
+def _attempt_key(stance_epoch, arguments):
+    """Same stance + same view + nearby click = the same target (not a materially different attempt)."""
+    target = (arguments or {}).get('target') if isinstance(arguments, dict) else None
+    view = point = None
+    if isinstance(target, dict):
+        ref = str(target.get('image_ref') or '')
+        view = ref.rsplit('-', 1)[-1] if '-' in ref else None
+        pt = target.get('point')
+        if isinstance(pt, (list, tuple)) and len(pt) == 2:
+            try:
+                point = [round(float(pt[0]) / POINT_BUCKET), round(float(pt[1]) / POINT_BUCKET)]
+            except (TypeError, ValueError):
+                point = None
+    return [int(stance_epoch), view, point]
+
+
+def _hashable_key(key):
+    stance, view, point = (list(key) + [None, None, None])[:3]
+    return (stance, view, tuple(point) if isinstance(point, (list, tuple)) else None)
+
+
 MESSAGES = {
-    'blocked': ('finish(outcome={outcome}) was not accepted yet: {remaining} act/look steps remain. Remaining work is not '
-                'a blocker, and missed pixel selections (nothing_lifted, not_placed, no_visible_change, '
-                'placement errors) are not blocked subgoals. Reinspect the newest RGB, move closer or use another view, '
-                'and reselect. finish(outcome={outcome}) is accepted only after at least {attempts} further act/look attempts '
-                'in a row have failed on the obstacle (a completed act is progress and restarts this count), or when '
-                'fewer than {threshold} steps remain.'),
-    'blocked_repeat': ('finish(outcome={outcome}) was not accepted yet: {remaining} act/look steps remain and {made} '
-                       'failed act/look attempt(s) in a row followed the previous deferral. Make at least {attempts} '
-                       'materially different attempts (another view, stance, target point, or order of the remaining '
-                       'subgoals) before finishing {outcome} again; a completed act is progress, so continue from it.'),
+    # 2026-11-21 (coordinator 11:48): no wording that can be satisfied literally ("make N attempts"); the guard does
+    # not know which requirement is unmet, so it asks the model to name one from the public task text.
+    'blocked': ('finish(outcome={outcome}) was not accepted yet: {remaining} act/look steps remain. Remaining work '
+                'is not a blocker, and missed pixel selections (nothing_lifted, not_placed, no_visible_change, '
+                'placement errors) are not blocked subgoals. Compare the public task requirements with what you have '
+                'done: state which requirement is still not met and what you will do next for it, then continue '
+                'working on it (a new view, a closer stance or another order of the remaining subgoals).'),
+    'blocked_repeat': ('finish(outcome={outcome}) was not accepted yet: {remaining} act/look steps remain. Compare '
+                       'the public task requirements with what you have done: state which requirement is still not '
+                       'met and what you will do next for it, then continue working on it. Actions that cannot apply '
+                       'in the current state (for example with an empty hand) do not move the task forward.'),
     'blocked_same_primitive': ('finish(outcome={outcome}) was not accepted yet: {remaining} act/look steps remain and '
-                               'all {made} failed action attempts repeated the same primitive '
-                               '({primitive}) without trying a structurally different recovery action. Repeating '
-                               'grasp/cut on a closed door or distant frame is not a blocked task: try open on a '
-                               'closed door/drawer, navigate_to to walk closer or enter another room, release to free '
-                               'your hand, or work on another independent subgoal first.'),
+                               'the recent failed attempts repeated {primitive} on the same target. A different view, '
+                               'a closer stance or another action (open a closed door or drawer, navigate_to to walk '
+                               'closer, release to free your hand) may work; or continue with another requirement that '
+                               'is still not met. State which requirement you will work on next, then continue.'),
     'achieved': ('finish(outcome=achieved) was not accepted yet: {remaining} act/look steps remain. Verify the '
                  'instruction against fresh RGB before finishing: use look (or move) so that every required object '
                  'and its destination are visible in a new image, and count each required item in that image, not '
@@ -69,9 +90,17 @@ MESSAGES = {
                         'in it, then finish again.'),
 }
 
+# Public receipt codes whose precondition was not met: the action could not apply, so it is not an attempt on the
+# obstacle and does not count towards accepting blocked/aborted (coordinator 11:48).
+PRECONDITION_CODES = frozenset({
+    'empty_hand', 'hand_occupied', 'robot_surface_selected', 'invalid_arguments', 'stale_image_ref',
+    'stale_observation', 'invalid_target', 'same_placement_object', 'unknown_skill_resource', 'no_surface_at_point',
+})
+POINT_BUCKET = 0.1   # two clicks this close (normalized image units) on the same view and stance are the same target
+
 # Counters are persisted so that a client restart (provider resume, rolling handoff, unfinished-turn nudge) keeps them.
 STATE_FIELDS = ('steps_remaining', 'deferrals', 'calls_since_blocked', 'calls_since_achieved', 'completed',
-                'failures_in_row', 'failed_primitives_in_row', 'history')
+                'failures_in_row', 'failed_primitives_in_row', 'history', 'failed_keys_in_row', 'stance_epoch')
 
 
 class FinishGuard:
@@ -83,6 +112,8 @@ class FinishGuard:
         self.completed = []
         self.failures_in_row = 0
         self.failed_primitives_in_row = []
+        self.failed_keys_in_row = []     # (stance, view, point bucket) of each counted failure since the last reset
+        self.stance_epoch = 0            # +1 after every completed navigate_to / return_to / look
         self.history = []
         self.state_memory_enabled = bool(state_memory)
         self.memory = StateMemory() if self.state_memory_enabled else None
@@ -139,13 +170,18 @@ class FinishGuard:
             step_used = error.get('action_step_used')
             if step_used is None:
                 step_used = not (reported and isinstance(before, int)) or self.steps_remaining < before
-            if not result.get('ok') and step_used:
+            code = error.get('code')
+            if not result.get('ok') and step_used and code not in PRECONDITION_CODES:
                 self.failures_in_row += 1
                 prim = str((arguments or {}).get('primitive') or name)
                 self.failed_primitives_in_row.append(prim)
+                self.failed_keys_in_row.append(_attempt_key(self.stance_epoch, arguments))
             elif completed:
                 self.failures_in_row = 0
                 self.failed_primitives_in_row = []
+                self.failed_keys_in_row = []
+            if result.get('ok') and (name == 'look' or str((arguments or {}).get('primitive')) in ('navigate_to', 'return_to')):
+                self.stance_epoch += 1
         if completed:
             intent = ' '.join(str((arguments or {}).get('intent') or '').split())
             if len(intent) > INTENT_CHARS:
@@ -262,9 +298,10 @@ class FinishGuard:
             if self.state_memory_enabled:
                 action_prims = [p for p in self.failed_primitives_in_row if p != 'look']
                 distinct_failed = set(action_prims)
-                if count and self.failures_in_row >= ATTEMPTS and len(distinct_failed) >= 2:
+                distinct_targets = {_hashable_key(k) for k in self.failed_keys_in_row}
+                if count and self.failures_in_row >= ATTEMPTS and len(distinct_targets) >= 2:
                     return None
-                if len(action_prims) >= 2 and len(distinct_failed) == 1:
+                if len(action_prims) >= 2 and len(distinct_targets) == 1:
                     only_prim = next(iter(distinct_failed))
                     message = MESSAGES['blocked_same_primitive'].format(
                         outcome=outcome, remaining=self.steps_remaining,
@@ -282,9 +319,10 @@ class FinishGuard:
                         )
             else:
                 distinct_failed = set(self.failed_primitives_in_row)
-                if count and self.failures_in_row >= ATTEMPTS and len(distinct_failed) >= 2:
+                distinct_targets = {_hashable_key(k) for k in self.failed_keys_in_row}
+                if count and self.failures_in_row >= ATTEMPTS and len(distinct_targets) >= 2:
                     return None
-                if count and self.failures_in_row >= ATTEMPTS and len(distinct_failed) == 1:
+                if count and self.failures_in_row >= ATTEMPTS and len(distinct_targets) == 1:
                     only_prim = next(iter(distinct_failed))
                     message = MESSAGES['blocked_same_primitive'].format(
                         outcome=outcome, remaining=self.steps_remaining, made=self.failures_in_row, primitive=only_prim)
@@ -297,6 +335,7 @@ class FinishGuard:
             self.calls_since_blocked = 0
             self.failures_in_row = 0
             self.failed_primitives_in_row = []
+            self.failed_keys_in_row = []
         else:
             if evidence_mode:
                 issues = self._memory_unresolved_issues() if self.state_memory_enabled else []

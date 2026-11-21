@@ -55,9 +55,11 @@ class FinishGuardRuleTests(unittest.TestCase):
         guard.observe(failed(397), 'act', {'primitive': 'grasp'})
         guard.observe(failed(396), 'act', {'primitive': 'open'})
         again = guard.deferral({'outcome': 'blocked', 'reason': 'still stuck'})
-        self.assertIn('2 failed act/look attempt(s) in a row', again['error']['message'])
-        for remaining, prim in zip(range(395, 395 - ATTEMPTS, -1), ('grasp', 'open', 'navigate_to')):
-            guard.observe(failed(remaining), 'act', {'primitive': prim})
+        self.assertIn('state which requirement is still not met', again['error']['message'])
+        self.assertNotIn('attempts', again['error']['message'].split('\n')[0])   # nothing to satisfy literally
+        for i, (remaining, prim) in enumerate(zip(range(395, 395 - ATTEMPTS, -1), ('grasp', 'open', 'navigate_to'))):
+            guard.observe(failed(remaining), 'act', {'primitive': prim, 'target': {'image_ref': 'rgb-00009-front',
+                                                                                     'point': [0.2 + 0.3 * i, 0.5]}})
         self.assertIsNone(guard.deferral(ABORT))
 
     def test_repeat_stop_with_same_primitive_is_deferred_until_diverse_attempt(self):
@@ -67,12 +69,41 @@ class FinishGuardRuleTests(unittest.TestCase):
             guard.observe(failed(remaining, 'fixed_object'), 'act', {'primitive': 'grasp'})
         same = guard.deferral({'outcome': 'blocked', 'reason': 'grasp failed 3 times'})
         self.assertIsNotNone(same)
-        self.assertIn('repeated the same primitive (grasp)', same['error']['message'])
-        # After trying at least 2 distinct primitives that still fail, stop is accepted
-        guard.observe(failed(394, 'pre_condition_error'), 'act', {'primitive': 'open'})
-        guard.observe(failed(393, 'navigation_unreachable'), 'act', {'primitive': 'navigate_to'})
-        guard.observe(failed(392, 'fixed_object'), 'act', {'primitive': 'grasp'})
+        self.assertIn('repeated grasp on the same target', same['error']['message'])
+        # After real attempts on different targets that still fail, stop is accepted
+        tgt = lambda x: {'image_ref': 'rgb-00009-front', 'point': [x, 0.5]}
+        guard.observe(failed(394, 'pre_condition_error'), 'act', {'primitive': 'open', 'target': tgt(0.2)})
+        guard.observe(failed(393, 'navigation_unreachable'), 'act', {'primitive': 'navigate_to', 'target': tgt(0.5)})
+        guard.observe(failed(392, 'fixed_object'), 'act', {'primitive': 'grasp', 'target': tgt(0.8)})
         self.assertIsNone(guard.deferral({'outcome': 'blocked', 'reason': 'tried open, nav, grasp'}))
+
+    def test_precondition_failures_do_not_release_a_stop(self):
+        """2026-11-21: empty-hand / hand-occupied / invalid-argument failures are not attempts on the obstacle."""
+        guard = self.guard_after_progress()
+        self.assertIsNotNone(guard.deferral(ABORT))
+        for i, (remaining, code, prim) in enumerate(zip(range(397, 391, -1),
+                ('empty_hand', 'empty_hand', 'hand_occupied', 'robot_surface_selected', 'invalid_arguments', 'empty_hand'),
+                ('attach', 'place_inside', 'toggle_on', 'place_inside', 'wipe', 'place_on_top'))):
+            guard.observe(failed(remaining, code), 'act', {'primitive': prim, 'target': {'image_ref': 'rgb-00009-front',
+                                                                                           'point': [0.1 * i, 0.5]}})
+        self.assertEqual(guard.failures_in_row, 0)
+        self.assertIsNotNone(guard.deferral(ABORT))
+
+    def test_same_target_and_stance_is_not_a_different_attempt(self):
+        guard = self.guard_after_progress()
+        self.assertIsNotNone(guard.deferral(ABORT))
+        same = {'primitive': 'grasp', 'target': {'image_ref': 'rgb-00009-front', 'point': [0.50, 0.68]}}
+        near = {'primitive': 'place_inside', 'target': {'image_ref': 'rgb-00010-front', 'point': [0.52, 0.66]}}
+        guard.observe(failed(397, 'nothing_lifted'), 'act', same)
+        guard.observe(failed(396, 'nothing_lifted'), 'act', near)
+        guard.observe(failed(395, 'nothing_lifted'), 'act', same)
+        self.assertIsNotNone(guard.deferral(ABORT))                    # three real failures, one target, one stance
+        guard.observe({'ok': True, 'effect': {'primitive': 'navigate_to', 'status': 'completed'},
+                       'execution_budget': budget(394)}, 'act', {'primitive': 'navigate_to'})
+        guard.observe(failed(393, 'nothing_lifted'), 'act', same)       # same pixel, new stance
+        guard.observe(failed(392, 'nothing_lifted'), 'act', near)
+        guard.observe(failed(391, 'nothing_lifted'), 'act', same)
+        self.assertIsNotNone(guard.deferral(ABORT))                    # still one target per stance since the reset
 
     def test_completed_act_restarts_the_failure_count(self):
         guard = self.guard_after_progress()
@@ -125,7 +156,7 @@ class FinishGuardRuleTests(unittest.TestCase):
             resumed = FinishGuard(path)
             self.assertEqual(resumed.deferrals, {'stop': 1})
             self.assertEqual(resumed.completed, [(1, 'grasp', '', None)])
-            self.assertIn('followed the previous deferral', resumed.deferral(ABORT)['error']['message'])
+            self.assertIn('state which requirement is still not met', resumed.deferral(ABORT)['error']['message'])
             resumed.observe({'ok': True, 'closed': True}, 'finish', ABORT)
             history = json.loads(path.read_text())['history']
             self.assertEqual([item['decision'] for item in history], ['deferred', 'deferred', 'accepted'])

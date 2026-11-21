@@ -404,7 +404,7 @@ def test_finish_guard_with_state_memory_protects_closed_enclosures_and_blocks_ba
     # Even though 3 calls failed (`grasp`, `grasp`, `look`), only 1 manipulation primitive (`grasp`) was tried -> still deferred!
     d_same = guard3.deferral({'outcome': 'blocked', 'reason': 'still stuck'})
     assert d_same is not None
-    assert 'repeated the same primitive (grasp)' in d_same['error']['message']
+    assert 'repeated grasp on the same target' in d_same['error']['message']
 
 
 def test_vision_harness_state_memory_switch_and_handoff_reinit(tmp_path: Path) -> None:
