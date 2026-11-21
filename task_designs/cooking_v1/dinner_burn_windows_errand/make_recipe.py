@@ -348,7 +348,8 @@ def build_reference_plan() -> dict:
         'stove_watch': {'actions': [wait(steaks_done, 5.0, 40), act('toggle_off', 'stove')],
                         'after': ['start_steaks']},
         # normal flow: the stove is already off; omit_stove_watch negative: wait until the steaks burn in the sim
-        'plate_steaks': {'actions': [wait({'any': [{'not': 'stove_on'}, steaks_burnt]}, 10.0, 12),
+        # r2b: 24 x 10 s (12 attempts ended exactly when the steaks were done, before the 30 s burn mark)
+        'plate_steaks': {'actions': [wait({'any': [{'not': 'stove_on'}, steaks_burnt]}, 10.0, 24),
                                      g('steak1', approach_role='stove'), put('plate1'),
                                      g('steak2', approach_role='stove'), put('plate2')], 'after': ['start_steaks']},
         'tray_hot_food': {'actions': [wait(soup_hot, 10.0, 20), act('open', 'microwave'),
