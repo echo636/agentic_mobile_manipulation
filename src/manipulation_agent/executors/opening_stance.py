@@ -17,7 +17,9 @@ Opening normal, generic (no task role, category or coordinate is read):
    expressed in the body's own frame; the dominant horizontal body axis (relative to the body half-extent) is the
    opening side. The hinge must lie on the same side (check); otherwise -> rc1 rule, recorded.
 3. Drawer (prismatic, horizontal axis): the slide axis, signed outward (away from the body centre).
-4. Lid (revolute, horizontal axis) or vertical slide: no sideways opening -> rc1 rule.
+4. Revolute with a horizontal hinge: a lid (closed panel on top) -> rc1 rule; a drop-down front door (oven: closed
+   panel on a side face) -> that face. Vertical slide, or a panel sliding along the body's long side (sliding door,
+   not a drawer) -> rc1 rule.
 Every decision is written to the private navigation record (normal, face, basis, fallback reason)."""
 import math
 import os
@@ -69,13 +71,17 @@ def face_from_point(point, body_center, body_yaw, half_extents):
     return i, (1 if scaled[i] >= 0 else -1), abs(scaled[i])
 
 
-def opening_normal(kind, axis_world, closed_ctr, hinge, body_center, body_yaw, half_extents):
+def opening_normal(kind, axis_world, closed_ctr, hinge, body_center, body_yaw, half_extents, half_z=None):
     """World xy unit normal of the opening side, plus a reason string; (None, reason) when there is none."""
     vertical = abs(axis_world[2]) / (math.sqrt(sum(a * a for a in axis_world)) or 1.0)
     if kind == 'revolute':
+        i, sgn, coord = face_from_point(closed_ctr, body_center, body_yaw, half_extents)
         if vertical < VERTICAL_AXIS_MIN:
-            return None, 'lid_horizontal_hinge'
-        i, sgn, _ = face_from_point(closed_ctr, body_center, body_yaw, half_extents)
+            # horizontal hinge: a lid (closed panel on the top) has no sideways opening; a drop-down front door
+            # (oven, dishwasher: closed panel on a side face, hinge at its bottom edge) opens sideways
+            zc = abs(closed_ctr[2] - body_center[2]) / max(half_z or 0.0, 1e-6) if half_z else float('inf')
+            if not (coord >= zc):
+                return None, 'lid_horizontal_hinge'
         hi, hsgn, hcoord = face_from_point(hinge, body_center, body_yaw, half_extents)
         rel_h = _rot_z([hinge[0] - body_center[0], hinge[1] - body_center[1]], -body_yaw)
         on_face = (rel_h[i] * sgn) / max(half_extents[i], 1e-6)
@@ -83,13 +89,20 @@ def opening_normal(kind, axis_world, closed_ctr, hinge, body_center, body_yaw, h
             return None, f'hinge_not_on_door_face(axis {i}, hinge at {on_face:.2f} of half-extent)'
         local = [0.0, 0.0]; local[i] = float(sgn)
         n = _rot_z(local, body_yaw)
-        return n, f'door_panel_closed_centre_face(axis {i} sign {sgn}); hinge check {on_face:.2f}'
+        kind_txt = 'door_panel_closed_centre_face' if vertical >= VERTICAL_AXIS_MIN else 'drop_down_door_closed_centre_face'
+        return n, f'{kind_txt}(axis {i} sign {sgn}); hinge check {on_face:.2f}'
     # prismatic
     if vertical > 1 - VERTICAL_AXIS_MIN:
         return None, 'vertical_slide'
     a = [axis_world[0], axis_world[1]]
     na = math.hypot(*a) or 1.0
     a = [a[0] / na, a[1] / na]
+    # a drawer slides along the body's shorter horizontal side (its depth); a panel sliding along the long side is a
+    # sliding door / screen, whose "outward" is not a place to stand
+    al = _rot_z(a, -body_yaw)
+    k = 0 if abs(al[0]) >= abs(al[1]) else 1
+    if half_extents[k] > half_extents[1 - k]:
+        return None, 'sliding_panel_along_long_side'
     out = [closed_ctr[0] - body_center[0], closed_ctr[1] - body_center[1]]
     if a[0] * out[0] + a[1] * out[1] < 0:
         a = [-a[0], -a[1]]
@@ -221,7 +234,7 @@ def opening_info(backend, obj, point):
     kind = 'revolute' if j.is_revolute else 'prismatic'
     center = [(lo[i] + hi[i]) / 2 for i in range(3)]
     closed = closed_center(kind, center, pivot, axis_w, q, bc)
-    normal, why = opening_normal(kind, axis_w, closed, pivot, bc, yaw, half)
+    normal, why = opening_normal(kind, axis_w, closed, pivot, bc, yaw, half, half_z=(bhi[2] - blo[2]) / 2)
     info = {'status': 'ok' if normal else 'no_side_opening', 'body': body.name, 'joint': j.joint_name, 'kind': kind,
             'clicked_link': bool(inside), 'joint_q': round(q, 3), 'axis_world': [round(v, 3) for v in axis_w],
             'body_center': [round(v, 3) for v in bc], 'body_yaw_deg': round(math.degrees(yaw), 1),

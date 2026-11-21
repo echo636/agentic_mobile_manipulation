@@ -67,3 +67,25 @@ def test_face_center_and_pick_front_cell():
     d = [math.hypot(x, y) for x, y in pts]
     assert OS.pick_front_cell(pts, d, 2.0, f, [1.0, 0.0]) == 1
     assert OS.pick_front_cell(pts, d, 1.0, f, [1.0, 0.0]) is None   # front cell beyond reach of the click
+
+
+def test_drop_down_oven_door_is_front_and_lid_is_not():
+    # oven (T3 kiln): hinge axis horizontal, closed door centre on the -y face at mid height, hinge at the bottom edge
+    n, why = OS.opening_normal('revolute', [1, 0, 0], [-6.02, 6.162, 0.343], [-6.02, 6.181, 0.125],
+                               [-6.02, 6.506, 0.364], -math.pi / 2, [0.35, 0.361], half_z=0.36)
+    assert n == pytest.approx([0.0, -1.0], abs=1e-6) and why.startswith('drop_down_door')
+    # toolbox lid: closed panel centre on top
+    n2, why2 = OS.opening_normal('revolute', [0, -1, 0], [19.883, 6.898, 1.054], [19.757, 6.898, 0.984],
+                                 [19.885, 6.898, 0.883], 0.0, [0.134, 0.309], half_z=0.17)
+    assert n2 is None and why2 == 'lid_horizontal_hinge'
+
+
+def test_sliding_room_door_is_not_a_drawer():
+    # sliding door: slide axis along the long side of a thin frame (T2 study_door)
+    n, why = OS.opening_normal('prismatic', [0, -1, 0], [20.203, 14.664, 1.162], [20.203, 13.848, 1.163],
+                               [20.203, 14.243, 2.31], 0.0, [0.05, 0.893])
+    assert n is None and why == 'sliding_panel_along_long_side'
+    # T2 drawer cabinet: slide along the short side -> outward
+    n2, _ = OS.opening_normal('prismatic', [-1, 0, 0], [19.854, 7.491, 0.289], [19.841, 7.497, 0.241],
+                              [19.89, 7.75, 0.277], math.pi, [0.202, 0.561])
+    assert n2 == pytest.approx([-1.0, 0.0], abs=1e-6)
