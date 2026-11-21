@@ -35,6 +35,8 @@ def public_observation(value: dict, revision: int) -> dict:
     return {**copy.deepcopy(value), "revision":revision}
 
 ERROR_MESSAGES = {
+    # timed_processes v5 (benchmark side): a declared appliance capacity; what a person sees at a full appliance
+    'appliance_full':'There is no room inside for this item: the appliance already holds as much as it can take. The item is still in your hand; take something out first or put this item somewhere else.',
     'articulation_endpoint_unresolved':'The executor could not find a checked, stable open position for the selected object\'s door or lid.',
     'look_rotation_blocked':'The requested turn has no checked clearance for the robot and carried item. Use the current four views; choose a different general approach if needed instead of repeating this turn.',
     'needs_macro_navigation':'The selected target is outside local adjustment range. Use navigate_to for a closer general approach, then select the target in the returned RGB.',
@@ -179,6 +181,9 @@ def factual_execution_error(exc: SkillError, primitive: str | None, hand: str | 
 def public_execution_error(exc: SkillError) -> dict:
     code = exc.code if exc.code in ERROR_MESSAGES else "execution_error"
     result = {"code":code,"message":ERROR_MESSAGES[code],"world_may_have_changed":exc.changed}
+    if code == 'appliance_full' and str(exc).strip():
+        result.update(message=f'{str(exc).strip()} The item is still in your hand; take something out first '
+                      'or put this item somewhere else.')
     if code == 'pre_condition_error' and exc.stage == 'unsupported_object_action':
         result.update(stage=exc.stage, message='The selected object does not support the requested '
                       'open/close or switch action. This is not a blocked mechanism; '

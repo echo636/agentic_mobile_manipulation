@@ -31,6 +31,16 @@ Self-stopping appliances (v4, 2026-11-20, benchmark side, all tiers; off unless 
 ``switch_off_when_complete`` the appliance switches itself off as soon as every item running in it has
 finished its cycle (a dishwasher or washing machine ends its programme). Items that were not inside
 during that run are not waited for; they need another run. Mutually exclusive with the overcook window.
+
+Upstream stage (v5, 2026-11-21, benchmark side, all tiers; off unless declared): with
+``requires_completed: <process id>`` an item only advances in this process after it has completed the
+named upstream process (frozen food bakes only once it is thawed). While the appliance would otherwise
+run it, the public text says so with ``not_ready_message`` (what a cook sees: the dish is still frozen).
+
+Appliance capacity (v5, same date; off unless declared): top-level ``appliance_capacities`` rows
+``{appliance, capacity, counted_items, full_message}``. ``place_inside`` of a counted item into that
+appliance is rejected with ``appliance_full`` when ``capacity`` counted items are already inside
+(a microwave that takes one large baking dish). Checked before any motion, so nothing moves.
 """
 from __future__ import annotations
 
@@ -41,7 +51,7 @@ from typing import Any
 from ..records import now
 from ..runtime.robot_clock import clock_of
 
-VERSION = 'timed_processes_robot_clock_v4_auto_off'
+VERSION = 'timed_processes_robot_clock_v5_stages_capacity'
 ALLOWED_CONTAINMENT = frozenset({'Inside', 'OnTop'})
 ALLOWED_OBJECT_STATES = frozenset({None, 'Cooked'})
 
@@ -101,6 +111,95 @@ def validate_timed_processes(spec: dict[str, Any]) -> None:
                 raise ValueError(f'timed_process {pid} cannot both switch off when complete and overcook')
             if row['switch_off_when_complete'] and row.get('require_toggled_on', True) is not True:
                 raise ValueError(f'timed_process {pid} switch_off_when_complete requires require_toggled_on')
+    by_id = {row['id']: row for row in processes}
+    for row in processes:
+        pid = row['id']
+        if 'requires_completed' in row:
+            up = row['requires_completed']
+            if up not in by_id or up == pid:
+                raise ValueError(f'timed_process {pid} requires_completed references unknown process: {up!r}')
+            if not set(row['items']) <= set(by_id[up]['items']):
+                raise ValueError(f'timed_process {pid} items must all belong to upstream process {up}')
+            if 'requires_completed' in by_id[up]:
+                raise ValueError(f'timed_process {pid}: chained upstream stages are not supported')
+            msg = row.get('not_ready_message')
+            if not isinstance(msg, str) or not msg.strip():
+                raise ValueError(f'timed_process {pid} with requires_completed needs a nonempty not_ready_message')
+        elif 'not_ready_message' in row:
+            raise ValueError(f'timed_process {pid} not_ready_message requires requires_completed')
+
+
+def validate_appliance_capacities(spec: dict[str, Any]) -> None:
+    rows = spec.get('appliance_capacities')
+    if rows is None:
+        return
+    roles = spec.get('roles', {})
+    if not isinstance(rows, list) or not rows:
+        raise ValueError('appliance_capacities must be a nonempty list when present')
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict) or row.get('appliance') not in roles or row['appliance'] in seen:
+            raise ValueError(f'appliance_capacities row needs a distinct known appliance role: {row!r}')
+        seen.add(row['appliance'])
+        cap = row.get('capacity')
+        if type(cap) is not int or cap < 1:
+            raise ValueError(f"appliance_capacities {row['appliance']} capacity must be a positive integer")
+        items = row.get('counted_items')
+        if (not isinstance(items, list) or not items or len(set(items)) != len(items)
+                or any(i not in roles or i == row['appliance'] for i in items)):
+            raise ValueError(f"appliance_capacities {row['appliance']} needs distinct valid counted_items")
+        msg = row.get('full_message')
+        if not isinstance(msg, str) or not msg.strip():
+            raise ValueError(f"appliance_capacities {row['appliance']} needs a nonempty full_message")
+
+
+def is_contained(item_obj: Any, appliance_obj: Any, mode: str) -> bool:
+    """Native ``Inside``/``OnTop`` with an AABB fallback (food in a pan on a stove, a dish on a rack)."""
+    if hasattr(item_obj, 'mock_relations'):
+        return appliance_obj in item_obj.mock_relations.get(mode, set())
+    from omnigibson.object_states import Inside, OnTop
+    state_cls = Inside if mode == 'Inside' else OnTop
+    try:
+        if state_cls in item_obj.states and item_obj.states[state_cls].get_value(appliance_obj):
+            return True
+    except Exception:
+        pass
+    try:
+        (ilo, ihi), (alo, ahi) = item_obj.aabb, appliance_obj.aabb
+        cx = float(ilo[0] + ihi[0]) * 0.5
+        cy = float(ilo[1] + ihi[1]) * 0.5
+        cz = float(ilo[2] + ihi[2]) * 0.5
+        xy_in = (float(alo[0]) - 0.02 <= cx <= float(ahi[0]) + 0.02
+                 and float(alo[1]) - 0.02 <= cy <= float(ahi[1]) + 0.02)
+        if mode == 'Inside':
+            return xy_in and float(alo[2]) - 0.02 <= cz <= float(ahi[2]) + 0.02
+        return xy_in and float(ahi[2]) - 0.05 <= float(ilo[2]) <= float(ahi[2]) + 0.15
+    except Exception:
+        return False
+
+
+def check_appliance_capacity(spec: dict[str, Any], live: dict[str, Any], held: Any, target: Any) -> None:
+    """Raise ``appliance_full`` before a place_inside that would exceed a declared capacity."""
+    rows = spec.get('appliance_capacities') or []
+    if not rows or held is None or target is None:
+        return
+    roles = spec.get('roles', {})
+    name_to_role = {name: role for role, name in roles.items()}
+    target_role = name_to_role.get(getattr(target, 'name', None))
+    held_role = name_to_role.get(getattr(held, 'name', None))
+    for row in rows:
+        if row['appliance'] != target_role or held_role not in row['counted_items']:
+            continue
+        inside = 0
+        for role in row['counted_items']:
+            obj = live.get(roles[role])
+            if obj is None or obj is held:
+                continue
+            if is_contained(obj, target, 'Inside'):
+                inside += 1
+        if inside >= row['capacity']:
+            from ..contracts import SkillError
+            raise SkillError('appliance_full', row['full_message'].strip())
 
 
 def normalize_rule(raw: dict[str, Any]) -> dict[str, Any]:
@@ -121,6 +220,8 @@ def normalize_rule(raw: dict[str, Any]) -> dict[str, Any]:
                                    if raw.get('overcook_after_seconds') is not None else None),
         'overcooked_message': (raw.get('overcooked_message') or '').strip(),
         'switch_off_when_complete': bool(raw.get('switch_off_when_complete', False)),
+        'requires_completed': raw.get('requires_completed'),
+        'not_ready_message': (raw.get('not_ready_message') or '').strip(),
     }
 
 
@@ -205,31 +306,26 @@ class TimedProcesses:
             obj.states[ToggledOn].set_value(False)
 
     def _is_contained(self, item_obj: Any, appliance_obj: Any, mode: str) -> bool:
-        if hasattr(item_obj, 'mock_relations'):
-            return appliance_obj in item_obj.mock_relations.get(mode, set())
-        from omnigibson.object_states import Inside, OnTop
-        state_cls = Inside if mode == 'Inside' else OnTop
-        try:
-            if state_cls in item_obj.states and item_obj.states[state_cls].get_value(appliance_obj):
-                return True
-        except Exception:
-            pass
-        try:
-            (ilo, ihi), (alo, ahi) = item_obj.aabb, appliance_obj.aabb
-            cx = float(ilo[0] + ihi[0]) * 0.5
-            cy = float(ilo[1] + ihi[1]) * 0.5
-            cz = float(ilo[2] + ihi[2]) * 0.5
-            xy_in = (float(alo[0]) - 0.02 <= cx <= float(ahi[0]) + 0.02
-                     and float(alo[1]) - 0.02 <= cy <= float(ahi[1]) + 0.02)
-            if mode == 'Inside':
-                return xy_in and float(alo[2]) - 0.02 <= cz <= float(ahi[2]) + 0.02
-            return xy_in and float(ahi[2]) - 0.05 <= float(ilo[2]) <= float(ahi[2]) + 0.15
-        except Exception:
-            return False
+        return is_contained(item_obj, appliance_obj, mode)
 
     def is_item_active(self, backend: Any, process_id: str, item_role: str,
                        *, live: dict[str, Any] | None = None) -> bool:
         rule = self.by_id[process_id]
+        up = rule['requires_completed']
+        if up is not None and not self.completed[up][item_role]:
+            return False
+        return self._conditions_hold(backend, rule, item_role, live)
+
+    def is_item_waiting_upstream(self, backend: Any, process_id: str, item_role: str,
+                                 *, live: dict[str, Any] | None = None) -> bool:
+        """The appliance would run this item, but its upstream stage is not complete yet."""
+        rule = self.by_id[process_id]
+        up = rule['requires_completed']
+        return (up is not None and not self.completed[up][item_role]
+                and self._conditions_hold(backend, rule, item_role, live))
+
+    def _conditions_hold(self, backend: Any, rule: dict[str, Any], item_role: str,
+                         live: dict[str, Any] | None) -> bool:
         live = self._live_map(backend) if live is None else live
         appliance = self._role_obj(backend, rule['appliance'], live)
         item = self._role_obj(backend, item_role, live)
@@ -423,6 +519,17 @@ class TimedProcesses:
                 any_unfinished_running = True
             if error is not None or pid in just_completed_rules or pid in just_overcooked_rules:
                 continue
+            if rule['requires_completed'] is not None and not unfinished_running_now:
+                waiting = False
+                for item in rule['items']:
+                    try:
+                        waiting = waiting or self.is_item_waiting_upstream(backend, pid, item, live=live)
+                    except Exception as exc:
+                        self._anomaly('waiting_upstream', exc)
+                if waiting and (primitive in {'wait', 'toggle_on', 'look', 'close'}
+                                or self._selected_matches_rule(backend, rule, selected_prim, live)):
+                    transient_messages.append(rule['not_ready_message'])
+                    continue
             if rule['overcook_after_seconds'] is not None and not unfinished_running_now:
                 left = [self._overcook_left(rule, item) for item in rule['items']
                         if active_now[(pid, item)] and self.completed[pid][item] and not self.overcooked[pid][item]]
@@ -526,6 +633,7 @@ class TimedProcesses:
                     'overcook_after_seconds': rule['overcook_after_seconds'],
                     'overcooked': dict(self.overcooked[rule['id']]),
                     'switch_off_when_complete': rule['switch_off_when_complete'],
+                    'requires_completed': rule['requires_completed'],
                     'active': ({item: self.is_item_active(backend, rule['id'], item, live=live)
                                 for item in rule['items']} if backend is not None and live else None),
                 }

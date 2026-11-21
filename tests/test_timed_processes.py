@@ -476,5 +476,90 @@ class TimedProcessesTests(unittest.TestCase):
             self.assertAlmostEqual(b.timed.elapsed['wash_dishes']['cup2'], 40.0, places=3)
 
 
+def _thaw_bake_spec():
+    """v5: a frozen dish thaws in the microwave (40 s) and only then bakes in the oven (60 s)."""
+    spec = _sample_spec()
+    spec['roles'].update({'oven': 'oven_0', 'dish': 'dish_0', 'dish2': 'dish_2'})
+    spec['timed_processes'] = [
+        {'id': 'thaw', 'appliance': 'microwave', 'items': ['dish', 'dish2'], 'containment': 'Inside',
+         'duration_seconds': 40.0, 'switch_off_when_complete': True,
+         'running_message': 'The microwave is thawing the dish.', 'completed_message': 'The dish is thawed.',
+         'stopped_early_message': 'The microwave stopped before the dish was thawed.'},
+        {'id': 'bake', 'appliance': 'oven', 'items': ['dish'], 'containment': 'Inside',
+         'duration_seconds': 60.0, 'requires_completed': 'thaw',
+         'running_message': 'The oven is baking the dish.', 'completed_message': 'The dish is baked.',
+         'stopped_early_message': 'The oven stopped before the dish was baked.',
+         'not_ready_message': 'The dish in the oven is still frozen, so it is not baking yet.'},
+    ]
+    spec['evaluation']['predicates'] = {
+        'dish_baked': {'object': 'dish', 'state': 'ProcessComplete', 'process': 'bake'},
+        'hotdog1_cooked': {'object': 'hotdog1', 'state': 'Cooked'}}
+    spec['evaluation']['terminal'] = {'all_done': 'dish_baked'}
+    spec['appliance_capacities'] = [{'appliance': 'microwave', 'capacity': 1, 'counted_items': ['dish', 'dish2'],
+                                     'full_message': 'The microwave takes only one baking dish at a time.'}]
+    return spec
+
+
+class StagesAndCapacityTests(unittest.TestCase):
+    def test_validation(self):
+        self.assertEqual(validate_spec(_thaw_bake_spec())['status'], 'passed')
+        for mutate, msg in (
+                (lambda s: s['timed_processes'][1].__setitem__('requires_completed', 'nope'), 'unknown process'),
+                (lambda s: s['timed_processes'][1].pop('not_ready_message'), 'not_ready_message'),
+                (lambda s: s['timed_processes'][0].__setitem__('not_ready_message', 'x'), 'requires requires_completed'),
+                (lambda s: s['timed_processes'][1].__setitem__('items', ['dish', 'hotdog1']), 'must all belong'),
+                (lambda s: s['appliance_capacities'][0].__setitem__('capacity', 0), 'positive integer'),
+                (lambda s: s['appliance_capacities'][0].pop('full_message'), 'full_message'),
+        ):
+            spec = _thaw_bake_spec()
+            mutate(spec)
+            with self.assertRaisesRegex(ValueError, msg):
+                validate_spec(spec)
+
+    def test_frozen_dish_does_not_bake_until_thawed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b = _MockBackend(_thaw_bake_spec(), tmp)
+            mw, oven, dish = b.mock_objects['microwave_0'], b.mock_objects['oven_0'], b.mock_objects['dish_0']
+            dish.mock_relations['Inside'].add(oven)
+            out = b.run_action('toggle_on', selected='oven_0',
+                               body=lambda: oven.mock_states.__setitem__('ToggledOn', True))
+            self.assertIn('still frozen', out['public_process']['message'])
+            b.run_action('wait', wait_s=90.0)
+            self.assertEqual(b.timed.elapsed['bake']['dish'], 0.0)
+            self.assertFalse(b.timed.is_completed('bake', 'dish'))
+            # thaw in the microwave, then the oven bakes it
+            dish.mock_relations['Inside'] = {mw}
+            b.run_action('toggle_on', selected='microwave_0',
+                         body=lambda: mw.mock_states.__setitem__('ToggledOn', True))
+            b.run_action('wait', wait_s=40.0)
+            self.assertTrue(b.timed.is_completed('thaw', 'dish'))
+            self.assertFalse(mw.mock_states['ToggledOn'])
+            dish.mock_relations['Inside'] = {oven}
+            out = b.run_action('close', selected='oven_0')
+            self.assertIn('oven is baking', out['public_process']['message'])
+            b.run_action('wait', wait_s=60.0)
+            self.assertTrue(b.timed.is_completed('bake', 'dish'))
+
+    def test_capacity_rejects_second_dish_before_motion(self):
+        from manipulation_agent.executors.timed_processes import check_appliance_capacity
+        from manipulation_agent.observations.boundary import public_execution_error
+        spec = _thaw_bake_spec()
+        with tempfile.TemporaryDirectory() as tmp:
+            b = _MockBackend(spec, tmp)
+            mw, dish, dish2 = b.mock_objects['microwave_0'], b.mock_objects['dish_0'], b.mock_objects['dish_2']
+            check_appliance_capacity(spec, b.mock_objects, dish, mw)       # empty microwave: fine
+            dish.mock_relations['Inside'].add(mw)
+            with self.assertRaises(SkillError) as ctx:
+                check_appliance_capacity(spec, b.mock_objects, dish2, mw)
+            self.assertEqual(ctx.exception.code, 'appliance_full')
+            public = public_execution_error(ctx.exception)
+            self.assertEqual(public['code'], 'appliance_full')
+            self.assertIn('only one baking dish', public['message'])
+            self.assertIn('take something out first', public['message'])
+            # an uncounted item, or another appliance, is not limited
+            check_appliance_capacity(spec, b.mock_objects, b.mock_objects['cup_1'], mw)
+            check_appliance_capacity(spec, b.mock_objects, dish2, b.mock_objects['oven_0'])
+
+
 if __name__ == '__main__':
     unittest.main()

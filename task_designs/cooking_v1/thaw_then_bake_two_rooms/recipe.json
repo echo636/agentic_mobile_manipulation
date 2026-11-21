@@ -1,0 +1,1695 @@
+{
+ "schema_version": 3,
+ "id": "thaw_then_bake_two_rooms",
+ "instance_id": "thaw_then_bake_two_rooms_seed0_r0",
+ "status": "complete_recipe_physics_pending",
+ "benchmark_ready": false,
+ "official_submission_eligible": false,
+ "base": {
+  "task": "preparing_lunch_box",
+  "instance": 301,
+  "seed": 0
+ },
+ "roles": {
+  "storage": "countertop_kelzer_0",
+  "island": "bar_udatjt_0",
+  "fridge": "fridge_dszchb_0",
+  "oven": "oven_ffitak_0",
+  "microwave": "microwave_abzvij_0",
+  "cabinet": "bottom_cabinet_fancyy_0",
+  "table": "coffee_table_rlsebe_0",
+  "nightstand": "nightstand_wbxekb_2",
+  "bed": "bed_rrcvaq_1",
+  "bedroom_door": "sliding_door_tprpvb_1",
+  "floor": "floors_qgmjvd_0",
+  "tea": "bottle_of_tea_208",
+  "tray": "c2_tray",
+  "lasagna": "c2_lasagna",
+  "fish": "c2_fish",
+  "plate1": "c2_plate1",
+  "plate2": "c2_plate2",
+  "fork1": "c2_fork1",
+  "fork2": "c2_fork2",
+  "fork3": "c2_fork3",
+  "unused_board": "chopping_board_211",
+  "unused_half_apple_a": "half_apple_212",
+  "unused_half_apple_b": "half_apple_213",
+  "unused_cookie": "chocolate_chip_cookie_207",
+  "unused_sandwich": "club_sandwich_209",
+  "unused_box": "packing_box_210"
+ },
+ "scene_exclusions": [
+  "water_glass_bbpraa_0",
+  "table_lamp_uupwiq_0"
+ ],
+ "construction_asset_scales": [
+  {
+   "object": "unused_board",
+   "scale": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "reason": "Native board size so it fits inside the closed pantry cabinet."
+  }
+ ],
+ "asset_imports": [
+  {
+   "name": "c2_plate1",
+   "source_task": "setting_the_table",
+   "source_object": "plate_243",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    119.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.5,
+    1.5,
+    1.0
+   ]
+  },
+  {
+   "name": "c2_plate2",
+   "source_task": "setting_the_table",
+   "source_object": "plate_244",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    122.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.5,
+    1.5,
+    1.0
+   ]
+  },
+  {
+   "name": "c2_fork1",
+   "source_task": "setting_the_table",
+   "source_object": "tablefork_247",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    125.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    0.85,
+    2.2,
+    1.5
+   ]
+  },
+  {
+   "name": "c2_fork2",
+   "source_task": "setting_the_table",
+   "source_object": "tablefork_248",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    128.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    0.85,
+    2.2,
+    1.5
+   ]
+  },
+  {
+   "name": "c2_fork3",
+   "source_task": "setting_the_table",
+   "source_object": "tablefork_247",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    131.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    0.85,
+    2.2,
+    1.5
+   ]
+  }
+ ],
+ "native_assets": [
+  {
+   "name": "c2_tray",
+   "category": "tray",
+   "model": "coqeme",
+   "usd_sha256": "f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd",
+   "prim_type": 0,
+   "position": [
+    95.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    3.38,
+    2.16,
+    1.5
+   ]
+  },
+  {
+   "name": "c2_lasagna",
+   "category": "casserole",
+   "model": "mmbavt",
+   "usd_sha256": "c1c415281c0c235cbaeb04e3b054e95b3a3afec114009e9939fec42851c66363",
+   "prim_type": 0,
+   "position": [
+    98.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    0.8,
+    0.8,
+    0.8
+   ]
+  },
+  {
+   "name": "c2_fish",
+   "category": "casserole",
+   "model": "ncbsee",
+   "usd_sha256": "14c40dfabcac6ca15fe71623625e7201deac519c2e0082e3727504b735475824",
+   "prim_type": 0,
+   "position": [
+    101.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    0.8,
+    0.8,
+    0.8
+   ]
+  }
+ ],
+ "timed_processes": [
+  {
+   "id": "thaw",
+   "appliance": "microwave",
+   "items": [
+    "lasagna"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 120.0,
+   "switch_off_when_complete": true,
+   "running_message": "The microwave is running; the lasagna inside is thawing.",
+   "completed_message": "The microwave chimed: the lasagna is thawed and the microwave has switched itself off.",
+   "stopped_early_message": "The microwave stopped before the lasagna was thawed."
+  },
+  {
+   "id": "thaw_fish",
+   "appliance": "microwave",
+   "items": [
+    "fish"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 360.0,
+   "switch_off_when_complete": true,
+   "running_message": "The microwave is running; the fish casserole inside is thawing.",
+   "completed_message": "The microwave chimed: the fish casserole is thawed and the microwave has switched itself off.",
+   "stopped_early_message": "The microwave stopped before the fish casserole was thawed."
+  },
+  {
+   "id": "bake_lasagna",
+   "appliance": "oven",
+   "items": [
+    "lasagna"
+   ],
+   "requires_completed": "thaw",
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 600.0,
+   "running_message": "The oven is on; the lasagna inside is baking.",
+   "completed_message": "The oven timer beeped: the lasagna is baked.",
+   "stopped_early_message": "The oven stopped before the lasagna was baked.",
+   "not_ready_message": "The lasagna in the oven is still frozen, so it is not baking."
+  },
+  {
+   "id": "bake_fish",
+   "appliance": "oven",
+   "items": [
+    "fish"
+   ],
+   "requires_completed": "thaw_fish",
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 240.0,
+   "running_message": "The oven is on; the fish casserole inside is baking.",
+   "completed_message": "The oven timer beeped: the fish casserole is baked.",
+   "stopped_early_message": "The oven stopped before the fish casserole was baked.",
+   "not_ready_message": "The fish casserole in the oven is still frozen, so it is not baking."
+  }
+ ],
+ "appliance_capacities": [
+  {
+   "appliance": "microwave",
+   "capacity": 1,
+   "counted_items": [
+    "lasagna",
+    "fish"
+   ],
+   "full_message": "The microwave takes only one baking dish at a time, and one is already inside."
+  }
+ ],
+ "initial_layout": [
+  {
+   "object": "bedroom_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "fridge",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "lasagna",
+   "target": "fridge",
+   "place_on_support": true,
+   "xy": [
+    7.68,
+    -1.85
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "support_probe_height": 1.0,
+   "initial_relation": "Inside"
+  },
+  {
+   "object": "fish",
+   "target": "fridge",
+   "place_on_support": true,
+   "xy": [
+    7.95,
+    -1.85
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "support_probe_height": 1.0,
+   "initial_relation": "Inside"
+  },
+  {
+   "object": "fridge",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "plate1",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    6.02,
+    0.05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "plate2",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    6.42,
+    0.05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "tray",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    7.0,
+    0.08
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "fork1",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    7.5,
+    0.05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "fork2",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    7.74,
+    0.05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "fork3",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    7.98,
+    0.05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "tea",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    8.4,
+    0.05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "cabinet",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "unused_board",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.74,
+    -1.96
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "support_probe_height": 0.9,
+   "initial_relation": "Inside"
+  },
+  {
+   "object": "unused_half_apple_a",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.22,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_half_apple_b",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.42,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_cookie",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.62,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_sandwich",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.86,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_box",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    9.22,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "cabinet",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "oven",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "oven",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "microwave",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "microwave",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  }
+ ],
+ "initial_assertions": {
+  "lasagna_in_fridge": "initial_lasagna_Inside",
+  "fish_in_fridge": "initial_fish_Inside",
+  "plate1_on_island": "initial_plate1_OnTop",
+  "plate2_on_island": "initial_plate2_OnTop",
+  "fork1_on_island": "initial_fork1_OnTop",
+  "fork2_on_island": "initial_fork2_OnTop",
+  "fork3_on_island": "initial_fork3_OnTop",
+  "tea_on_island": "initial_tea_OnTop",
+  "tray_on_island": "initial_tray_OnTop",
+  "fridge_closed": {
+   "not": "fridge_open"
+  },
+  "cabinet_closed": {
+   "not": "cabinet_open"
+  },
+  "oven_closed": {
+   "not": "oven_open"
+  },
+  "microwave_closed": {
+   "not": "microwave_open"
+  },
+  "oven_off": {
+   "not": "oven_on"
+  },
+  "microwave_off": {
+   "not": "microwave_on"
+  },
+  "hand_empty": "hand_empty"
+ },
+ "future_roles": [],
+ "replacements": [],
+ "public_instruction": "Thaw and bake the frozen fish casserole and the frozen lasagna; serve the fish with a fork and tea in the children's bedroom and the lasagna with plates and forks in the living room, and leave the kitchen appliances off and closed.",
+ "public_context": [
+  "Two frozen dishes are inside the refrigerator: a fish casserole in the round baking dish and a lasagna in the rectangular baking dish. Each must first be thawed in the microwave on the west preparation counter and then baked in the black built-in oven to the right of the refrigerator; a dish that is still frozen does not bake in the oven. The fish casserole thaws in about 6 minutes and then bakes in about 4 minutes; the lasagna thaws in about 2 minutes and then bakes in about 10 minutes. Thawing and baking only progress while the appliance door is closed and the appliance is switched on. The microwave takes only one baking dish at a time and switches itself off when it is done; the oven holds both dishes at once and does not switch itself off.",
+  "Serve the baked fish casserole with one fork and the bottle of tea on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor), for the person resting there: directly on the nightstand or on the serving tray resting on it.",
+  "Serve the baked lasagna with two plates and two forks on the living-room coffee table (the low square table in front of the sofas east of the kitchen): directly on the table or on the serving tray resting on it. The plates, the three forks, the bottle of tea and a 48 x 48 cm serving tray start on the kitchen island.",
+  "Leave the oven and the microwave switched off, and the oven, microwave and refrigerator closed.",
+  "Finish with no object held."
+ ],
+ "requirements": [
+  {
+   "id": "dishes_baked",
+   "text": "Two frozen dishes are inside the refrigerator: a fish casserole in the round baking dish and a lasagna in the rectangular baking dish. Each must first be thawed in the microwave on the west preparation counter and then baked in the black built-in oven to the right of the refrigerator; a dish that is still frozen does not bake in the oven. The fish casserole thaws in about 6 minutes and then bakes in about 4 minutes; the lasagna thaws in about 2 minutes and then bakes in about 10 minutes. Thawing and baking only progress while the appliance door is closed and the appliance is switched on. The microwave takes only one baking dish at a time and switches itself off when it is done; the oven holds both dishes at once and does not switch itself off.",
+   "terminal": [
+    "dishes_baked"
+   ]
+  },
+  {
+   "id": "fish_served",
+   "text": "Serve the baked fish casserole with one fork and the bottle of tea on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor), for the person resting there: directly on the nightstand or on the serving tray resting on it.",
+   "terminal": [
+    "fish_served"
+   ]
+  },
+  {
+   "id": "lasagna_served",
+   "text": "Serve the baked lasagna with two plates and two forks on the living-room coffee table (the low square table in front of the sofas east of the kitchen): directly on the table or on the serving tray resting on it. The plates, the three forks, the bottle of tea and a 48 x 48 cm serving tray start on the kitchen island.",
+   "terminal": [
+    "lasagna_served"
+   ]
+  },
+  {
+   "id": "appliances_safe",
+   "text": "Leave the oven and the microwave switched off, and the oven, microwave and refrigerator closed.",
+   "terminal": [
+    "appliances_safe"
+   ]
+  },
+  {
+   "id": "hand_empty",
+   "text": "Finish with no object held.",
+   "terminal": [
+    "hand_empty"
+   ]
+  }
+ ],
+ "evaluation": {
+  "predicates": {
+   "lasagna_baked": {
+    "object": "lasagna",
+    "state": "ProcessComplete",
+    "process": "bake_lasagna"
+   },
+   "fish_baked": {
+    "object": "fish",
+    "state": "ProcessComplete",
+    "process": "bake_fish"
+   },
+   "lasagna_thawed": {
+    "object": "lasagna",
+    "state": "ProcessComplete",
+    "process": "thaw"
+   },
+   "fish_thawed": {
+    "object": "fish",
+    "state": "ProcessComplete",
+    "process": "thaw_fish"
+   },
+   "lasagna_ontop_table": {
+    "object": "lasagna",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "lasagna_ontop_tray": {
+    "object": "lasagna",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "plate1_ontop_table": {
+    "object": "plate1",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "plate1_ontop_tray": {
+    "object": "plate1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "plate2_ontop_table": {
+    "object": "plate2",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "plate2_ontop_tray": {
+    "object": "plate2",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "fork1_ontop_table": {
+    "object": "fork1",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "fork1_ontop_tray": {
+    "object": "fork1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "fork2_ontop_table": {
+    "object": "fork2",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "fork2_ontop_tray": {
+    "object": "fork2",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "fish_ontop_nightstand": {
+    "object": "fish",
+    "state": "OnTop",
+    "target": "nightstand"
+   },
+   "fish_ontop_tray": {
+    "object": "fish",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "fork3_ontop_nightstand": {
+    "object": "fork3",
+    "state": "OnTop",
+    "target": "nightstand"
+   },
+   "fork3_ontop_tray": {
+    "object": "fork3",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "tea_ontop_nightstand": {
+    "object": "tea",
+    "state": "OnTop",
+    "target": "nightstand"
+   },
+   "tea_ontop_tray": {
+    "object": "tea",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "tray_ontop_table": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "tray_ontop_nightstand": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "nightstand"
+   },
+   "fridge_open": {
+    "object": "fridge",
+    "state": "Open"
+   },
+   "cabinet_open": {
+    "object": "cabinet",
+    "state": "Open"
+   },
+   "oven_open": {
+    "object": "oven",
+    "state": "Open"
+   },
+   "microwave_open": {
+    "object": "microwave",
+    "state": "Open"
+   },
+   "oven_on": {
+    "object": "oven",
+    "state": "ToggledOn"
+   },
+   "microwave_on": {
+    "object": "microwave",
+    "state": "ToggledOn"
+   },
+   "hand_empty": {
+    "object": "tea",
+    "state": "HandEmpty"
+   },
+   "initial_lasagna_Inside": {
+    "object": "lasagna",
+    "state": "Inside",
+    "target": "fridge"
+   },
+   "initial_fish_Inside": {
+    "object": "fish",
+    "state": "Inside",
+    "target": "fridge"
+   },
+   "initial_plate1_OnTop": {
+    "object": "plate1",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_plate2_OnTop": {
+    "object": "plate2",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_fork1_OnTop": {
+    "object": "fork1",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_fork2_OnTop": {
+    "object": "fork2",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_fork3_OnTop": {
+    "object": "fork3",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_tea_OnTop": {
+    "object": "tea",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_tray_OnTop": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "island"
+   }
+  },
+  "terminal": {
+   "dishes_baked": {
+    "all": [
+     "lasagna_baked",
+     "fish_baked"
+    ]
+   },
+   "fish_served": {
+    "all": [
+     "fish_baked",
+     {
+      "any": [
+       "fish_ontop_nightstand",
+       {
+        "all": [
+         "fish_ontop_tray",
+         "tray_ontop_nightstand"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "fork3_ontop_nightstand",
+       {
+        "all": [
+         "fork3_ontop_tray",
+         "tray_ontop_nightstand"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "tea_ontop_nightstand",
+       {
+        "all": [
+         "tea_ontop_tray",
+         "tray_ontop_nightstand"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "lasagna_served": {
+    "all": [
+     "lasagna_baked",
+     {
+      "any": [
+       "lasagna_ontop_table",
+       {
+        "all": [
+         "lasagna_ontop_tray",
+         "tray_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "plate1_ontop_table",
+       {
+        "all": [
+         "plate1_ontop_tray",
+         "tray_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "plate2_ontop_table",
+       {
+        "all": [
+         "plate2_ontop_tray",
+         "tray_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "fork1_ontop_table",
+       {
+        "all": [
+         "fork1_ontop_tray",
+         "tray_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "fork2_ontop_table",
+       {
+        "all": [
+         "fork2_ontop_tray",
+         "tray_ontop_table"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "appliances_safe": {
+    "all": [
+     {
+      "not": "oven_on"
+     },
+     {
+      "not": "microwave_on"
+     },
+     {
+      "not": "oven_open"
+     },
+     {
+      "not": "microwave_open"
+     },
+     {
+      "not": "fridge_open"
+     }
+    ]
+   },
+   "hand_empty": "hand_empty"
+  },
+  "score_type": "custom_joint_terminal_and_public_history_v2"
+ },
+ "acceptance_cases": {
+  "reference_orders": [
+   "optimal_johnson_tray",
+   "habit_sequential"
+  ],
+  "physical_negative_cases": [
+   "omit_fish_serve",
+   "omit_living_tableware",
+   "omit_lasagna_serve"
+  ],
+  "fresh_restore_repetitions": 2,
+  "max_reference_action_attempts": 300
+ },
+ "reference_plan": {
+  "kind": "full_workflow",
+  "allow_strategy_variants": true,
+  "phases": {
+   "thaw_lasagna": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "open",
+      "role": "fridge"
+     },
+     {
+      "primitive": "grasp",
+      "role": "lasagna",
+      "approach_role": "fridge"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "fridge"
+     }
+    ],
+    "after": []
+   },
+   "lasagna_to_oven": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "lasagna_thawed",
+      "seconds": 20.0,
+      "attempts": 25
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "grasp",
+      "role": "lasagna",
+      "approach_role": "microwave"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "oven",
+      "xy": [
+       8.3,
+       -1.82
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "oven"
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     }
+    ],
+    "after": [
+     "thaw_lasagna"
+    ]
+   },
+   "thaw_fish": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "open",
+      "role": "fridge"
+     },
+     {
+      "primitive": "grasp",
+      "role": "fish",
+      "approach_role": "fridge"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "fridge"
+     }
+    ],
+    "after": [
+     "lasagna_to_oven"
+    ]
+   },
+   "tray_north": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "fork3"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.25,
+       0.25
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "tea"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.25,
+       0.75
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "tray"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "nightstand",
+      "xy": [
+       20.55,
+       14.0
+      ]
+     }
+    ],
+    "after": []
+   },
+   "plates_living": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "plate1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.25,
+       0.25
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "plate2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.25,
+       0.75
+      ]
+     }
+    ],
+    "after": []
+   },
+   "fish_to_oven": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "fish_thawed",
+      "seconds": 20.0,
+      "attempts": 25
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "grasp",
+      "role": "fish",
+      "approach_role": "microwave"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "oven",
+      "xy": [
+       8.56,
+       -1.82
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "oven"
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     }
+    ],
+    "after": [
+     "thaw_fish",
+     "lasagna_to_oven"
+    ]
+   },
+   "forks_living": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "fork1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.55,
+       0.2
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "fork2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.55,
+       0.8
+      ]
+     }
+    ],
+    "after": []
+   },
+   "lasagna_out": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "lasagna_baked",
+      "seconds": 20.0,
+      "attempts": 40
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "grasp",
+      "role": "lasagna",
+      "approach_role": "oven"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "island",
+      "xy": [
+       6.4,
+       0.45
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     }
+    ],
+    "after": [
+     "lasagna_to_oven"
+    ]
+   },
+   "lasagna_serve": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "lasagna"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.7,
+       0.5
+      ]
+     }
+    ],
+    "after": [
+     "lasagna_out"
+    ]
+   },
+   "fish_out": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "fish_baked",
+      "seconds": 20.0,
+      "attempts": 40
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "oven"
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "grasp",
+      "role": "fish",
+      "approach_role": "oven"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "island",
+      "xy": [
+       6.9,
+       0.45
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     }
+    ],
+    "after": [
+     "fish_to_oven"
+    ]
+   },
+   "fish_serve_tray": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "fish"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.72,
+       0.5
+      ]
+     }
+    ],
+    "after": [
+     "fish_out",
+     "tray_north"
+    ]
+   },
+   "h_thaw_fish": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "open",
+      "role": "fridge"
+     },
+     {
+      "primitive": "grasp",
+      "role": "fish",
+      "approach_role": "fridge"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "fridge"
+     }
+    ],
+    "after": []
+   },
+   "h_fish_to_oven": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "fish_thawed",
+      "seconds": 20.0,
+      "attempts": 25
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "grasp",
+      "role": "fish",
+      "approach_role": "microwave"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "oven",
+      "xy": [
+       8.56,
+       -1.82
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "oven"
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     }
+    ],
+    "after": [
+     "h_thaw_fish"
+    ]
+   },
+   "h_fish_bake_serve": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "fish_baked",
+      "seconds": 30.0,
+      "attempts": 20
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "oven"
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "grasp",
+      "role": "fish",
+      "approach_role": "oven"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "nightstand",
+      "xy": [
+       20.55,
+       13.85
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     }
+    ],
+    "after": [
+     "h_fish_to_oven"
+    ]
+   },
+   "h_thaw_lasagna": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "open",
+      "role": "fridge"
+     },
+     {
+      "primitive": "grasp",
+      "role": "lasagna",
+      "approach_role": "fridge"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "fridge"
+     }
+    ],
+    "after": [
+     "h_fish_bake_serve"
+    ]
+   },
+   "h_lasagna_to_oven": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "lasagna_thawed",
+      "seconds": 20.0,
+      "attempts": 25
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "grasp",
+      "role": "lasagna",
+      "approach_role": "microwave"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "oven",
+      "xy": [
+       8.3,
+       -1.82
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "oven"
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     }
+    ],
+    "after": [
+     "h_thaw_lasagna"
+    ]
+   },
+   "h_lasagna_bake_serve": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "lasagna_baked",
+      "seconds": 30.0,
+      "attempts": 30
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "oven"
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "grasp",
+      "role": "lasagna",
+      "approach_role": "oven"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.7,
+       0.5
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     }
+    ],
+    "after": [
+     "h_lasagna_to_oven"
+    ]
+   },
+   "h_north_singles": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "fork3"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "nightstand",
+      "xy": [
+       20.45,
+       14.2
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "tea"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "nightstand",
+      "xy": [
+       20.68,
+       14.2
+      ]
+     }
+    ],
+    "after": []
+   }
+  },
+  "orders": {
+   "optimal_johnson_tray": [
+    "thaw_lasagna",
+    "lasagna_to_oven",
+    "thaw_fish",
+    "tray_north",
+    "plates_living",
+    "fish_to_oven",
+    "forks_living",
+    "lasagna_out",
+    "lasagna_serve",
+    "fish_out",
+    "fish_serve_tray"
+   ],
+   "habit_sequential": [
+    "h_thaw_fish",
+    "h_fish_to_oven",
+    "h_fish_bake_serve",
+    "h_thaw_lasagna",
+    "h_lasagna_to_oven",
+    "h_lasagna_bake_serve",
+    "h_north_singles",
+    "plates_living",
+    "forks_living"
+   ]
+  },
+  "negative_omissions": {
+   "omit_fish_serve": "fish_serve_tray",
+   "omit_living_tableware": "forks_living",
+   "omit_lasagna_serve": "lasagna_serve"
+  }
+ },
+ "settle_steps": 30
+}

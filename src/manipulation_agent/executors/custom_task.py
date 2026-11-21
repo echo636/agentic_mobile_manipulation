@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 from .omnigibson_rgb import RGBBackend
-from .timed_processes import TimedProcesses, VERSION as TIMED_PROCESSES_VERSION
+from .timed_processes import TimedProcesses, VERSION as TIMED_PROCESSES_VERSION, check_appliance_capacity
 from ..tasks.long_horizon import TemporalGoalEvaluator
 from ..tasks.custom_tasks import validate_spec
 from ..records import write_json
@@ -896,6 +896,13 @@ class CustomTaskBackend(RGBBackend):
             if any(child.states[Covered].get_value(sys) for sys in systems):
                 return child
         return candidates[0]
+
+    def _checked_place_inside(self, target, max_steps, point=None):
+        # Benchmark side (timed_processes v5): a declared appliance capacity rejects before any motion.
+        if self.custom_spec.get('appliance_capacities'):
+            check_appliance_capacity(self.custom_spec, {o.name: o for o in self.env.scene.objects},
+                                     self._get_held(), target)
+        return super()._checked_place_inside(target, max_steps, point=point)
 
     def _surface_action_preconditions(self, primitive, target):
         target = self._resolve_interior_surface_target(primitive, target)
