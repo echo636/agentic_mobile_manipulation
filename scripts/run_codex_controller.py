@@ -369,6 +369,14 @@ def main(argv=None, *, allow_client=False):
             # v12 harness option: the proxy adds the zoom tool and a zoom target for act; the frozen catalog matches.
             from manipulation_agent.tools.zoom_select import two_step_catalog
             catalog = two_step_catalog(catalog)
+        # Harness options --place-names / --place-return (2026-11-21): the proxy adds name_here / return_to+place;
+        # the frozen catalog matches (same transform, mcp_server.place_catalog), else the schema preflight refuses.
+        def _switch_on(flag):
+            return flag in raw_mcp_args and raw_mcp_args.index(flag) + 1 < len(raw_mcp_args) \
+                and raw_mcp_args[raw_mcp_args.index(flag) + 1] == 'on'
+        if _switch_on('--place-names') or _switch_on('--place-return'):
+            from manipulation_agent.agent.place_options import place_catalog
+            catalog = place_catalog(catalog, names=_switch_on('--place-names'), ret=_switch_on('--place-return'))
     planner_config = None
     mcp_env_vars = ()
     judge_relay_config = None
