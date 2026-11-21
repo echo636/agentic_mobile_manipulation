@@ -171,3 +171,19 @@ def test_place_inside_falls_back_to_the_one_open_record_but_open_never_does():
     mem.observe('act', act('close', 2, 'front', (0.5, 0.2)), receipt(3, 'close', 0.0, (0.0, 0.0)))
     mem.observe('act', act('open', 3, 'back', (0.5, 0.2)), receipt(4, 'open', 0.0, (0.0, 0.0)))     # other direction
     assert len(mem.container_states) == 2
+
+
+def test_close_with_two_open_records_picks_the_loosely_agreeing_one():
+    """h3 (candidate (a)): two containers open nearby, a close whose line of sight matches neither strictly goes to
+    the one it loosely agrees with, not to the most recent."""
+    mem = StateMemory()
+    mem.observe('initialize', {}, receipt(0, 'initialize', 0.0, (0.0, 0.0)))
+    mem.observe('act', act('open', 0, 'front', (0.5, 0.4)), receipt(1, 'open', 0.0, (0.0, 0.0)))     # A ahead (east)
+    mem.observe('act', act('open', 1, 'left', (0.5, 0.4)), receipt(2, 'open', 0.0, (0.0, 0.0)))      # B to the north
+    first, second = list(mem.container_states)
+    # close from the same stance, 25 deg off A (strict 12 deg fails, loose 45 deg agrees), far from B
+    import math
+    x = 0.5 + math.tan(math.radians(25)) / 2
+    mem.observe('act', act('close', 2, 'front', (x, 0.4)), receipt(3, 'close', 0.0, (0.0, 0.0)))
+    assert len(mem.container_states) == 2
+    assert mem.container_states[first]['state'] == 'closed' and mem.container_states[second]['state'] == 'open'

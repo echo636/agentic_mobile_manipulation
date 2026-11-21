@@ -52,7 +52,8 @@ SAME_VIEW_CONTAINER_RADIUS = 0.25
 # headings within SAME_CONTAINER_HEADING_DEG and |dy| <= 0.25; stances further apart -> the lines cross
 # RAY_MIN_M..RAY_MAX_M in front of both at CROSS_MIN_ANGLE_DEG or more, or nearly coincide (COLLINEAR_ACCEPT).
 # Fallback only for close / place_inside / take out (the container is open now): the one open record here or within
-# OPEN_FALLBACK_RADIUS_M. open has no fallback. Without odometry: the old same-view rule. Odometry never reaches the
+# OPEN_FALLBACK_RADIUS_M; for close, when several are open, the one whose lines of sight loosely agree (45 deg at one
+# stance, any crossing 0.2-4 m). open has no fallback. Without odometry: the old same-view rule. Odometry never reaches the
 # model (the proxy strips _private_odometry).
 SAME_CONTAINER_HEADING_DEG = 12.0
 VIEW_YAW_DEG = {'front': 0.0, 'back': 180.0, 'left': 90.0, 'right': -90.0}
@@ -64,8 +65,8 @@ CROSS_MIN_ANGLE_DEG = 30.0     # lines of sight from different stances must meet
 RAYS_MUST_ALL_AGREE = True     # a new click must agree with every line of sight of the record (else: any)
 RAYS_RECENT = 0                # if > 0: only the record's most recent lines of sight are compared
 OPEN_FALLBACK_LATEST = False   # several open records nearby: the one operated most recently
-OPEN_FALLBACK_LOOSE = False    # several open records nearby: the one whose lines of sight loosely agree (best score)
-LOOSE_FOR = ('close', 'place_inside', 'grasp')  # which actions may use the loose choice
+OPEN_FALLBACK_LOOSE = True     # several open records nearby: the one whose lines of sight loosely agree (best score)
+LOOSE_FOR = ('close',)         # which actions may use the loose choice (coordinator 10:17, candidate (a))
 COLLINEAR_ACCEPT = True        # shallow-angle lines of sight that nearly coincide (each stance <= NEAR_STANCE_M off
                                # the other line, same direction) are the same thing
 PRIVATE_ODOMETRY_KEY = '_private_odometry'   # bridge -> memory only; the proxy removes it before the model
