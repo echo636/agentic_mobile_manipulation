@@ -800,6 +800,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         start=position[:2].cpu();hint=point[:2].cpu()
         floor_click=not for_manipulation and float(point[2])-trav.floor_heights[floor]<=.15
+        # rc2 (MAS_OPENING_STANCE): a low click on an openable object (the bottom of an oven door) is an object
+        # approach, not a floor destination (stance probe S_T3b_on step 16, 00:45)
+        from . import opening_stance as OS
+        if floor_click and OS.enabled() and OS._openable(getattr(target,'selected_object',None)):
+            floor_click=False
         # Objects need a nearby standing position; a floor click is the actual
         # destination and must not be projected back into the start's region.
         occupancy=trav._erode_trav_map(trav.floor_map[floor].clone(),robot=self.robot).cpu().numpy()
