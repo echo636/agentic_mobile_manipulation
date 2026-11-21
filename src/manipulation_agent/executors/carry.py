@@ -85,6 +85,7 @@ class ControlledCarry:
         self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
         self._grasped_payload = (obj, list(dependencies), list(contents))
         self._grasped_registered_ids = {id(child) for child, _, _ in registered}
+        CR.record_tilts(self, 'carrier_grasp_tilts', obj, [child for child, _ in contents])   # rc2 pose hold record
         if max_steps > 0:
             self._step(self.primitives._empty_action())
         if self._get_held() is not obj:
@@ -248,9 +249,12 @@ class ControlledCarry:
                                                     roll_degrees=roll_degrees)
             else:
                 result = self._checked_place_next_to(target,max_steps,point,yaw_degrees)
+            from . import carrier_registry as CR
+            # rc2 (MAS_CARRIER_POSE_HOLD, default on): carried contents keep their pose relative to the carrier when
+            # the carrier is put down; tilts before/after go to the private carry_diagnostics record.
+            CR.hold_pose_after_place(self, held, list(contents))
             if primitive in {'place_on_top','place_inside'}:
                 # rc1 A6: a passed placement onto a movable object registers held -> target (carrier_registry.py).
-                from . import carrier_registry as CR
                 CR.register_after_place(self, held, target, primitive)
             return result
         finally:

@@ -31,8 +31,19 @@ PIN_POSITION_TOL_M = 0.005
 PIN_ANGLE_TOL_RAD = math.radians(3.0)
 
 
+def pose_hold_enabled():
+    """rc2 (2026-11-21, benchmark side, coordinator 20:30/20:42): contents of a carrier keep their pose relative to
+    the carrier while it is carried AND when it is put down. Default ON; MAS_CARRIER_POSE_HOLD=off restores rc1."""
+    return os.environ.get('MAS_CARRIER_POSE_HOLD', 'on') == 'on'
+
+
 def enabled():
-    return os.environ.get('MAS_CARRIER_REGISTRY', 'off') == 'on'
+    """Registry (rc1 A6). rc2: an explicit MAS_CARRIER_REGISTRY wins; unset follows MAS_CARRIER_POSE_HOLD
+    (default on). Both off / unset-with-pose-hold-off = rc1 behaviour."""
+    explicit = os.environ.get('MAS_CARRIER_REGISTRY')
+    if explicit is not None:
+        return explicit == 'on'
+    return pose_hold_enabled()
 
 
 class Registry:
@@ -211,4 +222,48 @@ def pin_contents(backend):
         fixed.append([child.name, round(drift, 4)])
     if fixed:
         _record(backend, event='carrier_pin', carrier=held.name, corrected=fixed)
+    return len(fixed)
+
+
+def tilt_degrees(q):
+    """Angle between the object's up axis and world up (x, y, z, w quaternion)."""
+    x, y, z, w = (float(v) for v in q)
+    upz = 1 - 2 * (x * x + y * y)
+    return math.degrees(math.acos(max(-1.0, min(1.0, upz))))
+
+
+def record_tilts(backend, event, carrier, children):
+    """Private record of each carried child's tilt (rc2 pose hold; measurement only)."""
+    if not pose_hold_enabled() or not children:
+        return
+    _record(backend, event=event, carrier=getattr(carrier, 'name', None),
+            tilts_deg={c.name: round(tilt_degrees(c.get_position_orientation()[1]), 1) for c in children})
+
+
+def hold_pose_after_place(backend, carrier, contents):
+    """rc2: after the carrier itself was placed (receipt passed), put every carried child back at its grasp-time pose
+    relative to the carrier when it drifted (> 5 mm or > 3 deg), with its particles; record tilts before/after.
+    `contents` = [(child, relative pose at grasp)] from ControlledCarry._carry_contents. Receipts are unchanged."""
+    if not pose_hold_enabled() or carrier is None or not contents:
+        return 0
+    from omnigibson.utils import transform_utils as T
+    from .particle_payload import snapshot_particles, relocate_particles
+    pose = carrier.get_position_orientation()
+    before, fixed = {}, []
+    for child, relative in contents:
+        want_p, want_q = T.pose_transform(*pose, *relative)
+        p, q = child.get_position_orientation()
+        before[child.name] = round(tilt_degrees(q), 1)
+        drift = float(sum((float(a) - float(b)) ** 2 for a, b in zip(p, want_p)) ** .5)
+        if drift <= PIN_POSITION_TOL_M and _angle_between(q, want_q) <= PIN_ANGLE_TOL_RAD:
+            continue
+        particles = snapshot_particles(backend.env.scene, [child], include_supported=True)
+        child.set_position_orientation(want_p, want_q)
+        if hasattr(child, 'keep_still'):
+            child.keep_still()
+        relocate_particles(backend.env.scene, particles)
+        fixed.append([child.name, round(drift, 4)])
+    after = {c.name: round(tilt_degrees(c.get_position_orientation()[1]), 1) for c, _ in contents}
+    _record(backend, event='carrier_put_down_pose_hold', carrier=getattr(carrier, 'name', None),
+            tilts_before_deg=before, tilts_after_deg=after, corrected=fixed)
     return len(fixed)

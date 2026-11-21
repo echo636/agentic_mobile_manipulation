@@ -29,11 +29,17 @@ def switch_on(monkeypatch):
     monkeypatch.setenv('MAS_CARRIER_REGISTRY', 'on')     # default is off since 2026-11-20 21:00; these test the on path
 
 
-def test_default_is_off(monkeypatch):
+def test_default_follows_pose_hold(monkeypatch):
+    # rc2 (2026-11-21): unset MAS_CARRIER_REGISTRY follows MAS_CARRIER_POSE_HOLD (default on); both off = rc1
     monkeypatch.delenv('MAS_CARRIER_REGISTRY', raising=False)
+    monkeypatch.delenv('MAS_CARRIER_POSE_HOLD', raising=False)
+    assert CR.pose_hold_enabled() is True and CR.enabled() is True
+    monkeypatch.setenv('MAS_CARRIER_POSE_HOLD', 'off')
     assert CR.enabled() is False
     b = Backend(); cup, tray = Obj('cup'), Obj('tray')
     assert CR.register_after_place(b, cup, tray, 'place_on_top') is None and b.records == []
+    monkeypatch.setenv('MAS_CARRIER_REGISTRY', 'on')                 # an explicit registry setting still wins
+    assert CR.enabled() is True
 
 
 def test_registry_register_unregister_descendants():
@@ -156,3 +162,81 @@ def test_pin_contents_noop_paths(monkeypatch):
     monkeypatch.setenv('MAS_CARRIER_REGISTRY', 'off')
     b._grasped_registered_ids = {1}
     assert CR.pin_contents(b) == 0
+
+
+# ---------- rc2 carrier pose hold (2026-11-21) ----------
+import sys
+import types
+
+
+def _fake_og(monkeypatch):
+    """Minimal omnigibson.utils.transform_utils + particle_payload stand-ins: poses are (xyz, quat) tuples and
+    pose_transform(parent, relative) = parent position + relative position, relative orientation (identity frames)."""
+    tu = types.ModuleType('omnigibson.utils.transform_utils')
+    tu.pose_transform = lambda p, q, rp, rq: ([p[i] + rp[i] for i in range(3)], list(rq))
+    og = types.ModuleType('omnigibson'); ut = types.ModuleType('omnigibson.utils'); ut.transform_utils = tu
+    og.utils = ut
+    monkeypatch.setitem(sys.modules, 'omnigibson', og)
+    monkeypatch.setitem(sys.modules, 'omnigibson.utils', ut)
+    monkeypatch.setitem(sys.modules, 'omnigibson.utils.transform_utils', tu)
+    from manipulation_agent.executors import particle_payload as PP
+    monkeypatch.setattr(PP, 'snapshot_particles', lambda *a, **k: [])
+    monkeypatch.setattr(PP, 'relocate_particles', lambda *a, **k: None)
+
+
+class Body(Obj):
+    def __init__(self, name, pos, quat):
+        super().__init__(name); self.pose = (list(pos), list(quat)); self.still = 0
+
+    def get_position_orientation(self):
+        return self.pose
+
+    def set_position_orientation(self, p, q):
+        self.pose = (list(p), list(q))
+
+    def keep_still(self):
+        self.still += 1
+
+
+def test_tilt_degrees():
+    assert CR.tilt_degrees([0, 0, 0, 1]) == pytest.approx(0)
+    s = 2 ** -.5
+    assert CR.tilt_degrees([s, 0, 0, s]) == pytest.approx(90, abs=1e-6)      # lying on its side
+
+
+def test_hold_pose_after_place_restores_toppled_child_and_records(monkeypatch):
+    _fake_og(monkeypatch)
+    monkeypatch.delenv('MAS_CARRIER_POSE_HOLD', raising=False)
+    s = 2 ** -.5
+    tray = Body('tray', [10, 0, 0.3], [0, 0, 0, 1])
+    tea = Body('tea', [10.1, 0.05, 0.31], [s, 0, 0, s])                         # toppled after the tray was put down
+    cup = Body('cup', [9.9, 0.0, 0.35], [0, 0, 0, 1])                           # still where it should be
+    b = Backend([tray, tea, cup])
+    contents = [(tea, ([0.1, 0.0, 0.08], [0, 0, 0, 1])), (cup, ([-0.1, 0.0, 0.05], [0, 0, 0, 1]))]
+    assert CR.hold_pose_after_place(b, tray, contents) == 1
+    assert tea.pose[0] == pytest.approx([10.1, 0.0, 0.38]) and tea.pose[1] == [0, 0, 0, 1] and tea.still == 1
+    assert cup.still == 0                                                       # within tolerance: untouched
+    rec = b.records[-1]
+    assert rec['event'] == 'carrier_put_down_pose_hold' and rec['corrected'][0][0] == 'tea'
+    assert rec['tilts_before_deg']['tea'] == pytest.approx(90, abs=0.1) and rec['tilts_after_deg']['tea'] == 0
+
+
+def test_hold_pose_after_place_off_is_rc1(monkeypatch):
+    _fake_og(monkeypatch)
+    monkeypatch.setenv('MAS_CARRIER_POSE_HOLD', 'off')
+    s = 2 ** -.5
+    tray = Body('tray', [0, 0, 0], [0, 0, 0, 1]); tea = Body('tea', [0, 0, 0], [s, 0, 0, s])
+    b = Backend([tray, tea])
+    assert CR.hold_pose_after_place(b, tray, [(tea, ([0, 0, 0.1], [0, 0, 0, 1]))]) == 0
+    assert tea.pose[1] == [s, 0, 0, s] and b.records == []
+    CR.record_tilts(b, 'carrier_grasp_tilts', tray, [tea])
+    assert b.records == []
+
+
+def test_record_tilts_on(monkeypatch):
+    monkeypatch.delenv('MAS_CARRIER_POSE_HOLD', raising=False)
+    tray = Body('tray', [0, 0, 0], [0, 0, 0, 1]); cup = Body('cup', [0, 0, 0], [0, 0, 0, 1])
+    b = Backend()
+    CR.record_tilts(b, 'carrier_grasp_tilts', tray, [cup])
+    assert b.records[-1] == {'component': 'rc1_A6_carrier_registry', 'event': 'carrier_grasp_tilts', 'carrier': 'tray',
+                             'tilts_deg': {'cup': 0.0}}
