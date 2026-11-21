@@ -85,8 +85,8 @@ def build_recipe() -> dict:
     )
     req_wine = (
         'Bring the bottle of wine and the two glasses from the counter of the south-east utility room to the '
-        'living-room coffee table, directly on the table or on a serving tray resting on it. A second serving '
-        'tray is on the same utility-room counter.'
+        'living-room coffee table, directly on the table or on a serving tray resting on it. A second small '
+        'serving tray is on the same utility-room counter.'
     )
     req_reset = 'Leave the oven and the stove switched off, and the oven, microwave and refrigerator closed.'
     req_hand = 'Finish with no object held.'
@@ -97,7 +97,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'dinner_burn_windows_errand',
-        'instance_id': 'dinner_burn_windows_errand_seed0_r3',
+        'instance_id': 'dinner_burn_windows_errand_seed0_r4',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -140,10 +140,12 @@ def build_recipe() -> dict:
             imported('c3_glass2', 'setting_the_table', 'water_glass_bbpraa_0', 128.0, [1.25, 1.25, 1.15]),
         ],
         'native_assets': [
+            # r4: 36 cm trays. A carried tray lands anywhere near the 98 cm table's centre; with 48 cm trays the
+            # plates/soups around it collided (c3r2/r3 negatives). Wine + two glasses fit one row of 36 cm.
             native('c3_tray', 'tray', 'coqeme',
-                   'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 95.0, [3.38, 2.16, 1.5]),
+                   'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 95.0, [2.54, 1.62, 1.5]),
             native('c3_tray2', 'tray', 'coqeme',
-                   'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 97.0, [3.38, 2.16, 1.5]),
+                   'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 97.0, [2.54, 1.62, 1.5]),
             native('c3_pan', 'griddle_pan', 'ryvqep',
                    '704c9e825784e54cb78730585111263a3832e79caa357c22963e87e47f8ce63e', 99.0, [1.5, 1.6, 1.0],
                    fixed=True),
@@ -336,8 +338,8 @@ def build_reference_plan() -> dict:
         'start_oven': {'actions': [act('open', 'oven'), g('veg'), act('place_inside', 'oven', xy=[8.43, -1.85]),
                                    act('close', 'oven'), act('toggle_on', 'oven')], 'after': []},
         # the far errand, inside the oven's done + 120 s window
-        'wine_errand_tray2': {'actions': [g('wine'), put('tray2', uv=[0.25, 0.30]), g('glass1'),
-                                          put('tray2', uv=[0.25, 0.72]), g('glass2'), put('tray2', uv=[0.70, 0.50]),
+        'wine_errand_tray2': {'actions': [g('wine'), put('tray2', uv=[0.50, 0.20]), g('glass1'),
+                                          put('tray2', uv=[0.50, 0.50]), g('glass2'), put('tray2', uv=[0.50, 0.80]),
                                           g('tray2'), put('table', uv=[0.75, 0.75])], 'after': []},
         'oven_off': {'actions': [wait('veg_roasted', 10.0, 40), act('toggle_off', 'oven')], 'after': ['start_oven']},
         'start_steaks': {'actions': [act('open', 'fridge'),
