@@ -713,6 +713,9 @@ class CheckedPlacement:
         payload = [obj for obj, _ in contents]
         from . import placement_transaction as TX
         tx_before = TX.before_release(self, held, target, contents)   # rc2 MAS_PLACE_TRANSACTIONAL; None when off
+        from . import support_judge as SJ
+        target_support = SJ.support_under(self, target)                 # rc2 MAS_SUPPORT_JUDGE; None when off
+        target_movable = not bool(getattr(target, 'fixed_base', False))
         candidate = self._select_surface_candidate(held, target, point, yaw_degrees, payload,
                                                    roll_degrees=roll_degrees)
         verification_point = candidate.get('verification_point', point)
@@ -745,6 +748,16 @@ class CheckedPlacement:
             # the rc1 A5 settle fallback below re-runs this same release and check (placement_settle.py).
             supported = all(value for key, value in support['checks'].items() if key != 'settled')
             official = bool(held.states[OnTop].get_value(target))
+            if not supported:
+                # rc2 MAS_SUPPORT_JUDGE (default off): settled on an upward surface of the target (or of the support
+                # under a clicked movable item) counts; the private record keeps the reason.
+                rescued, why = SJ.judge_on_top(support['checks'], official, SJ.owner_name(support.get('support_hit_body')),
+                                               target_movable, target_support,
+                                               {k: support['checks'][k] for k in ('upright_kept', 'carried_contents_kept')
+                                                if k in support['checks']})
+                if rescued:
+                    supported = True
+                    support['support_judge'] = why
             self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
                 'position': held.get_position_orientation()[0].tolist(),
                 'official_on_top': official,
@@ -890,7 +903,9 @@ class CheckedPlacement:
             **{k: v for k, v in candidate.items() if k != 'pose'},
             'position': candidate['pose'][0].tolist(), 'orientation': candidate['pose'][1].tolist()})
         from . import placement_transaction as TX
+        from . import support_judge as SJ
         tx_before = TX.before_release(self, held, target, contents)   # rc2 MAS_PLACE_TRANSACTIONAL; None when off
+        flat = SJ.flat_target(target) if SJ.enabled() else False
         self._carry_detach()
         payload_objs = [obj for obj, _ in contents]
 
@@ -904,11 +919,21 @@ class CheckedPlacement:
             self._settle_surface_contacts(held, target, payload_objs, max_steps)
             inside = bool(held.states[Inside].get_value(target))
             extra = TX.after_settle(self, held, tx_before)
+            judged = None
+            if not inside and SJ.enabled():
+                # rc2 MAS_SUPPORT_JUDGE: a target without a real cavity (tray, plate) is judged like place_on_top
+                from omnigibson.object_states import OnTop
+                settled = (float(self.torch.linalg.norm(held.get_linear_velocity())) <= .10
+                           and float(self.torch.linalg.norm(held.get_angular_velocity())) <= .5)
+                ok_flat, judged = SJ.judge_inside(inside, bool(held.states[OnTop].get_value(target)), settled,
+                                                  flat, extra)
+                inside = inside or ok_flat
             self._placement_record({'status': 'inside_result', 'held': held.name, 'target': target.name,
-                'official_inside': inside, 'position': held.get_position_orientation()[0].tolist(),
-                **({'transaction_checks': extra} if extra else {})})
+                'official_inside': bool(held.states[Inside].get_value(target)),
+                'position': held.get_position_orientation()[0].tolist(),
+                **({'transaction_checks': extra} if extra else {}), **({'support_judge': judged} if judged else {})})
             ok = inside and all(extra.values())
-            return ok, {'official_inside': inside, 'position': held.get_position_orientation()[0].tolist(),
+            return ok, {'official_inside': bool(held.states[Inside].get_value(target)), 'position': held.get_position_orientation()[0].tolist(),
                         **({'transaction_checks': extra} if extra else {})}
         try:
             inside, first = release_and_check(candidate)
