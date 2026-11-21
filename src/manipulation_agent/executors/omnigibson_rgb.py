@@ -806,7 +806,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if floor_click and OS.enabled():
             try:   # the clicked object, or the openable body whose box holds the click (pixel at an oven's foot)
                 body=OS._container_of_point(self,getattr(target,'selected_object',None),point)
-                if body is not None and not OS.is_thin(body):     # room doors keep the rc1 floor-click rule
+                # room doors keep the rc1 floor-click rule; the clicked point must lie in the body link's own box (an
+                # open door's sweep does not count), also when the clicked object itself is the openable one
+                if (body is not None and not OS.is_thin(body)
+                        and OS.point_in_box([float(v) for v in point],*OS._body_box(body))):
                     floor_click=False
             except Exception:
                 pass

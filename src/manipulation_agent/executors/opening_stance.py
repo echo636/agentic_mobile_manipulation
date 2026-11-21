@@ -189,8 +189,20 @@ def _openable(obj):
         return False
 
 
+def _body_box(o):
+    """Box of the object's own body link (root link), not of the whole object: an open door must not widen it
+    (coordinator 01:20 -- a floor click under an open door stays a floor click)."""
+    links = getattr(o, 'links', None) or {}
+    base = links.get(getattr(o, 'root_link_name', 'base_link')) or links.get('base_link')
+    return _box(base if base is not None else o)
+
+
+def point_in_box(p, lo, hi, margin=0.02):
+    return all(lo[i] - margin <= p[i] <= hi[i] + margin for i in range(3))
+
+
 def is_thin(body):
-    lo, hi = _box(body)
+    lo, hi = _body_box(body)
     return min(hi[0] - lo[0], hi[1] - lo[1]) < THIN_BODY_M
 
 
@@ -203,12 +215,12 @@ def _container_of_point(backend, obj, point):
         if o is obj or not _openable(o):
             continue
         try:
-            lo, hi = _box(o)
+            lo, hi = _body_box(o)
         except Exception:
             continue
         if min(hi[0] - lo[0], hi[1] - lo[1]) < THIN_BODY_M:      # a room door has no inside to hold the clicked thing
             continue
-        if all(lo[i] - .02 <= p[i] <= hi[i] + .02 for i in range(3)):
+        if point_in_box(p, lo, hi):
             vol = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2])
             if best is None or vol < best[0]:
                 best = (vol, o)

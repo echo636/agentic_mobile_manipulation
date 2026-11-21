@@ -114,3 +114,18 @@ def test_open_drop_down_door_closed_centre_uses_body_box():
     assert c == pytest.approx([0.0, -0.36, 0.345], abs=1e-6)                  # upright on the front face
     n, why = OS.opening_normal('revolute', [1, 0, 0], c, pivot, [0, 0, 0.364], 0.0, [0.35, 0.36], half_z=0.365)
     assert n == pytest.approx([0.0, -1.0], abs=1e-6) and why.startswith('drop_down_door')
+
+
+def test_body_box_ignores_open_door_sweep():
+    from types import SimpleNamespace as NS
+    base = NS(aabb=([0.0, 0.0, 0.0], [0.6, 0.6, 0.9]))
+    door = NS(aabb=([0.6, -0.5, 0.0], [1.2, 0.6, 0.9]))                 # swung open in front of the body
+    washer = NS(aabb=([0.0, -0.5, 0.0], [1.2, 0.6, 0.9]), root_link_name='base_link',
+                links={'base_link': base, 'door': door})
+    lo, hi = OS._body_box(washer)
+    assert (lo, hi) == ([0.0, 0.0, 0.0], [0.6, 0.6, 0.9])
+    floor_under_door = [0.9, 0.0, 0.05]
+    assert OS.point_in_box(floor_under_door, *OS._body_box(washer)) is False   # stays a floor click
+    assert OS.point_in_box(floor_under_door, *OS._box(washer)) is True         # the whole-object box would swallow it
+    assert OS.point_in_box([0.3, 0.3, 0.05], *OS._body_box(washer)) is True    # the machine's own foot
+    assert OS.is_thin(washer) is False
