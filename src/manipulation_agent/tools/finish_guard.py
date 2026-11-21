@@ -22,7 +22,7 @@ from pathlib import Path
 from ..agent.state_memory import StateMemory
 
 THRESHOLDS = {'blocked': 15, 'aborted': 15, 'achieved': 5}
-MAX_DEFERRALS = {'stop': 5, 'achieved': 2}
+MAX_DEFERRALS = {'stop': 2, 'achieved': 2}   # stop 5 -> 2 (coordinator 11:57; replay: refusals rarely rescued a task)
 MAX_ACHIEVED_ISSUE_DEFERRALS = 3
 STOP_OUTCOMES = ('blocked', 'aborted')
 ATTEMPTS = 3
@@ -138,6 +138,8 @@ class FinishGuard:
             path = Path(self.path)
             tmp = path.with_name(path.name + '.tmp')
             payload = {key: getattr(self, key) for key in STATE_FIELDS}
+            payload['max_deferrals'] = dict(MAX_DEFERRALS)          # recorded with every episode (coordinator 11:57)
+            payload['precondition_codes'] = sorted(PRECONDITION_CODES)
             if self.state_memory_enabled and self.memory is not None:
                 payload['state_memory_enabled'] = True
                 payload['state_memory_data'] = self.memory.to_dict()

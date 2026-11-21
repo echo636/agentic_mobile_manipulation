@@ -103,7 +103,22 @@ class FinishGuardRuleTests(unittest.TestCase):
         guard.observe(failed(393, 'nothing_lifted'), 'act', same)       # same pixel, new stance
         guard.observe(failed(392, 'nothing_lifted'), 'act', near)
         guard.observe(failed(391, 'nothing_lifted'), 'act', same)
-        self.assertIsNotNone(guard.deferral(ABORT))                    # still one target per stance since the reset
+        from manipulation_agent.tools.finish_guard import _hashable_key
+        self.assertEqual(len({_hashable_key(k) for k in guard.failed_keys_in_row}), 1)   # one target per stance
+
+    def test_stop_deferral_cap_is_two_and_recorded(self):
+        """2026-11-21 (coordinator 11:57): blocked and aborted together are deferred at most twice."""
+        from manipulation_agent.tools.finish_guard import MAX_DEFERRALS
+        self.assertEqual(MAX_DEFERRALS['stop'], 2)
+        with tempfile.TemporaryDirectory() as directory:
+            guard = FinishGuard(Path(directory) / 'g.json')
+            guard.observe(completed('grasp', 399), 'act', {})
+            self.assertIsNotNone(guard.deferral(ABORT))
+            self.assertIsNotNone(guard.deferral({'outcome': 'blocked', 'reason': 'x'}))
+            self.assertIsNone(guard.deferral(ABORT))
+            saved = json.loads((Path(directory) / 'g.json').read_text())
+            self.assertEqual(saved['max_deferrals']['stop'], 2)
+            self.assertIn('empty_hand', saved['precondition_codes'])
 
     def test_completed_act_restarts_the_failure_count(self):
         guard = self.guard_after_progress()
