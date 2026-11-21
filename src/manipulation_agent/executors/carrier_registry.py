@@ -32,18 +32,14 @@ PIN_ANGLE_TOL_RAD = math.radians(3.0)
 
 
 def pose_hold_enabled():
-    """rc2 (2026-11-21, benchmark side, coordinator 20:30/20:42): contents of a carrier keep their pose relative to
-    the carrier while it is carried AND when it is put down. Default ON; MAS_CARRIER_POSE_HOLD=off restores rc1."""
+    """rc2 (2026-11-21, benchmark side, coordinator 20:30/20:42/20:47): when a carrier is put down, the contents it
+    carried keep their pose relative to it. Default ON; MAS_CARRIER_POSE_HOLD=off restores rc1. Independent of the
+    A6 registry below (which stays default off: its motivating defect #24 was voided and on/off made no difference)."""
     return os.environ.get('MAS_CARRIER_POSE_HOLD', 'on') == 'on'
 
 
 def enabled():
-    """Registry (rc1 A6). rc2: an explicit MAS_CARRIER_REGISTRY wins; unset follows MAS_CARRIER_POSE_HOLD
-    (default on). Both off / unset-with-pose-hold-off = rc1 behaviour."""
-    explicit = os.environ.get('MAS_CARRIER_REGISTRY')
-    if explicit is not None:
-        return explicit == 'on'
-    return pose_hold_enabled()
+    return os.environ.get('MAS_CARRIER_REGISTRY', 'off') == 'on'
 
 
 class Registry:

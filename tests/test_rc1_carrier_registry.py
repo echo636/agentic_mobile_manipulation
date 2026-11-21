@@ -29,17 +29,20 @@ def switch_on(monkeypatch):
     monkeypatch.setenv('MAS_CARRIER_REGISTRY', 'on')     # default is off since 2026-11-20 21:00; these test the on path
 
 
-def test_default_follows_pose_hold(monkeypatch):
-    # rc2 (2026-11-21): unset MAS_CARRIER_REGISTRY follows MAS_CARRIER_POSE_HOLD (default on); both off = rc1
+def test_default_is_off(monkeypatch):
     monkeypatch.delenv('MAS_CARRIER_REGISTRY', raising=False)
-    monkeypatch.delenv('MAS_CARRIER_POSE_HOLD', raising=False)
-    assert CR.pose_hold_enabled() is True and CR.enabled() is True
-    monkeypatch.setenv('MAS_CARRIER_POSE_HOLD', 'off')
     assert CR.enabled() is False
     b = Backend(); cup, tray = Obj('cup'), Obj('tray')
     assert CR.register_after_place(b, cup, tray, 'place_on_top') is None and b.records == []
-    monkeypatch.setenv('MAS_CARRIER_REGISTRY', 'on')                 # an explicit registry setting still wins
-    assert CR.enabled() is True
+
+
+def test_pose_hold_default_on_and_independent_of_registry(monkeypatch):
+    # rc2 (20:47): the put-down pose hold is its own switch (default on); the A6 registry stays default off
+    monkeypatch.delenv('MAS_CARRIER_REGISTRY', raising=False)
+    monkeypatch.delenv('MAS_CARRIER_POSE_HOLD', raising=False)
+    assert CR.pose_hold_enabled() is True and CR.enabled() is False
+    monkeypatch.setenv('MAS_CARRIER_POSE_HOLD', 'off')
+    assert CR.pose_hold_enabled() is False and CR.enabled() is False
 
 
 def test_registry_register_unregister_descendants():
