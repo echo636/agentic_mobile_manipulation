@@ -105,7 +105,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'three_appliance_brunch',
-        'instance_id': 'three_appliance_brunch_seed0_r7',
+        'instance_id': 'three_appliance_brunch_seed0_r7b',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -353,8 +353,8 @@ def build_reference_plan() -> dict:
                         {'primitive': 'grasp', 'role': 'fork2'},
                         {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.32, 0.70]},
                         {'primitive': 'grasp', 'role': 'tray'},
-                        # r7: aim at the east edge; the released tray lands 16-32 cm west of the aim (c1r5/r6)
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.95, 0.50]}],
+                        # r7b: near T1's aim; at the edge (0.95, r7) the tray slid off the table
+                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.80, 0.50]}],
             'after': []},
         'deliver_cold_single_trips': {
             'actions': [{'primitive': 'grasp', 'role': 'cup1'},
