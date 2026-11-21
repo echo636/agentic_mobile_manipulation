@@ -16,7 +16,7 @@ plates by hand (nested plate-on-tray payloads are not needed to show the saving)
 
 Planning structure: self-stopping soup first; oven next; the far errand fits inside the oven's done+120 s window;
 the steaks (shortest window) last and the cook stays at the stove. Benchmark-side rules (all tiers): timed_processes
-v3 overcook window (oven, stove), v4 auto-off (microwave). The frying pan is fixed on the stove (C1 practice).
+v3 overcook window (oven, stove), v4 auto-off (microwave). The griddle pan is fixed on the stove (C1 practice).
 """
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def build_recipe() -> dict:
         'does not burn. Roast the vegetables in the black built-in oven to the right of the refrigerator: '
         'about 4 minutes with the oven door closed and the oven switched on; the oven does not switch itself '
         'off, and roasted vegetables left in the running oven for more than about 2 more minutes burn. Fry the '
-        'steaks in the frying pan on the stove beside the microwave: about 2 minutes with the stove switched '
+        'steaks in the griddle pan on the stove beside the microwave: about 2 minutes with the stove switched '
         'on; the stove does not switch itself off, and steaks left on the running stove for more than about '
         '30 more seconds burn. Burnt food cannot be served.'
     )
@@ -97,7 +97,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'dinner_burn_windows_errand',
-        'instance_id': 'dinner_burn_windows_errand_seed0_r1',
+        'instance_id': 'dinner_burn_windows_errand_seed0_r2',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -144,8 +144,9 @@ def build_recipe() -> dict:
                    'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 95.0, [3.38, 2.16, 1.5]),
             native('c3_tray2', 'tray', 'coqeme',
                    'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 97.0, [3.38, 2.16, 1.5]),
-            native('c3_pan', 'frying_pan', 'hzspwg',
-                   'f60390f685a005d7b2c0f581c1de8574c242ca61c4687e226f0415098f2207af', 99.0, fixed=True),
+            native('c3_pan', 'griddle_pan', 'ryvqep',
+                   '704c9e825784e54cb78730585111263a3832e79caa357c22963e87e47f8ce63e', 99.0, [1.5, 1.6, 1.0],
+                   fixed=True),
             *[native(f'c3_soup{i}', 'bowl', 'ajzltc',
                      '9b6bb0e23e537cccaa2bc372997bceb1d0e7cc4f6a520119de03ea75b1a739ad', 100.0 + 2 * i,
                      [1.2, 1.2, 1.2]) for i in (1, 2)],
@@ -196,7 +197,7 @@ def build_recipe() -> dict:
             on('steak2', 'fridge', [7.94, -1.72], yaw90=True, support_probe_height=1.0, initial_relation='Inside'),
             state('fridge', 'Open', False, fully=True),
             on('veg', 'storage', [6.75, -1.94]),
-            on('pan', 'stove', [4.20, -0.50], yaw90=True),
+            on('pan', 'stove', [4.17, -0.50], yaw90=True),  # flat griddle (r5/C3 r2)
             on('plate1', 'island', [6.02, 0.05]),
             on('plate2', 'island', [6.42, 0.05]),
             on('tray', 'island', [7.00, 0.08], yaw90=True),
@@ -340,8 +341,8 @@ def build_reference_plan() -> dict:
                                           g('tray2'), put('table', uv=[0.75, 0.75])], 'after': []},
         'oven_off': {'actions': [wait('veg_roasted', 10.0, 40), act('toggle_off', 'oven')], 'after': ['start_oven']},
         'start_steaks': {'actions': [act('open', 'fridge'),
-                                     g('steak1', approach_role='fridge'), put('pan', xy=[4.15, -0.39]),
-                                     g('steak2', approach_role='fridge'), put('pan', xy=[4.27, -0.39]),
+                                     g('steak1', approach_role='fridge'), put('pan', xy=[4.17, -0.58]),
+                                     g('steak2', approach_role='fridge'), put('pan', xy=[4.17, -0.41]),
                                      act('close', 'fridge'), act('toggle_on', 'stove')], 'after': []},
         # stay by the stove: detect "done" within 5 s and switch off before the 30 s window closes
         'stove_watch': {'actions': [wait(steaks_done, 5.0, 40), act('toggle_off', 'stove')],

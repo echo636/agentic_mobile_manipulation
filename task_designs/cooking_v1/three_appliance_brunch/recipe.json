@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "three_appliance_brunch",
- "instance_id": "three_appliance_brunch_seed0_r4",
+ "instance_id": "three_appliance_brunch_seed0_r5",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -215,9 +215,9 @@
   },
   {
    "name": "c1_pan",
-   "category": "frying_pan",
-   "model": "hzspwg",
-   "usd_sha256": "f60390f685a005d7b2c0f581c1de8574c242ca61c4687e226f0415098f2207af",
+   "category": "griddle_pan",
+   "model": "ryvqep",
+   "usd_sha256": "704c9e825784e54cb78730585111263a3832e79caa357c22963e87e47f8ce63e",
    "prim_type": 0,
    "position": [
     98.0,
@@ -228,6 +228,11 @@
     0.0,
     0.0,
     0.0,
+    1.0
+   ],
+   "scale": [
+    1.5,
+    1.6,
     1.0
    ],
    "fixed_base": true
@@ -486,7 +491,7 @@
    "target": "stove",
    "place_on_support": true,
    "xy": [
-    4.2,
+    4.17,
     -0.5
    ],
    "orientation": [
@@ -797,7 +802,7 @@
  "replacements": [],
  "public_instruction": "Cook and serve brunch for two on the living-room coffee table: a baked quiche, fried sausages and warm bagels on two plates, with cups, forks and tea, and leave the kitchen appliances off and closed.",
  "public_context": [
-  "Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm bagel, and the baked quiche served whole (each plate and the quiche directly on the coffee table or on the serving tray resting on it). Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 minutes with the oven door closed and the oven switched on. Fry both sausages in the frying pan on the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave switched on; the microwave switches itself off when it is done, the oven and the stove do not. The quiche and the bagels start on the counter between the sink and the refrigerator, the sausages inside the refrigerator, and the two plates on the kitchen island. The living-room coffee table is the low square table in front of the sofas east of the kitchen.",
+  "Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm bagel, and the baked quiche served whole (each plate and the quiche directly on the coffee table or on the serving tray resting on it). Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 minutes with the oven door closed and the oven switched on. Fry both sausages in the griddle pan on the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave switched on; the microwave switches itself off when it is done, the oven and the stove do not. The quiche and the bagels start on the counter between the sink and the refrigerator, the sausages inside the refrigerator, and the two plates on the kitchen island. The living-room coffee table is the low square table in front of the sofas east of the kitchen.",
   "Serve the two cups, two forks, and tea bottle at the living-room coffee table, placed either directly on the coffee table or on the serving tray resting on the coffee table. The two cups, two forks, tea bottle, and serving tray start on the kitchen island.",
   "Leave the oven and the stove switched off, and the oven, microwave and refrigerator closed.",
   "Finish with no object held."
@@ -805,7 +810,7 @@
  "requirements": [
   {
    "id": "serve_hot_plates",
-   "text": "Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm bagel, and the baked quiche served whole (each plate and the quiche directly on the coffee table or on the serving tray resting on it). Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 minutes with the oven door closed and the oven switched on. Fry both sausages in the frying pan on the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave switched on; the microwave switches itself off when it is done, the oven and the stove do not. The quiche and the bagels start on the counter between the sink and the refrigerator, the sausages inside the refrigerator, and the two plates on the kitchen island. The living-room coffee table is the low square table in front of the sofas east of the kitchen.",
+   "text": "Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm bagel, and the baked quiche served whole (each plate and the quiche directly on the coffee table or on the serving tray resting on it). Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 minutes with the oven door closed and the oven switched on. Fry both sausages in the griddle pan on the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave switched on; the microwave switches itself off when it is done, the oven and the stove do not. The quiche and the bagels start on the counter between the sink and the refrigerator, the sausages inside the refrigerator, and the two plates on the kitchen island. The living-room coffee table is the low square table in front of the sofas east of the kitchen.",
    "terminal": [
     "plates_served"
    ]
@@ -1336,8 +1341,8 @@
       "primitive": "place_on_top",
       "role": "pan",
       "xy": [
-       4.15,
-       -0.39
+       4.17,
+       -0.58
       ]
      },
      {
@@ -1349,8 +1354,8 @@
       "primitive": "place_on_top",
       "role": "pan",
       "xy": [
-       4.26,
-       -0.39
+       4.17,
+       -0.42
       ]
      },
      {

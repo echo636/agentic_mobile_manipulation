@@ -11,7 +11,7 @@ Changes against the paper design (my call under "less trouble for the agent", re
   - eggs -> sausages: the egg assets are 5-7 cm (too small to click reliably); bratwurst is 23 x 11 cm;
   - toaster oven -> the scene microwave (validated in T1); importing a new appliance was the main build risk;
     the microwave sits next to the stove where the paper toaster was, so routes are unchanged;
-  - the frying pan is fixed on the stove: moving the pan is not part of the planning structure.
+  - the griddle pan is fixed on the stove: moving the pan is not part of the planning structure.
 
 Planning structure: three processes of very different length (360 / 150 / 90 s) -> start the longest first;
 fill the waits with the cold tray run to the living room (8 m); plate in completion order.
@@ -37,7 +37,7 @@ PLATE_UV = {'sausage': [0.50, 0.28], 'bagel': [0.50, 0.72]}
 OVEN_AIM = [8.43, -1.85]
 # r4: the pan's bowl is its north end (y ~ -0.39); without an aim the reference clicked the south rim and the
 # sausage landed on the bare burner beside the pan (c1r3 optimal). Reference tooling only.
-PAN_AIM = {'sausage1': [4.15, -0.39], 'sausage2': [4.26, -0.39]}
+PAN_AIM = {'sausage1': [4.17, -0.58], 'sausage2': [4.17, -0.42]}
 
 
 def native(name, category, model, sha, x, scale=None, fixed=False):
@@ -83,7 +83,7 @@ def build_recipe() -> dict:
         'Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm '
         'bagel, and the baked quiche served whole (each plate and the quiche directly on the coffee table or on '
         'the serving tray resting on it). Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 '
-        'minutes with the oven door closed and the oven switched on. Fry both sausages in the frying pan on '
+        'minutes with the oven door closed and the oven switched on. Fry both sausages in the griddle pan on '
         'the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both '
         'bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave '
         'switched on; the microwave switches itself off when it is done, the oven and the stove do not. The '
@@ -105,7 +105,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'three_appliance_brunch',
-        'instance_id': 'three_appliance_brunch_seed0_r4',
+        'instance_id': 'three_appliance_brunch_seed0_r5',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -153,8 +153,9 @@ def build_recipe() -> dict:
         'native_assets': [
             native('c1_tray', 'tray', 'coqeme',
                    'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 95.0, [3.38, 2.16, 1.5]),
-            native('c1_pan', 'frying_pan', 'hzspwg',
-                   'f60390f685a005d7b2c0f581c1de8574c242ca61c4687e226f0415098f2207af', 98.0, fixed=True),
+            native('c1_pan', 'griddle_pan', 'ryvqep',
+                   '704c9e825784e54cb78730585111263a3832e79caa357c22963e87e47f8ce63e', 98.0, [1.5, 1.6, 1.0],
+                   fixed=True),
             # r3: one 24 x 24 x 4 cm quiche (pie-sized; potatoes r1 and 16 cm mini quiches r2 slid off the rack)
             native('c1_quiche', 'quiche', 'borxmv',
                    '1fa9c0efc74208bf9f94d4c2ec0da8994f9dc0e371bdaf33d2b134fce5bff8a6', 100.0, [1.1, 1.1, 1.4]),
@@ -203,8 +204,8 @@ def build_recipe() -> dict:
             on('quiche', 'storage', [6.62, -1.94]),
             on('bagel1', 'storage', [7.06, -1.94]),
             on('bagel2', 'storage', [7.32, -1.94]),
-            # frying pan fixed on the stove, handle along the counter
-            on('pan', 'stove', [4.20, -0.50], yaw90=True),
+            # griddle pan fixed on the stove, handle along the counter
+            on('pan', 'stove', [4.17, -0.50], yaw90=True),  # flat griddle (r5/C3 r2)
             # tableware, drink and tray on the kitchen island in plain view
             on('plate1', 'island', [6.00, 0.08]),
             on('plate2', 'island', [6.40, 0.08]),

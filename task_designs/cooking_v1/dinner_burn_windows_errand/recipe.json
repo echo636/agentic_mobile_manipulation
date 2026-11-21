@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "dinner_burn_windows_errand",
- "instance_id": "dinner_burn_windows_errand_seed0_r1",
+ "instance_id": "dinner_burn_windows_errand_seed0_r2",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -197,9 +197,9 @@
   },
   {
    "name": "c3_pan",
-   "category": "frying_pan",
-   "model": "hzspwg",
-   "usd_sha256": "f60390f685a005d7b2c0f581c1de8574c242ca61c4687e226f0415098f2207af",
+   "category": "griddle_pan",
+   "model": "ryvqep",
+   "usd_sha256": "704c9e825784e54cb78730585111263a3832e79caa357c22963e87e47f8ce63e",
    "prim_type": 0,
    "position": [
     99.0,
@@ -210,6 +210,11 @@
     0.0,
     0.0,
     0.0,
+    1.0
+   ],
+   "scale": [
+    1.5,
+    1.6,
     1.0
    ],
    "fixed_base": true
@@ -510,7 +515,7 @@
    "target": "stove",
    "place_on_support": true,
    "xy": [
-    4.2,
+    4.17,
     -0.5
    ],
    "orientation": [
@@ -820,7 +825,7 @@
  "replacements": [],
  "public_instruction": "Cook and serve dinner for two on the living-room coffee table: hot soup, roasted vegetables and fried steaks on plates, with the wine and two glasses from the utility room, without burning anything, and leave the kitchen appliances off and closed.",
  "public_context": [
-  "Serve dinner for two on the living-room coffee table (the low square table in front of the sofas east of the kitchen): the two bowls of soup heated, the dish of vegetables roasted, and the two steaks fried and served on the two plates, one steak per plate; each item directly on the table or on a serving tray resting on it. The soup bowls and the steaks start inside the refrigerator, the vegetable dish on the counter between the sink and the refrigerator, and the two plates and a serving tray on the kitchen island. Heat the soup in the microwave on the west preparation counter: about 3 minutes with the door closed and the microwave switched on; it switches itself off when done and the soup does not burn. Roast the vegetables in the black built-in oven to the right of the refrigerator: about 4 minutes with the oven door closed and the oven switched on; the oven does not switch itself off, and roasted vegetables left in the running oven for more than about 2 more minutes burn. Fry the steaks in the frying pan on the stove beside the microwave: about 2 minutes with the stove switched on; the stove does not switch itself off, and steaks left on the running stove for more than about 30 more seconds burn. Burnt food cannot be served.",
+  "Serve dinner for two on the living-room coffee table (the low square table in front of the sofas east of the kitchen): the two bowls of soup heated, the dish of vegetables roasted, and the two steaks fried and served on the two plates, one steak per plate; each item directly on the table or on a serving tray resting on it. The soup bowls and the steaks start inside the refrigerator, the vegetable dish on the counter between the sink and the refrigerator, and the two plates and a serving tray on the kitchen island. Heat the soup in the microwave on the west preparation counter: about 3 minutes with the door closed and the microwave switched on; it switches itself off when done and the soup does not burn. Roast the vegetables in the black built-in oven to the right of the refrigerator: about 4 minutes with the oven door closed and the oven switched on; the oven does not switch itself off, and roasted vegetables left in the running oven for more than about 2 more minutes burn. Fry the steaks in the griddle pan on the stove beside the microwave: about 2 minutes with the stove switched on; the stove does not switch itself off, and steaks left on the running stove for more than about 30 more seconds burn. Burnt food cannot be served.",
   "Bring the bottle of wine and the two glasses from the counter of the south-east utility room to the living-room coffee table, directly on the table or on a serving tray resting on it. A second serving tray is on the same utility-room counter.",
   "Leave the oven and the stove switched off, and the oven, microwave and refrigerator closed.",
   "Finish with no object held."
@@ -828,7 +833,7 @@
  "requirements": [
   {
    "id": "dinner_served",
-   "text": "Serve dinner for two on the living-room coffee table (the low square table in front of the sofas east of the kitchen): the two bowls of soup heated, the dish of vegetables roasted, and the two steaks fried and served on the two plates, one steak per plate; each item directly on the table or on a serving tray resting on it. The soup bowls and the steaks start inside the refrigerator, the vegetable dish on the counter between the sink and the refrigerator, and the two plates and a serving tray on the kitchen island. Heat the soup in the microwave on the west preparation counter: about 3 minutes with the door closed and the microwave switched on; it switches itself off when done and the soup does not burn. Roast the vegetables in the black built-in oven to the right of the refrigerator: about 4 minutes with the oven door closed and the oven switched on; the oven does not switch itself off, and roasted vegetables left in the running oven for more than about 2 more minutes burn. Fry the steaks in the frying pan on the stove beside the microwave: about 2 minutes with the stove switched on; the stove does not switch itself off, and steaks left on the running stove for more than about 30 more seconds burn. Burnt food cannot be served.",
+   "text": "Serve dinner for two on the living-room coffee table (the low square table in front of the sofas east of the kitchen): the two bowls of soup heated, the dish of vegetables roasted, and the two steaks fried and served on the two plates, one steak per plate; each item directly on the table or on a serving tray resting on it. The soup bowls and the steaks start inside the refrigerator, the vegetable dish on the counter between the sink and the refrigerator, and the two plates and a serving tray on the kitchen island. Heat the soup in the microwave on the west preparation counter: about 3 minutes with the door closed and the microwave switched on; it switches itself off when done and the soup does not burn. Roast the vegetables in the black built-in oven to the right of the refrigerator: about 4 minutes with the oven door closed and the oven switched on; the oven does not switch itself off, and roasted vegetables left in the running oven for more than about 2 more minutes burn. Fry the steaks in the griddle pan on the stove beside the microwave: about 2 minutes with the stove switched on; the stove does not switch itself off, and steaks left on the running stove for more than about 30 more seconds burn. Burnt food cannot be served.",
    "terminal": [
     "dinner_served"
    ]
@@ -1515,8 +1520,8 @@
       "primitive": "place_on_top",
       "role": "pan",
       "xy": [
-       4.15,
-       -0.39
+       4.17,
+       -0.58
       ]
      },
      {
@@ -1528,8 +1533,8 @@
       "primitive": "place_on_top",
       "role": "pan",
       "xy": [
-       4.27,
-       -0.39
+       4.17,
+       -0.41
       ]
      },
      {
