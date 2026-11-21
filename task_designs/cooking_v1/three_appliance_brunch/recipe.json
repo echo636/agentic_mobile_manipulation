@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "three_appliance_brunch",
- "instance_id": "three_appliance_brunch_seed0_r7b",
+ "instance_id": "three_appliance_brunch_seed0_r8",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -25,8 +25,6 @@
   "tray": "c1_tray",
   "plate1": "c1_plate1",
   "plate2": "c1_plate2",
-  "fork1": "c1_fork1",
-  "fork2": "c1_fork2",
   "cup1": "c1_cup1",
   "cup2": "c1_cup2",
   "quiche": "c1_quiche",
@@ -73,8 +71,8 @@
     1.0
    ],
    "scale": [
-    1.75,
-    1.75,
+    1.5,
+    1.5,
     1.0
    ]
   },
@@ -95,53 +93,9 @@
     1.0
    ],
    "scale": [
-    1.75,
-    1.75,
+    1.5,
+    1.5,
     1.0
-   ]
-  },
-  {
-   "name": "c1_fork1",
-   "source_task": "setting_the_table",
-   "source_object": "tablefork_247",
-   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
-   "position": [
-    125.0,
-    50.0,
-    2.0
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.0,
-    1.0
-   ],
-   "scale": [
-    0.85,
-    2.2,
-    1.5
-   ]
-  },
-  {
-   "name": "c1_fork2",
-   "source_task": "setting_the_table",
-   "source_object": "tablefork_248",
-   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
-   "position": [
-    128.0,
-    50.0,
-    2.0
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.0,
-    1.0
-   ],
-   "scale": [
-    0.85,
-    2.2,
-    1.5
    ]
   },
   {
@@ -276,6 +230,11 @@
     0.0,
     0.0,
     1.0
+   ],
+   "scale": [
+    0.8,
+    0.8,
+    1.0
    ]
   },
   {
@@ -293,6 +252,11 @@
     0.0,
     0.0,
     0.0,
+    1.0
+   ],
+   "scale": [
+    0.8,
+    0.8,
     1.0
    ]
   },
@@ -582,36 +546,6 @@
    ]
   },
   {
-   "object": "fork1",
-   "target": "island",
-   "place_on_support": true,
-   "xy": [
-    8.02,
-    0.05
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.70710678,
-    0.70710678
-   ]
-  },
-  {
-   "object": "fork2",
-   "target": "island",
-   "place_on_support": true,
-   "xy": [
-    8.26,
-    0.05
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.70710678,
-    0.70710678
-   ]
-  },
-  {
    "object": "tea",
    "target": "island",
    "place_on_support": true,
@@ -777,8 +711,6 @@
   "tray_on_island": "initial_tray_OnTop",
   "cup1_on_island": "initial_cup1_OnTop",
   "cup2_on_island": "initial_cup2_OnTop",
-  "fork1_on_island": "initial_fork1_OnTop",
-  "fork2_on_island": "initial_fork2_OnTop",
   "tea_on_island": "initial_tea_OnTop",
   "fridge_closed": {
    "not": "fridge_open"
@@ -805,10 +737,10 @@
  },
  "future_roles": [],
  "replacements": [],
- "public_instruction": "Cook and serve brunch for two on the living-room coffee table: a baked quiche, fried sausages and warm bagels on two plates, with cups, forks and tea, and leave the kitchen appliances off and closed.",
+ "public_instruction": "Cook and serve brunch for two on the living-room coffee table: a baked quiche, fried sausages and warm bagels on two plates, with cups and tea, and leave the kitchen appliances off and closed.",
  "public_context": [
   "Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm bagel, and the baked quiche served whole (each plate and the quiche directly on the coffee table or on the serving tray resting on it). Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 minutes with the oven door closed and the oven switched on. Fry both sausages in the griddle pan on the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave switched on; the microwave switches itself off when it is done, the oven and the stove do not. The quiche and the bagels start on the counter between the sink and the refrigerator, the sausages inside the refrigerator, and the two plates on the kitchen island. The living-room coffee table is the low square table in front of the sofas east of the kitchen.",
-  "Serve the two cups, two forks, and tea bottle at the living-room coffee table, placed either directly on the coffee table or on the serving tray resting on the coffee table. The two cups, two forks, tea bottle, and serving tray start on the kitchen island.",
+  "Serve the two cups and the tea bottle at the living-room coffee table, placed either directly on the coffee table or on the serving tray resting on the coffee table. The two cups, the tea bottle and the serving tray start on the kitchen island.",
   "Leave the oven and the stove switched off, and the oven, microwave and refrigerator closed.",
   "Finish with no object held."
  ],
@@ -822,7 +754,7 @@
   },
   {
    "id": "serve_tableware_and_tea",
-   "text": "Serve the two cups, two forks, and tea bottle at the living-room coffee table, placed either directly on the coffee table or on the serving tray resting on the coffee table. The two cups, two forks, tea bottle, and serving tray start on the kitchen island.",
+   "text": "Serve the two cups and the tea bottle at the living-room coffee table, placed either directly on the coffee table or on the serving tray resting on the coffee table. The two cups, the tea bottle and the serving tray start on the kitchen island.",
    "terminal": [
     "tableware_served"
    ]
@@ -934,16 +866,6 @@
     "state": "OnTop",
     "target": "table"
    },
-   "fork1_ontop_table": {
-    "object": "fork1",
-    "state": "OnTop",
-    "target": "table"
-   },
-   "fork2_ontop_table": {
-    "object": "fork2",
-    "state": "OnTop",
-    "target": "table"
-   },
    "tea_ontop_table": {
     "object": "tea",
     "state": "OnTop",
@@ -971,16 +893,6 @@
    },
    "cup2_ontop_tray": {
     "object": "cup2",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "fork1_ontop_tray": {
-    "object": "fork1",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "fork2_ontop_tray": {
-    "object": "fork2",
     "state": "OnTop",
     "target": "tray"
    },
@@ -1073,16 +985,6 @@
    },
    "initial_cup2_OnTop": {
     "object": "cup2",
-    "state": "OnTop",
-    "target": "island"
-   },
-   "initial_fork1_OnTop": {
-    "object": "fork1",
-    "state": "OnTop",
-    "target": "island"
-   },
-   "initial_fork2_OnTop": {
-    "object": "fork2",
     "state": "OnTop",
     "target": "island"
    },
@@ -1186,28 +1088,6 @@
        {
         "all": [
          "cup2_ontop_tray",
-         "tray_ontop_table"
-        ]
-       }
-      ]
-     },
-     {
-      "any": [
-       "fork1_ontop_table",
-       {
-        "all": [
-         "fork1_ontop_tray",
-         "tray_ontop_table"
-        ]
-       }
-      ]
-     },
-     {
-      "any": [
-       "fork2_ontop_table",
-       {
-        "all": [
-         "fork2_ontop_tray",
          "tray_ontop_table"
         ]
        }
@@ -1384,8 +1264,8 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.2,
-       0.2
+       0.22,
+       0.24
       ]
      },
      {
@@ -1397,7 +1277,7 @@
       "role": "tray",
       "uv": [
        0.5,
-       0.2
+       0.24
       ]
      },
      {
@@ -1408,32 +1288,8 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.8,
-       0.2
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "fork1"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "tray",
-      "uv": [
-       0.16,
-       0.7
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "fork2"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "tray",
-      "uv": [
-       0.32,
-       0.7
+       0.78,
+       0.24
       ]
      },
      {
@@ -1444,7 +1300,7 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.8,
+       0.71,
        0.5
       ]
      }
@@ -1487,30 +1343,6 @@
       "uv": [
        0.73,
        0.52
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "fork1"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "table",
-      "uv": [
-       0.62,
-       0.24
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "fork2"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "table",
-      "uv": [
-       0.84,
-       0.24
       ]
      }
     ],
@@ -1697,7 +1529,7 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.25,
+       0.47,
        0.5
       ]
      }
@@ -1731,7 +1563,7 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.72,
+       0.5,
        0.72
       ]
      }
@@ -1762,8 +1594,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.18,
-       0.8
+       0.2,
+       0.74
       ]
      },
      {
@@ -1774,8 +1606,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.18,
-       0.2
+       0.2,
+       0.26
       ]
      }
     ],

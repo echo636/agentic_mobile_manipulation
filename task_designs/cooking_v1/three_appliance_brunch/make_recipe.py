@@ -92,20 +92,20 @@ def build_recipe() -> dict:
         'square table in front of the sofas east of the kitchen.'
     )
     req_cold = (
-        'Serve the two cups, two forks, and tea bottle at the living-room coffee table, placed either '
-        'directly on the coffee table or on the serving tray resting on the coffee table. The two cups, '
-        'two forks, tea bottle, and serving tray start on the kitchen island.'
+        'Serve the two cups and the tea bottle at the living-room coffee table, placed either directly on '
+        'the coffee table or on the serving tray resting on the coffee table. The two cups, the tea bottle '
+        'and the serving tray start on the kitchen island.'
     )
     req_reset = 'Leave the oven and the stove switched off, and the oven, microwave and refrigerator closed.'
     req_hand = 'Finish with no object held.'
 
     items = [f'{f}{i}' for f in FOODS for i in (1, 2)]
-    cold = ['cup1', 'cup2', 'fork1', 'fork2', 'tea']
+    cold = ['cup1', 'cup2', 'tea']   # r8: forks dropped (no planning role; room for the quiche on the tray)
     island_items = ['plate1', 'plate2', 'tray'] + cold
     spec = {
         'schema_version': 3,
         'id': 'three_appliance_brunch',
-        'instance_id': 'three_appliance_brunch_seed0_r7b',
+        'instance_id': 'three_appliance_brunch_seed0_r8',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -124,7 +124,6 @@ def build_recipe() -> dict:
             'tea': 'bottle_of_tea_208',
             'tray': 'c1_tray',
             'plate1': 'c1_plate1', 'plate2': 'c1_plate2',
-            'fork1': 'c1_fork1', 'fork2': 'c1_fork2',
             'cup1': 'c1_cup1', 'cup2': 'c1_cup2',
             'quiche': 'c1_quiche',
             'sausage1': 'c1_sausage1', 'sausage2': 'c1_sausage2',
@@ -144,11 +143,10 @@ def build_recipe() -> dict:
         'asset_imports': [
             # r6: 34 cm plates; on 25.6 cm plates the 23 cm sausage reached the rim, touched the island and was
             # left behind when the plate was lifted (c1r5 habit, grasp payload left in place)
-            # r7: 30 cm (34 cm plates + tray + quiche crowded the 98 cm table, c1r6)
-            imported('c1_plate1', 'setting_the_table', 'plate_243', 119.0, [1.75, 1.75, 1.0]),
-            imported('c1_plate2', 'setting_the_table', 'plate_244', 122.0, [1.75, 1.75, 1.0]),
-            imported('c1_fork1', 'setting_the_table', 'tablefork_247', 125.0, [0.85, 2.2, 1.5]),
-            imported('c1_fork2', 'setting_the_table', 'tablefork_248', 128.0, [0.85, 2.2, 1.5]),
+            # r8: T1 plates (25.6 cm). The executor puts a large carried tray near the table centre whatever the
+            # aim (c1r7/r7b, C4), so only T1's footprint fits: tray in the middle, 25.6 cm plates at the west side.
+            imported('c1_plate1', 'setting_the_table', 'plate_243', 119.0, [1.5, 1.5, 1.0]),
+            imported('c1_plate2', 'setting_the_table', 'plate_244', 122.0, [1.5, 1.5, 1.0]),
             imported('c1_cup1', 'setting_the_table', 'water_glass_bbpraa_0', 131.0, [1.25, 1.25, 1.15]),
             imported('c1_cup2', 'setting_the_table', 'water_glass_bbpraa_0', 134.0, [1.25, 1.25, 1.15]),
         ],
@@ -162,7 +160,8 @@ def build_recipe() -> dict:
             native('c1_quiche', 'quiche', 'borxmv',
                    '1fa9c0efc74208bf9f94d4c2ec0da8994f9dc0e371bdaf33d2b134fce5bff8a6', 100.0, [1.1, 1.1, 1.4]),
             *[native(f'c1_sausage{i}', 'bratwurst', 'pqfrrn',
-                     '86266778cc1596287bb28195075443d7bdeb2a73c4d3815ac6232a0ecb6fc69c', 104.0 + 2 * i)
+                     '86266778cc1596287bb28195075443d7bdeb2a73c4d3815ac6232a0ecb6fc69c', 104.0 + 2 * i,
+                     [0.8, 0.8, 1.0])   # r8: 18 cm, clear of the 25.6 cm plate rim (c1r5 habit)
               for i in (1, 2)],
             *[native(f'c1_bagel{i}', 'bagel', 'zlxkry',
                      '57467aa695bccaa4ffce63eaac4b507b25c2837c2d537883e2415c783a4b66ab', 108.0 + 2 * i,
@@ -216,8 +215,6 @@ def build_recipe() -> dict:
             on('tray', 'island', [7.00, 0.08], yaw90=True),
             on('cup1', 'island', [7.50, 0.05]),
             on('cup2', 'island', [7.76, 0.05]),
-            on('fork1', 'island', [8.02, 0.05], yaw90=True),
-            on('fork2', 'island', [8.26, 0.05], yaw90=True),
             on('tea', 'island', [8.54, 0.05]),
             # unused base-task objects: board inside the closed pantry cabinet, the rest on its roof (as T1/C4)
             state('cabinet', 'Open', True, fully=True),
@@ -252,7 +249,7 @@ def build_recipe() -> dict:
         'replacements': [],
         'public_instruction': (
             'Cook and serve brunch for two on the living-room coffee table: a baked quiche, fried sausages and '
-            'warm bagels on two plates, with cups, forks and tea, and leave the kitchen appliances off and closed.'
+            'warm bagels on two plates, with cups and tea, and leave the kitchen appliances off and closed.'
         ),
         'public_context': [req_hot, req_cold, req_reset, req_hand],
         'requirements': [
@@ -343,18 +340,13 @@ def build_reference_plan() -> dict:
                         'after': []},
         'deliver_cold_batch_on_tray': {
             'actions': [{'primitive': 'grasp', 'role': 'cup1'},
-                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.20, 0.20]},
+                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.22, 0.24]},
                         {'primitive': 'grasp', 'role': 'tea'},
-                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.50, 0.20]},
+                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.50, 0.24]},
                         {'primitive': 'grasp', 'role': 'cup2'},
-                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.80, 0.20]},
-                        {'primitive': 'grasp', 'role': 'fork1'},
-                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.16, 0.70]},
-                        {'primitive': 'grasp', 'role': 'fork2'},
-                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.32, 0.70]},
+                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.78, 0.24]},
                         {'primitive': 'grasp', 'role': 'tray'},
-                        # r7b: near T1's aim; at the edge (0.95, r7) the tray slid off the table
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.80, 0.50]}],
+                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.71, 0.50]}],
             'after': []},
         'deliver_cold_single_trips': {
             'actions': [{'primitive': 'grasp', 'role': 'cup1'},
@@ -363,10 +355,7 @@ def build_reference_plan() -> dict:
                         {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.84, 0.80]},
                         {'primitive': 'grasp', 'role': 'tea'},
                         {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.73, 0.52]},
-                        {'primitive': 'grasp', 'role': 'fork1'},
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.62, 0.24]},
-                        {'primitive': 'grasp', 'role': 'fork2'},
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.84, 0.24]}],
+],
             'after': []},
         'idle_wait_oven': {'actions': [wait('quiche_done', 60.0, 8)], 'after': ['start_oven']},
         'idle_wait_stove': {'actions': [wait(done('sausage'), 30.0, 8)], 'after': ['start_stove']},
@@ -381,19 +370,19 @@ def build_reference_plan() -> dict:
         'serve_quiche': {'actions': [wait('quiche_done', 20.0, 20), {'primitive': 'toggle_off', 'role': 'oven'},
                                      {'primitive': 'open', 'role': 'oven'},
                                      {'primitive': 'grasp', 'role': 'quiche', 'approach_role': 'oven'},
-                                     {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.25, 0.50]}],
+                                     {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.47, 0.50]}],
                          'after': ['start_oven']},
         # optimal: onto the tray already on the table (free bottom-right quadrant)
         'serve_quiche_tray': {'actions': [wait('quiche_done', 20.0, 20), {'primitive': 'toggle_off', 'role': 'oven'},
                                           {'primitive': 'open', 'role': 'oven'},
                                           {'primitive': 'grasp', 'role': 'quiche', 'approach_role': 'oven'},
-                                          {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.72, 0.72]}],
+                                          {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.50, 0.72]}],
                               'after': ['start_oven', 'deliver_cold_batch_on_tray']},
         'close_oven': {'actions': [{'primitive': 'close', 'role': 'oven'}], 'after': ['start_oven']},
         'deliver_plates': {'actions': [{'primitive': 'grasp', 'role': 'plate1'},
-                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.18, 0.80]},
+                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.20, 0.74]},
                                        {'primitive': 'grasp', 'role': 'plate2'},
-                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.18, 0.20]}],
+                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.20, 0.26]}],
                            'after': ['plate_bagels', 'plate_sausages']},
     }
     orders = {
