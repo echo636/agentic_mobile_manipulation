@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "dinner_burn_windows_errand",
- "instance_id": "dinner_burn_windows_errand_seed0_r5",
+ "instance_id": "dinner_burn_windows_errand_seed0_r5b",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -1445,8 +1445,8 @@
       "primitive": "place_on_top",
       "role": "tray2",
       "uv": [
-       0.25,
-       0.3
+       0.4,
+       0.32
       ]
      },
      {
@@ -1457,8 +1457,8 @@
       "primitive": "place_on_top",
       "role": "tray2",
       "uv": [
-       0.25,
-       0.72
+       0.4,
+       0.68
       ]
      },
      {
@@ -1469,7 +1469,7 @@
       "primitive": "place_on_top",
       "role": "tray2",
       "uv": [
-       0.7,
+       0.66,
        0.5
       ]
      },

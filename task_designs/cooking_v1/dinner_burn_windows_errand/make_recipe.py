@@ -97,7 +97,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'dinner_burn_windows_errand',
-        'instance_id': 'dinner_burn_windows_errand_seed0_r5',
+        'instance_id': 'dinner_burn_windows_errand_seed0_r5b',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -339,8 +339,9 @@ def build_reference_plan() -> dict:
         'start_oven': {'actions': [act('open', 'oven'), g('veg'), act('place_inside', 'oven', xy=[8.43, -1.85]),
                                    act('close', 'oven'), act('toggle_on', 'oven')], 'after': []},
         # the far errand, inside the oven's done + 120 s window
-        'wine_errand_tray2': {'actions': [g('wine'), put('tray2', uv=[0.25, 0.30]), g('glass1'),
-                                          put('tray2', uv=[0.25, 0.72]), g('glass2'), put('tray2', uv=[0.70, 0.50]),
+        # r5b: items pulled toward the tray centre (glass1 at the rim stayed on the counter, c3r5 optimal)
+        'wine_errand_tray2': {'actions': [g('wine'), put('tray2', uv=[0.40, 0.32]), g('glass1'),
+                                          put('tray2', uv=[0.40, 0.68]), g('glass2'), put('tray2', uv=[0.66, 0.50]),
                                           g('tray2'), put('table', uv=[0.75, 0.75])], 'after': []},
         'oven_off': {'actions': [wait('veg_roasted', 10.0, 40), act('toggle_off', 'oven')], 'after': ['start_oven']},
         'start_steaks': {'actions': [act('open', 'fridge'),
