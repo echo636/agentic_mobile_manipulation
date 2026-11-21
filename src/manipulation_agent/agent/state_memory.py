@@ -45,17 +45,29 @@ PLACEMENT_STATUS_MAP = {
 MACRO_TRAVEL_METERS = 1.5
 MACRO_TRAVEL_SECONDS = 3.5
 SAME_VIEW_CONTAINER_RADIUS = 0.25
-# 2026-11-21 container matching by click heading (coordinator 09:34): a click's absolute heading = the robot's odometry
-# heading when the clicked image was taken + the camera's yaw + the click's horizontal angle in the image. Two clicks at
-# one location are the same container only if their headings are within SAME_CONTAINER_HEADING_DEG and the robot stood
-# within STANCE_RADIUS_M (odometry) for both; the main rule also keeps |dy| <= 0.25. Unknown heading or stance: the
-# old same-view rule only, no fallback (split rather than merge). Odometry is never shown to the model.
-SAME_CONTAINER_HEADING_DEG = 20.0   # offline replay 2026-11-21 (sec20/container_match): 40 left 22 merged records, 20 left 10
+# 2026-11-21 container matching by lines of sight (coordinator 09:34 / 09:58; offline replay sec20/container_match).
+# A click is a line of sight: start = the robot's odometry stance when the clicked image was taken, direction = its
+# odometry heading + the camera's yaw + the click's horizontal angle in the image. A record keeps all its lines of
+# sight; a new click is the same container if it agrees with every one of them: stances within NEAR_STANCE_M ->
+# headings within SAME_CONTAINER_HEADING_DEG and |dy| <= 0.25; stances further apart -> the lines cross
+# RAY_MIN_M..RAY_MAX_M in front of both at CROSS_MIN_ANGLE_DEG or more, or nearly coincide (COLLINEAR_ACCEPT).
+# Fallback only for close / place_inside / take out (the container is open now): the one open record here or within
+# OPEN_FALLBACK_RADIUS_M. open has no fallback. Without odometry: the old same-view rule. Odometry never reaches the
+# model (the proxy strips _private_odometry).
+SAME_CONTAINER_HEADING_DEG = 12.0
 VIEW_YAW_DEG = {'front': 0.0, 'back': 180.0, 'left': 90.0, 'right': -90.0}
 HALF_HFOV_TAN = 1.0   # 90-degree horizontal field of view (focal 10, aperture 20)
-FALLBACK_CHECKS_Y = False             # the fallback does not use dy (open clicks the door, place_inside the inside)
-OPEN_FALLBACK_IGNORES_HEADING = False  # place_inside/close: the one open container here, whatever its heading
-STANCE_RADIUS_M = 1.0                  # same container also needs the two clicks' robot stances (odometry) this close
+NEAR_STANCE_M = 0.5            # two clicks from stances this close: compare headings (and click y)
+RAY_MIN_M, RAY_MAX_M = 0.3, 3.0  # stances further apart: the lines of sight must cross this far in front of both
+OPEN_FALLBACK_RADIUS_M = 3.0   # close / place_inside fallback: the one open record here or within this distance
+CROSS_MIN_ANGLE_DEG = 30.0     # lines of sight from different stances must meet at least at this angle
+RAYS_MUST_ALL_AGREE = True     # a new click must agree with every line of sight of the record (else: any)
+RAYS_RECENT = 0                # if > 0: only the record's most recent lines of sight are compared
+OPEN_FALLBACK_LATEST = False   # several open records nearby: the one operated most recently
+OPEN_FALLBACK_LOOSE = False    # several open records nearby: the one whose lines of sight loosely agree (best score)
+LOOSE_FOR = ('close', 'place_inside', 'grasp')  # which actions may use the loose choice
+COLLINEAR_ACCEPT = True        # shallow-angle lines of sight that nearly coincide (each stance <= NEAR_STANCE_M off
+                               # the other line, same direction) are the same thing
 PRIVATE_ODOMETRY_KEY = '_private_odometry'   # bridge -> memory only; the proxy removes it before the model
 
 
@@ -68,6 +80,59 @@ def _click_heading(obs_heading, view, point):
 
 def _heading_gap(a, b):
     return abs((float(a) - float(b) + 180.0) % 360.0 - 180.0)
+
+
+def _rays_loose(a, b):
+    """Looser agreement for choosing among open records: 45 deg at one stance, any crossing 0.2-4 m."""
+    if a is None or b is None:
+        return None
+    ax, ay = a['xy']; bx, by = b['xy']
+    gap = _heading_gap(a['heading'], b['heading'])
+    if math.dist((ax, ay), (bx, by)) <= NEAR_STANCE_M:
+        return gap / 45.0 if gap <= 45.0 else None
+    d1 = (math.cos(math.radians(a['heading'])), math.sin(math.radians(a['heading'])))
+    d2 = (math.cos(math.radians(b['heading'])), math.sin(math.radians(b['heading'])))
+    den = d1[0] * d2[1] - d1[1] * d2[0]
+    wx, wy = bx - ax, by - ay
+    if abs(den) < 1e-3:
+        lateral = abs(wx * d1[1] - wy * d1[0])
+        return 1.0 + lateral if gap <= 45.0 and lateral <= 0.5 else None
+    t = (wx * d2[1] - wy * d2[0]) / den
+    u = (wx * d1[1] - wy * d1[0]) / den
+    return 1.0 + abs(t - u) / 4.0 if 0.2 <= t <= 4.0 and 0.2 <= u <= 4.0 else None
+
+
+def _rays_agree(a, b):
+    """Two lines of sight {'xy', 'heading', 'y'} on one container? -> a score (lower = better) or None."""
+    if a is None or b is None:
+        return None
+    ax, ay = a['xy']; bx, by = b['xy']
+    gap = _heading_gap(a['heading'], b['heading'])
+    if math.dist((ax, ay), (bx, by)) <= NEAR_STANCE_M:
+        if gap > SAME_CONTAINER_HEADING_DEG:
+            return None
+        if a.get('y') is not None and b.get('y') is not None and abs(a['y'] - b['y']) > SAME_VIEW_CONTAINER_RADIUS:
+            return None
+        return gap / SAME_CONTAINER_HEADING_DEG
+    d1 = (math.cos(math.radians(a['heading'])), math.sin(math.radians(a['heading'])))
+    d2 = (math.cos(math.radians(b['heading'])), math.sin(math.radians(b['heading'])))
+    den = d1[0] * d2[1] - d1[1] * d2[0]
+    wx, wy = bx - ax, by - ay
+    if abs(den) < math.sin(math.radians(max(5.0, CROSS_MIN_ANGLE_DEG))) and gap > 5.0:
+        if COLLINEAR_ACCEPT and gap <= SAME_CONTAINER_HEADING_DEG:
+            off_a = abs(wx * d1[1] - wy * d1[0]); off_b = abs(wx * d2[1] - wy * d2[0])
+            if off_a <= NEAR_STANCE_M and off_b <= NEAR_STANCE_M:
+                return 1.0 + max(off_a, off_b)
+        return None
+    if abs(den) < math.sin(math.radians(5)):
+        # (anti)parallel: the same thing only when both look the same way along one line (stepped back / forward)
+        lateral = abs(wx * d1[1] - wy * d1[0])
+        return 1.0 + lateral if gap <= SAME_CONTAINER_HEADING_DEG and lateral <= NEAR_STANCE_M else None
+    t = (wx * d2[1] - wy * d2[0]) / den      # distance along a's line of sight
+    u = (wx * d1[1] - wy * d1[0]) / den      # distance along b's line of sight
+    if RAY_MIN_M <= t <= RAY_MAX_M and RAY_MIN_M <= u <= RAY_MAX_M:
+        return 1.0 + abs(t - u) / RAY_MAX_M
+    return None
 IMAGE_BLOCK_TYPES = frozenset({'input_image', 'image', 'image_url'})
 OMITTED_IMAGE_PLACEHOLDER = '[omitted historical RGB frame; state retained in StateMemory]'
 
@@ -552,73 +617,79 @@ class StateMemory:
                     return info['id']
 
         heading = getattr(self, '_click_heading', None)
-
-        def y_ok(info):
-            p = info.get('point')
-            return not (point and isinstance(p, list) and len(p) == 2) or abs(point[1] - p[1]) <= SAME_VIEW_CONTAINER_RADIUS
-
         stance = getattr(self, '_click_stance', None)
-
-        def stance_ok(info):
-            if STANCE_RADIUS_M is None:
-                return True
-            other = info.get('stance')
-            return stance is not None and other is not None and math.dist(stance, other) <= STANCE_RADIUS_M
+        ray = ({'xy': [round(stance[0], 3), round(stance[1], 3)], 'heading': round(heading, 1),
+                'y': None if not point else point[1]} if heading is not None and stance is not None else None)
 
         def state_ok(info):
             return not expected_current_state or info.get('state') in {expected_current_state, 'unknown'}
 
-        # Main rule. Both headings known: same location, headings within SAME_CONTAINER_HEADING_DEG, |dy| <= 0.25
-        # (the view may differ). Otherwise the old same-view rule (same view, click distance <= 0.25).
+        def ray_score(info):
+            """Best agreement between this click's line of sight and any of the record's; None = no match."""
+            best = None
+            rays = info.get('rays') or []
+            for r in (rays[-RAYS_RECENT:] if RAYS_RECENT else rays):
+                sc = _rays_agree(ray, r)
+                if sc is None and RAYS_MUST_ALL_AGREE:
+                    return None
+                if sc is not None and (best is None or sc < best):
+                    best = sc
+            return best
+
+        def take(cid):
+            if ray is not None:
+                rays = self.container_states[cid].setdefault('rays', [])
+                if ray not in rays:
+                    rays.append(dict(ray))
+            return cid
+
+        # Main rule. With a line of sight (odometry stance + heading): any of the record's lines of sight agrees
+        # (same stance: heading within SAME_CONTAINER_HEADING_DEG and |dy| <= 0.25; different stances: the two
+        # lines cross RAY_MIN_M..RAY_MAX_M in front of both). Without odometry: the old same-view rule.
         best_id, best_key = None, None
         for info in candidates_here:
             if not state_ok(info):
                 continue
-            if heading is not None and info.get('heading') is not None:
-                gap = _heading_gap(heading, info['heading'])
-                if gap <= SAME_CONTAINER_HEADING_DEG and y_ok(info) and stance_ok(info):
-                    key = (0, gap)
-                else:
+            if ray is not None and info.get('rays'):
+                sc = ray_score(info)
+                if sc is None:
                     continue
-            elif view and point and info.get('view') == view and isinstance(info.get('point'), list) and len(info['point']) == 2:
-                d = math.dist(point, info['point'])
-                if d <= SAME_VIEW_CONTAINER_RADIUS:
-                    key = (1, d)
-                else:
-                    continue
+                key = (0, sc)
+            elif ray is None and view and point and info.get('view') == view and isinstance(info.get('point'), list) \
+                    and len(info['point']) == 2 and math.dist(point, info['point']) <= SAME_VIEW_CONTAINER_RADIUS:
+                key = (1, math.dist(point, info['point']))
             else:
                 continue
             if best_key is None or key < best_key:
                 best_id, best_key = info['id'], key
         if best_id is not None:
-            return best_id
+            globals()['_last_match_rule'] = (('same_stance' if best_key[1] < 1.0 else 'crossing') if best_key[0] == 0
+                                             else 'same_view')
+            return take(best_id)
 
-        # Fallback (the one container here in the expected state) only when the headings agree too: never merge
-        # two containers in different directions; when the heading is unknown, split rather than merge.
-        if expected_current_state == 'open' and OPEN_FALLBACK_IGNORES_HEADING:
-            open_here = [info for info in candidates_here if info.get('state') == 'open']
-            if len(open_here) == 1:
-                return open_here[0]['id']
-        if expected_current_state and heading is None and not point:
-            # No click at all (no spatial information either way): the old rule, the one container here in that state.
+        # Fallback by action. close / place_inside / take out (expected open): the container is open right now, so
+        # the one record here (or within OPEN_FALLBACK_RADIUS_M of the robot) marked open. open: no fallback.
+        if expected_current_state == 'open':
+            near = [info for info in self.container_states.values() if info.get('state') == 'open' and (
+                info.get('location') == self.current_location or (stance is not None and any(
+                    math.dist(stance, r['xy']) <= OPEN_FALLBACK_RADIUS_M for r in info.get('rays') or [])))]
+            if OPEN_FALLBACK_LOOSE and len(near) > 1 and ray is not None and arguments.get('primitive') in LOOSE_FOR:
+                scored = []
+                for info in near:
+                    scs = [sc for sc in (_rays_loose(ray, r) for r in info.get('rays') or []) if sc is not None]
+                    if scs:
+                        scored.append((min(scs), info['id']))
+                if scored:
+                    globals()['_last_match_rule'] = 'open_fallback_loose'
+                    return take(min(scored)[1])
+            if len(near) == 1 or (near and OPEN_FALLBACK_LATEST):
+                globals()['_last_match_rule'] = 'open_fallback'
+                return take(max(near, key=lambda r: int(r.get('last_step') or 0))['id'])
+        elif expected_current_state and not point:
+            # No click at all (old compatibility events): the one container here in that state.
             matching_state = [info for info in candidates_here if info.get('state') == expected_current_state]
             if len(matching_state) == 1:
                 return matching_state[0]['id']
-            if matching_state and expected_current_state == 'open':
-                matching_state.sort(key=lambda r: int(r.get('last_step') or 0))
-                return matching_state[-1]['id']
-        if expected_current_state and heading is not None:
-            matching_state = [
-                info for info in candidates_here
-                if info.get('state') == expected_current_state and info.get('heading') is not None
-                and _heading_gap(heading, info['heading']) <= SAME_CONTAINER_HEADING_DEG
-                and (y_ok(info) or not FALLBACK_CHECKS_Y) and stance_ok(info)
-            ]
-            if len(matching_state) == 1:
-                return matching_state[0]['id']
-            if matching_state and expected_current_state == 'open':
-                matching_state.sort(key=lambda r: int(r.get('last_step') or 0))
-                return matching_state[-1]['id']
 
         if not create_if_missing:
             return None
@@ -639,8 +710,7 @@ class StateMemory:
             'view': view,
             'point': point,
             'hint': hint,
-            'heading': None if getattr(self, '_click_heading', None) is None else round(self._click_heading, 1),
-            'stance': getattr(self, '_click_stance', None),
+            'rays': [] if ray is None else [dict(ray)],
         }
         return cid
 

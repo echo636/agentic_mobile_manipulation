@@ -133,3 +133,41 @@ def test_proxy_strips_odometry_before_the_model(tmp_path):
     for opts in ({}, {'state_memory': True}, {'state_memory': True, 'place_names': True, 'place_return': True}):
         joined = '\n'.join(asyncio.run(run(**opts)))
         assert PRIVATE_ODOMETRY_KEY not in joined and '123.4' not in joined and '9.876' not in joined, opts
+
+
+# ---------------------------------------------------------------- lines of sight (coordinator 09:58)
+def test_close_from_another_stance_is_the_same_record_by_crossing_lines():
+    """Cabinet at (2, 0): opened from (0, 0) looking east, closed from (2, -1.5) looking north."""
+    mem = StateMemory()
+    mem.observe('initialize', {}, receipt(0, 'initialize', 0.0, (0.0, 0.0)))
+    mem.observe('act', act('open', 0, 'front', (0.5, 0.4)), receipt(1, 'open', 90.0, (2.0, -1.5)))
+    mem.observe('act', act('close', 1, 'front', (0.5, 0.45)), receipt(2, 'close', 90.0, (2.0, -1.5)))
+    assert len(mem.container_states) == 1
+    assert next(iter(mem.container_states.values()))['state'] == 'closed'
+
+
+def test_reopen_from_another_stance_matches_and_side_by_side_does_not():
+    mem = StateMemory()
+    mem.observe('initialize', {}, receipt(0, 'initialize', 0.0, (0.0, 0.0)))
+    mem.observe('act', act('open', 0, 'front', (0.5, 0.4)), receipt(1, 'open', 0.0, (0.0, 0.0)))      # cabinet at (2, 0)
+    mem.observe('act', act('close', 1, 'front', (0.5, 0.4)), receipt(2, 'close', 90.0, (2.0, -1.5)))
+    mem.observe('act', act('open', 2, 'front', (0.5, 0.4)), receipt(3, 'open', 90.0, (2.0, -1.5)))   # from (2,-1.5) north
+    mem.observe('act', act('close', 3, 'front', (0.5, 0.4)), receipt(4, 'close', 90.0, (2.0, -1.5)))
+    assert len(mem.container_states) == 1
+    # a second cabinet 1.2 m further east (3.2, 0): from (2, -1.5) its line of sight does not cross the first's lines
+    import math
+    x = 0.5 + math.tan(math.atan2(1.2, 1.5)) / 2          # horizontal click position of (3.2, 0) seen facing north
+    mem.observe('act', act('open', 4, 'front', (x, 0.4)), receipt(5, 'open', 90.0, (2.0, -1.5)))
+    assert len(mem.container_states) == 2
+
+
+def test_place_inside_falls_back_to_the_one_open_record_but_open_never_does():
+    mem = StateMemory()
+    mem.observe('initialize', {}, receipt(0, 'initialize', 0.0, (0.0, 0.0)))
+    mem.observe('act', act('open', 0, 'front', (0.5, 0.2)), receipt(1, 'open', 0.0, (0.0, 0.0)))
+    # place from a stance and direction whose line does not cross the open line: still the only open record here
+    mem.observe('act', act('place_inside', 1, 'back', (0.5, 0.6)), receipt(2, 'place_inside', 0.0, (0.2, 0.0)))
+    assert len(mem.container_states) == 1
+    mem.observe('act', act('close', 2, 'front', (0.5, 0.2)), receipt(3, 'close', 0.0, (0.0, 0.0)))
+    mem.observe('act', act('open', 3, 'back', (0.5, 0.2)), receipt(4, 'open', 0.0, (0.0, 0.0)))     # other direction
+    assert len(mem.container_states) == 2
