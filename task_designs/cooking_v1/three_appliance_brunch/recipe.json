@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "three_appliance_brunch",
- "instance_id": "three_appliance_brunch_seed0_r8",
+ "instance_id": "three_appliance_brunch_seed0_r8b",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -1318,7 +1318,7 @@
       "role": "table",
       "uv": [
        0.62,
-       0.8
+       0.18
       ]
      },
      {
@@ -1330,7 +1330,7 @@
       "role": "table",
       "uv": [
        0.84,
-       0.8
+       0.18
       ]
      },
      {
@@ -1341,8 +1341,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.73,
-       0.52
+       0.84,
+       0.45
       ]
      }
     ],
@@ -1594,8 +1594,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.2,
-       0.74
+       0.25,
+       0.82
       ]
      },
      {
@@ -1606,8 +1606,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.2,
-       0.26
+       0.7,
+       0.82
       ]
      }
     ],

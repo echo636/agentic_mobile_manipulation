@@ -105,7 +105,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'three_appliance_brunch',
-        'instance_id': 'three_appliance_brunch_seed0_r8',
+        'instance_id': 'three_appliance_brunch_seed0_r8b',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -350,11 +350,11 @@ def build_reference_plan() -> dict:
             'after': []},
         'deliver_cold_single_trips': {
             'actions': [{'primitive': 'grasp', 'role': 'cup1'},
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.62, 0.80]},
+                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.62, 0.18]},
                         {'primitive': 'grasp', 'role': 'cup2'},
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.84, 0.80]},
+                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.84, 0.18]},
                         {'primitive': 'grasp', 'role': 'tea'},
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.73, 0.52]},
+                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.84, 0.45]},
 ],
             'after': []},
         'idle_wait_oven': {'actions': [wait('quiche_done', 60.0, 8)], 'after': ['start_oven']},
@@ -380,9 +380,9 @@ def build_reference_plan() -> dict:
                               'after': ['start_oven', 'deliver_cold_batch_on_tray']},
         'close_oven': {'actions': [{'primitive': 'close', 'role': 'oven'}], 'after': ['start_oven']},
         'deliver_plates': {'actions': [{'primitive': 'grasp', 'role': 'plate1'},
-                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.20, 0.74]},
+                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.25, 0.82]},   # r8b: both plates in the free north band (tray sits mid/south)
                                        {'primitive': 'grasp', 'role': 'plate2'},
-                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.20, 0.26]}],
+                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.70, 0.82]}],
                            'after': ['plate_bagels', 'plate_sausages']},
     }
     orders = {
