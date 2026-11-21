@@ -33,9 +33,11 @@ PIN_ANGLE_TOL_RAD = math.radians(3.0)
 
 def pose_hold_enabled():
     """rc2 (2026-11-21, benchmark side, coordinator 20:30/20:42/20:47): when a carrier is put down, the contents it
-    carried keep their pose relative to it. Default ON; MAS_CARRIER_POSE_HOLD=off restores rc1. Independent of the
-    A6 registry below (which stays default off: its motivating defect #24 was voided and on/off made no difference)."""
-    return os.environ.get('MAS_CARRIER_POSE_HOLD', 'on') == 'on'
+    carried keep their pose relative to it. Default OFF since 2026-11-22 (coordinator 05:43): of the 11 toppled carrier
+    items in model episodes none toppled while the carrier was lifted or carried (sec20/carrier_topple_timing/
+    TOPPLE_TIMING_20261122.md), so this does not address the observed defect; code and tests kept. MAS_CARRIER_POSE_HOLD
+    =on enables it. Independent of the A6 registry below (also default off)."""
+    return os.environ.get('MAS_CARRIER_POSE_HOLD', 'off') == 'on'
 
 
 def enabled():

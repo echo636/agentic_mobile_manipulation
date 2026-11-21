@@ -40,9 +40,11 @@ def test_pose_hold_default_on_and_independent_of_registry(monkeypatch):
     # rc2 (20:47): the put-down pose hold is its own switch (default on); the A6 registry stays default off
     monkeypatch.delenv('MAS_CARRIER_REGISTRY', raising=False)
     monkeypatch.delenv('MAS_CARRIER_POSE_HOLD', raising=False)
+    assert CR.pose_hold_enabled() is False and CR.enabled() is False      # default off since 2026-11-22
+    monkeypatch.setenv('MAS_CARRIER_POSE_HOLD', 'on')
     assert CR.pose_hold_enabled() is True and CR.enabled() is False
     monkeypatch.setenv('MAS_CARRIER_POSE_HOLD', 'off')
-    assert CR.pose_hold_enabled() is False and CR.enabled() is False
+    assert CR.pose_hold_enabled() is False
 
 
 def test_registry_register_unregister_descendants():
@@ -209,7 +211,7 @@ def test_tilt_degrees():
 
 def test_hold_pose_after_place_restores_toppled_child_and_records(monkeypatch):
     _fake_og(monkeypatch)
-    monkeypatch.delenv('MAS_CARRIER_POSE_HOLD', raising=False)
+    monkeypatch.setenv('MAS_CARRIER_POSE_HOLD', 'on')
     s = 2 ** -.5
     tray = Body('tray', [10, 0, 0.3], [0, 0, 0, 1])
     tea = Body('tea', [10.1, 0.05, 0.31], [s, 0, 0, s])                         # toppled after the tray was put down
@@ -237,7 +239,7 @@ def test_hold_pose_after_place_off_is_rc1(monkeypatch):
 
 
 def test_record_tilts_on(monkeypatch):
-    monkeypatch.delenv('MAS_CARRIER_POSE_HOLD', raising=False)
+    monkeypatch.setenv('MAS_CARRIER_POSE_HOLD', 'on')
     tray = Body('tray', [0, 0, 0], [0, 0, 0, 1]); cup = Body('cup', [0, 0, 0], [0, 0, 0, 1])
     b = Backend()
     CR.record_tilts(b, 'carrier_grasp_tilts', tray, [cup])

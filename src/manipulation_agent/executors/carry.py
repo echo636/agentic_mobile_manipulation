@@ -250,7 +250,7 @@ class ControlledCarry:
             else:
                 result = self._checked_place_next_to(target,max_steps,point,yaw_degrees)
             from . import carrier_registry as CR
-            # rc2 (MAS_CARRIER_POSE_HOLD, default on): carried contents keep their pose relative to the carrier when
+            # rc2 (MAS_CARRIER_POSE_HOLD, default off since 2026-11-22): carried contents keep their pose relative to the carrier when
             # the carrier is put down; tilts before/after go to the private carry_diagnostics record.
             CR.hold_pose_after_place(self, held, list(contents))
             if primitive in {'place_on_top','place_inside'}:
