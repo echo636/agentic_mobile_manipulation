@@ -815,7 +815,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         cells=np.column_stack(np.where((labels==labels[source]) & (occupancy!=0)))
         if not len(cells):
             raise SkillError('navigation_invalid_start','No native traversable neighbor at the start')
-        reach_fallback=None;floor_snap=None
+        reach_fallback=None;floor_snap=None;opening_note=None
         # rc1 A3 (benchmark side): keep standing cells clear of loose floor items (floor_clearance.py).
         from . import floor_clearance as FC
         clearance={'enabled':FC.enabled()}
@@ -919,6 +919,24 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                             endpoint,reach_fallback=select(points[mask],distances[mask],bound)
                             room_filter=tag
                             break
+            # rc2 (MAS_OPENING_STANCE, default on): stand in front of the opening of an openable object
+            # (opening_stance.py); only the stance changes, receipts do not.
+            from . import opening_stance as OS
+            if OS.enabled() and not for_manipulation:
+                try:
+                    opening_note=OS.opening_info(self,getattr(target,'selected_object',None),point)
+                    if opening_note.get('normal'):
+                        k=OS.pick_front_cell(points.cpu().tolist(),distances.cpu().tolist(),
+                                             self.local_limits.fallback_reach_m,opening_note['face_center'],
+                                             opening_note['normal'])
+                        if k is None:
+                            opening_note['stance']='rc1_rule_no_reachable_cell_in_front'
+                        else:
+                            opening_note['rc1_endpoint']=[round(float(v),3) for v in endpoint.tolist()]
+                            endpoint=points[k];reach_fallback=None
+                            opening_note['stance']='front_of_opening'
+                except Exception as exc:
+                    opening_note={'status':'error','error':f'{type(exc).__name__}: {exc}'[:200]}
             operation=getattr(self,'_local_operation',None)
             if reach_fallback is not None and operation is not None:
                 operation.reach_m=min(self.local_limits.fallback_reach_m,reach_fallback+2*float(trav.map_resolution))
@@ -933,6 +951,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'room_filter':None if floor_click else room_filter,
                 'floor_clearance':clearance,
                 'dynamic_collision_check':False}
+        if opening_note is not None:
+            record['opening_stance']=opening_note
         try:
             self.deadline.check()
             path,length=trav.get_shortest_path(floor,start,endpoint,entire_path=True,robot=self.robot)
