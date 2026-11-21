@@ -711,6 +711,8 @@ class CheckedPlacement:
         from .resting_motion import RestingMotionWindow
         contents = list(self._carry_contents)
         payload = [obj for obj, _ in contents]
+        from . import placement_transaction as TX
+        tx_before = TX.before_release(self, held, target, contents)   # rc2 MAS_PLACE_TRANSACTIONAL; None when off
         candidate = self._select_surface_candidate(held, target, point, yaw_degrees, payload,
                                                    roll_degrees=roll_degrees)
         verification_point = candidate.get('verification_point', point)
@@ -737,6 +739,8 @@ class CheckedPlacement:
             touching = any(link.prim_path in contacts for link in target.links.values())
             supported, support = self._selected_surface_support(
                 held, target, vpoint, touching, payload, resting=resting.report())
+            # rc2 MAS_PLACE_TRANSACTIONAL: upright_kept / carried_contents_kept join the checks (A5 sees them too)
+            support['checks'].update(TX.after_settle(self, held, tx_before))
             # Residual motion is diagnostic; losing the requested support is a failed result. No rewind here;
             # the rc1 A5 settle fallback below re-runs this same release and check (placement_settle.py).
             supported = all(value for key, value in support['checks'].items() if key != 'settled')
@@ -885,6 +889,8 @@ class CheckedPlacement:
         self._placement_record({'status': 'inside_release', 'held': held.name, 'target': target.name,
             **{k: v for k, v in candidate.items() if k != 'pose'},
             'position': candidate['pose'][0].tolist(), 'orientation': candidate['pose'][1].tolist()})
+        from . import placement_transaction as TX
+        tx_before = TX.before_release(self, held, target, contents)   # rc2 MAS_PLACE_TRANSACTIONAL; None when off
         self._carry_detach()
         payload_objs = [obj for obj, _ in contents]
 
@@ -897,9 +903,13 @@ class CheckedPlacement:
                     item.wake()
             self._settle_surface_contacts(held, target, payload_objs, max_steps)
             inside = bool(held.states[Inside].get_value(target))
+            extra = TX.after_settle(self, held, tx_before)
             self._placement_record({'status': 'inside_result', 'held': held.name, 'target': target.name,
-                'official_inside': inside, 'position': held.get_position_orientation()[0].tolist()})
-            return inside, {'official_inside': inside, 'position': held.get_position_orientation()[0].tolist()}
+                'official_inside': inside, 'position': held.get_position_orientation()[0].tolist(),
+                **({'transaction_checks': extra} if extra else {})})
+            ok = inside and all(extra.values())
+            return ok, {'official_inside': inside, 'position': held.get_position_orientation()[0].tolist(),
+                        **({'transaction_checks': extra} if extra else {})}
         try:
             inside, first = release_and_check(candidate)
             if not inside:

@@ -231,9 +231,32 @@ class ControlledCarry:
 
     def _place_state(self, primitive, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None):
         """Snapshot transported material once; never pin it during settling."""
-        from omnigibson.utils.constants import PrimType
         held=self._get_held()
         contents=self._carry_contents
+        from . import placement_transaction as TX
+        # rc2 MAS_PLACE_TRANSACTIONAL (default off): one snapshot before the placement; a failure after the release
+        # restores it, so the item is back in the hand and the receipt is the existing not_placed.
+        transaction=TX.snapshot(self) if TX.enabled() and held is not None else None
+        try:
+            return self._place_state_once(primitive, target, max_steps, point, yaw_degrees,
+                                          roll_degrees=roll_degrees, held=held, contents=contents)
+        except SkillError as exc:
+            if transaction is None or not TX.should_roll_back(exc):
+                raise
+            ok, reason = TX.restore(self, transaction)
+            self._placement_record({'status': 'transaction_rolled_back' if ok else 'transaction_not_rolled_back',
+                'primitive': primitive, 'held': getattr(held, 'name', None), 'target': getattr(target, 'name', None),
+                'original_code': exc.code, 'original_stage': exc.stage, 'reason': reason})
+            if not ok:
+                raise
+            # Native transitions and evaluation see the restored world once, as after any placement.
+            self._step(self.primitives._empty_action())
+            raise SkillError('pre_condition_error', 'Placement did not hold; the scene was restored with the item '
+                             'still in the hand', changed=False, stage='released_rolled_back') from exc
+
+    def _place_state_once(self, primitive, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None,
+                          held=None, contents=()):
+        from omnigibson.utils.constants import PrimType
         self._placement_particle_payload=(held,snapshot_particles(
             self.env.scene,[held,*[child for child,_ in contents]],include_supported=True))
         try:
