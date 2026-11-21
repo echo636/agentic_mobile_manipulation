@@ -450,7 +450,10 @@ class ControlledCarry:
             if not bool(((center>=lo)&(center<=hi)).all()) or not child.states[Inside].get_value(container):continue
             link=next((link for link in links if bool(link.check_points_in_volume(center.unsqueeze(0)).item())),None)
             if link is None:
-                raise SkillError('pre_condition_error','Cannot identify the supporting volume of existing contents')
+                # 2026-11-21: native Inside holds but the centre lies outside every annotated volume (a dish on
+                # an oven rack above the fillable box, C2 r3 closing the oven); track it with the nearest volume
+                # instead of refusing the door motion.
+                link=min(links,key=lambda l:float(((l.get_position_orientation()[0]-center)**2).sum()))
             relative=T.relative_pose_transform(*child.get_position_orientation(),*link.get_position_orientation())
             payload.append((child,link,relative))
         if payload and getattr(container,'n_joints',0):
