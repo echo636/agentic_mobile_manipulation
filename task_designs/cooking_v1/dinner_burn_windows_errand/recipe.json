@@ -1,0 +1,1899 @@
+{
+ "schema_version": 3,
+ "id": "dinner_burn_windows_errand",
+ "instance_id": "dinner_burn_windows_errand_seed0_r0",
+ "status": "complete_recipe_physics_pending",
+ "benchmark_ready": false,
+ "official_submission_eligible": false,
+ "base": {
+  "task": "preparing_lunch_box",
+  "instance": 301,
+  "seed": 0
+ },
+ "roles": {
+  "storage": "countertop_kelzer_0",
+  "island": "bar_udatjt_0",
+  "fridge": "fridge_dszchb_0",
+  "oven": "oven_ffitak_0",
+  "microwave": "microwave_abzvij_0",
+  "stove": "burner_mjvqii_0",
+  "cabinet": "bottom_cabinet_fancyy_0",
+  "table": "coffee_table_rlsebe_0",
+  "utility_counter": "countertop_fjkase_0",
+  "utility_entry_door": "sliding_door_tprpvb_12",
+  "utility_exit_door": "sliding_door_tprpvb_7",
+  "floor": "floors_qgmjvd_0",
+  "pan": "c3_pan",
+  "tray": "c3_tray",
+  "tray2": "c3_tray2",
+  "soup1": "c3_soup1",
+  "soup2": "c3_soup2",
+  "steak1": "c3_steak1",
+  "steak2": "c3_steak2",
+  "veg": "c3_veg",
+  "plate1": "c3_plate1",
+  "plate2": "c3_plate2",
+  "wine": "c3_wine",
+  "glass1": "c3_glass1",
+  "glass2": "c3_glass2",
+  "unused_tea": "bottle_of_tea_208",
+  "unused_board": "chopping_board_211",
+  "unused_half_apple_a": "half_apple_212",
+  "unused_half_apple_b": "half_apple_213",
+  "unused_cookie": "chocolate_chip_cookie_207",
+  "unused_sandwich": "club_sandwich_209",
+  "unused_box": "packing_box_210"
+ },
+ "scene_exclusions": [
+  "water_glass_bbpraa_0"
+ ],
+ "construction_asset_scales": [
+  {
+   "object": "unused_board",
+   "scale": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "reason": "Native board size so it fits inside the closed pantry cabinet."
+  }
+ ],
+ "asset_imports": [
+  {
+   "name": "c3_plate1",
+   "source_task": "setting_the_table",
+   "source_object": "plate_243",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    119.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.5,
+    1.5,
+    1.0
+   ]
+  },
+  {
+   "name": "c3_plate2",
+   "source_task": "setting_the_table",
+   "source_object": "plate_244",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    122.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.5,
+    1.5,
+    1.0
+   ]
+  },
+  {
+   "name": "c3_glass1",
+   "source_task": "setting_the_table",
+   "source_object": "water_glass_bbpraa_0",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    125.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.25,
+    1.25,
+    1.15
+   ]
+  },
+  {
+   "name": "c3_glass2",
+   "source_task": "setting_the_table",
+   "source_object": "water_glass_bbpraa_0",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    128.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.25,
+    1.25,
+    1.15
+   ]
+  }
+ ],
+ "native_assets": [
+  {
+   "name": "c3_tray",
+   "category": "tray",
+   "model": "coqeme",
+   "usd_sha256": "f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd",
+   "prim_type": 0,
+   "position": [
+    95.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    3.38,
+    2.16,
+    1.5
+   ]
+  },
+  {
+   "name": "c3_tray2",
+   "category": "tray",
+   "model": "coqeme",
+   "usd_sha256": "f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd",
+   "prim_type": 0,
+   "position": [
+    97.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    3.38,
+    2.16,
+    1.5
+   ]
+  },
+  {
+   "name": "c3_pan",
+   "category": "frying_pan",
+   "model": "hzspwg",
+   "usd_sha256": "f60390f685a005d7b2c0f581c1de8574c242ca61c4687e226f0415098f2207af",
+   "prim_type": 0,
+   "position": [
+    99.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "fixed_base": true
+  },
+  {
+   "name": "c3_soup1",
+   "category": "bowl",
+   "model": "ajzltc",
+   "usd_sha256": "9b6bb0e23e537cccaa2bc372997bceb1d0e7cc4f6a520119de03ea75b1a739ad",
+   "prim_type": 0,
+   "position": [
+    102.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.2,
+    1.2,
+    1.2
+   ]
+  },
+  {
+   "name": "c3_soup2",
+   "category": "bowl",
+   "model": "ajzltc",
+   "usd_sha256": "9b6bb0e23e537cccaa2bc372997bceb1d0e7cc4f6a520119de03ea75b1a739ad",
+   "prim_type": 0,
+   "position": [
+    104.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.2,
+    1.2,
+    1.2
+   ]
+  },
+  {
+   "name": "c3_steak1",
+   "category": "steak",
+   "model": "ppykkp",
+   "usd_sha256": "6640ed708d8939d9bdcf4e2cb836a62afffc696f84977ec6a68720652cd61eeb",
+   "prim_type": 0,
+   "position": [
+    106.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "c3_steak2",
+   "category": "steak",
+   "model": "ppykkp",
+   "usd_sha256": "6640ed708d8939d9bdcf4e2cb836a62afffc696f84977ec6a68720652cd61eeb",
+   "prim_type": 0,
+   "position": [
+    108.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "c3_veg",
+   "category": "casserole",
+   "model": "mmbavt",
+   "usd_sha256": "c1c415281c0c235cbaeb04e3b054e95b3a3afec114009e9939fec42851c66363",
+   "prim_type": 0,
+   "position": [
+    109.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    0.8,
+    0.8,
+    0.8
+   ]
+  },
+  {
+   "name": "c3_wine",
+   "category": "bottle_of_wine",
+   "model": "hnkiog",
+   "usd_sha256": "a409aaa61c3b38196ef480631b5934e5e0b246bde95e1e28264ceaa4b5d08c81",
+   "prim_type": 0,
+   "position": [
+    111.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  }
+ ],
+ "timed_processes": [
+  {
+   "id": "heat_soup",
+   "appliance": "microwave",
+   "items": [
+    "soup1",
+    "soup2"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 180.0,
+   "switch_off_when_complete": true,
+   "running_message": "The microwave is running; the soup inside is heating.",
+   "completed_message": "The microwave chimed: the soup is hot and the microwave has switched itself off.",
+   "stopped_early_message": "The microwave stopped before the soup was hot."
+  },
+  {
+   "id": "roast_veg",
+   "appliance": "oven",
+   "items": [
+    "veg"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 240.0,
+   "overcook_after_seconds": 120.0,
+   "running_message": "The oven is on; the vegetables inside are roasting.",
+   "completed_message": "The oven timer beeped: the vegetables are roasted.",
+   "stopped_early_message": "The oven stopped before the vegetables were roasted.",
+   "overcooked_message": "A burning smell comes from the oven: the vegetables have burnt."
+  },
+  {
+   "id": "fry_steaks",
+   "appliance": "stove",
+   "items": [
+    "steak1",
+    "steak2"
+   ],
+   "containment": "OnTop",
+   "require_closed": false,
+   "require_toggled_on": true,
+   "duration_seconds": 120.0,
+   "overcook_after_seconds": 30.0,
+   "running_message": "The stove is on; the steaks in the pan are sizzling.",
+   "completed_message": "The steaks in the pan are done.",
+   "stopped_early_message": "The stove was switched off before the steaks were done.",
+   "overcooked_message": "Smoke rises from the pan: the steaks have burnt."
+  }
+ ],
+ "initial_layout": [
+  {
+   "object": "utility_entry_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "utility_exit_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "fridge",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "soup1",
+   "target": "fridge",
+   "place_on_support": true,
+   "xy": [
+    7.66,
+    -1.95
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "support_probe_height": 1.0,
+   "initial_relation": "Inside"
+  },
+  {
+   "object": "soup2",
+   "target": "fridge",
+   "place_on_support": true,
+   "xy": [
+    7.94,
+    -1.95
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "support_probe_height": 1.0,
+   "initial_relation": "Inside"
+  },
+  {
+   "object": "steak1",
+   "target": "fridge",
+   "place_on_support": true,
+   "xy": [
+    7.66,
+    -1.72
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ],
+   "support_probe_height": 1.0,
+   "initial_relation": "Inside"
+  },
+  {
+   "object": "steak2",
+   "target": "fridge",
+   "place_on_support": true,
+   "xy": [
+    7.94,
+    -1.72
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ],
+   "support_probe_height": 1.0,
+   "initial_relation": "Inside"
+  },
+  {
+   "object": "fridge",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "veg",
+   "target": "storage",
+   "place_on_support": true,
+   "xy": [
+    6.75,
+    -1.94
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "pan",
+   "target": "stove",
+   "place_on_support": true,
+   "xy": [
+    4.2,
+    -0.5
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "plate1",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    6.02,
+    0.05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "plate2",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    6.42,
+    0.05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "tray",
+   "target": "island",
+   "place_on_support": true,
+   "xy": [
+    7.0,
+    0.08
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "wine",
+   "target": "utility_counter",
+   "place_on_support": true,
+   "xy": [
+    21.93,
+    -0.55
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "glass1",
+   "target": "utility_counter",
+   "place_on_support": true,
+   "xy": [
+    21.93,
+    -0.3
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "glass2",
+   "target": "utility_counter",
+   "place_on_support": true,
+   "xy": [
+    21.93,
+    -0.08
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "tray2",
+   "target": "utility_counter",
+   "place_on_support": true,
+   "xy": [
+    21.93,
+    1.2
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "cabinet",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "unused_board",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.74,
+    -1.96
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "support_probe_height": 0.9,
+   "initial_relation": "Inside"
+  },
+  {
+   "object": "unused_half_apple_a",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.22,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_half_apple_b",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.42,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_cookie",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.62,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_sandwich",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    8.86,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_box",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    9.22,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "unused_tea",
+   "target": "cabinet",
+   "place_on_support": true,
+   "xy": [
+    9.45,
+    -1.92
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "cabinet",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "oven",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "oven",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "microwave",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "microwave",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "stove",
+   "state": "ToggledOn",
+   "value": false
+  }
+ ],
+ "initial_assertions": {
+  "soup1_in_fridge": "initial_soup1_Inside",
+  "soup2_in_fridge": "initial_soup2_Inside",
+  "steak1_in_fridge": "initial_steak1_Inside",
+  "steak2_in_fridge": "initial_steak2_Inside",
+  "plate1_on_island": "initial_plate1_OnTop",
+  "plate2_on_island": "initial_plate2_OnTop",
+  "tray_on_island": "initial_tray_OnTop",
+  "wine_on_utility": "initial_wine_OnTop",
+  "glass1_on_utility": "initial_glass1_OnTop",
+  "glass2_on_utility": "initial_glass2_OnTop",
+  "tray2_on_utility": "initial_tray2_OnTop",
+  "veg_on_storage": "initial_veg_OnTop",
+  "fridge_closed": {
+   "not": "fridge_open"
+  },
+  "cabinet_closed": {
+   "not": "cabinet_open"
+  },
+  "oven_closed": {
+   "not": "oven_open"
+  },
+  "microwave_closed": {
+   "not": "microwave_open"
+  },
+  "oven_off": {
+   "not": "oven_on"
+  },
+  "microwave_off": {
+   "not": "microwave_on"
+  },
+  "stove_off": {
+   "not": "stove_on"
+  },
+  "hand_empty": "hand_empty"
+ },
+ "future_roles": [],
+ "replacements": [],
+ "public_instruction": "Cook and serve dinner for two on the living-room coffee table: hot soup, roasted vegetables and fried steaks on plates, with the wine and two glasses from the utility room, without burning anything, and leave the kitchen appliances off and closed.",
+ "public_context": [
+  "Serve dinner for two on the living-room coffee table (the low square table in front of the sofas east of the kitchen): the two bowls of soup heated, the dish of vegetables roasted, and the two steaks fried and served on the two plates, one steak per plate; each item directly on the table or on a serving tray resting on it. The soup bowls and the steaks start inside the refrigerator, the vegetable dish on the counter between the sink and the refrigerator, and the two plates and a serving tray on the kitchen island. Heat the soup in the microwave on the west preparation counter: about 3 minutes with the door closed and the microwave switched on; it switches itself off when done and the soup does not burn. Roast the vegetables in the black built-in oven to the right of the refrigerator: about 4 minutes with the oven door closed and the oven switched on; the oven does not switch itself off, and roasted vegetables left in the running oven for more than about 2 more minutes burn. Fry the steaks in the frying pan on the stove beside the microwave: about 2 minutes with the stove switched on; the stove does not switch itself off, and steaks left on the running stove for more than about 30 more seconds burn. Burnt food cannot be served.",
+  "Bring the bottle of wine and the two glasses from the counter of the south-east utility room to the living-room coffee table, directly on the table or on a serving tray resting on it. A second serving tray is on the same utility-room counter.",
+  "Leave the oven and the stove switched off, and the oven, microwave and refrigerator closed.",
+  "Finish with no object held."
+ ],
+ "requirements": [
+  {
+   "id": "dinner_served",
+   "text": "Serve dinner for two on the living-room coffee table (the low square table in front of the sofas east of the kitchen): the two bowls of soup heated, the dish of vegetables roasted, and the two steaks fried and served on the two plates, one steak per plate; each item directly on the table or on a serving tray resting on it. The soup bowls and the steaks start inside the refrigerator, the vegetable dish on the counter between the sink and the refrigerator, and the two plates and a serving tray on the kitchen island. Heat the soup in the microwave on the west preparation counter: about 3 minutes with the door closed and the microwave switched on; it switches itself off when done and the soup does not burn. Roast the vegetables in the black built-in oven to the right of the refrigerator: about 4 minutes with the oven door closed and the oven switched on; the oven does not switch itself off, and roasted vegetables left in the running oven for more than about 2 more minutes burn. Fry the steaks in the frying pan on the stove beside the microwave: about 2 minutes with the stove switched on; the stove does not switch itself off, and steaks left on the running stove for more than about 30 more seconds burn. Burnt food cannot be served.",
+   "terminal": [
+    "dinner_served"
+   ]
+  },
+  {
+   "id": "wine_served",
+   "text": "Bring the bottle of wine and the two glasses from the counter of the south-east utility room to the living-room coffee table, directly on the table or on a serving tray resting on it. A second serving tray is on the same utility-room counter.",
+   "terminal": [
+    "wine_served"
+   ]
+  },
+  {
+   "id": "appliances_safe",
+   "text": "Leave the oven and the stove switched off, and the oven, microwave and refrigerator closed.",
+   "terminal": [
+    "appliances_safe"
+   ]
+  },
+  {
+   "id": "hand_empty",
+   "text": "Finish with no object held.",
+   "terminal": [
+    "hand_empty"
+   ]
+  }
+ ],
+ "evaluation": {
+  "predicates": {
+   "soup1_hot": {
+    "object": "soup1",
+    "state": "ProcessComplete",
+    "process": "heat_soup"
+   },
+   "soup2_hot": {
+    "object": "soup2",
+    "state": "ProcessComplete",
+    "process": "heat_soup"
+   },
+   "veg_roasted": {
+    "object": "veg",
+    "state": "ProcessComplete",
+    "process": "roast_veg"
+   },
+   "veg_burnt": {
+    "object": "veg",
+    "state": "ProcessOvercooked",
+    "process": "roast_veg"
+   },
+   "steak1_fried": {
+    "object": "steak1",
+    "state": "ProcessComplete",
+    "process": "fry_steaks"
+   },
+   "steak2_fried": {
+    "object": "steak2",
+    "state": "ProcessComplete",
+    "process": "fry_steaks"
+   },
+   "steak1_burnt": {
+    "object": "steak1",
+    "state": "ProcessOvercooked",
+    "process": "fry_steaks"
+   },
+   "steak2_burnt": {
+    "object": "steak2",
+    "state": "ProcessOvercooked",
+    "process": "fry_steaks"
+   },
+   "steak1_ontop_plate1": {
+    "object": "steak1",
+    "state": "OnTop",
+    "target": "plate1"
+   },
+   "steak1_ontop_plate2": {
+    "object": "steak1",
+    "state": "OnTop",
+    "target": "plate2"
+   },
+   "steak2_ontop_plate1": {
+    "object": "steak2",
+    "state": "OnTop",
+    "target": "plate1"
+   },
+   "steak2_ontop_plate2": {
+    "object": "steak2",
+    "state": "OnTop",
+    "target": "plate2"
+   },
+   "soup1_ontop_table": {
+    "object": "soup1",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "soup1_ontop_tray": {
+    "object": "soup1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "soup1_ontop_tray2": {
+    "object": "soup1",
+    "state": "OnTop",
+    "target": "tray2"
+   },
+   "soup2_ontop_table": {
+    "object": "soup2",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "soup2_ontop_tray": {
+    "object": "soup2",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "soup2_ontop_tray2": {
+    "object": "soup2",
+    "state": "OnTop",
+    "target": "tray2"
+   },
+   "veg_ontop_table": {
+    "object": "veg",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "veg_ontop_tray": {
+    "object": "veg",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "veg_ontop_tray2": {
+    "object": "veg",
+    "state": "OnTop",
+    "target": "tray2"
+   },
+   "plate1_ontop_table": {
+    "object": "plate1",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "plate1_ontop_tray": {
+    "object": "plate1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "plate1_ontop_tray2": {
+    "object": "plate1",
+    "state": "OnTop",
+    "target": "tray2"
+   },
+   "plate2_ontop_table": {
+    "object": "plate2",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "plate2_ontop_tray": {
+    "object": "plate2",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "plate2_ontop_tray2": {
+    "object": "plate2",
+    "state": "OnTop",
+    "target": "tray2"
+   },
+   "wine_ontop_table": {
+    "object": "wine",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "wine_ontop_tray": {
+    "object": "wine",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "wine_ontop_tray2": {
+    "object": "wine",
+    "state": "OnTop",
+    "target": "tray2"
+   },
+   "glass1_ontop_table": {
+    "object": "glass1",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "glass1_ontop_tray": {
+    "object": "glass1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "glass1_ontop_tray2": {
+    "object": "glass1",
+    "state": "OnTop",
+    "target": "tray2"
+   },
+   "glass2_ontop_table": {
+    "object": "glass2",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "glass2_ontop_tray": {
+    "object": "glass2",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "glass2_ontop_tray2": {
+    "object": "glass2",
+    "state": "OnTop",
+    "target": "tray2"
+   },
+   "tray_ontop_table": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "tray2_ontop_table": {
+    "object": "tray2",
+    "state": "OnTop",
+    "target": "table"
+   },
+   "fridge_open": {
+    "object": "fridge",
+    "state": "Open"
+   },
+   "cabinet_open": {
+    "object": "cabinet",
+    "state": "Open"
+   },
+   "oven_open": {
+    "object": "oven",
+    "state": "Open"
+   },
+   "microwave_open": {
+    "object": "microwave",
+    "state": "Open"
+   },
+   "oven_on": {
+    "object": "oven",
+    "state": "ToggledOn"
+   },
+   "microwave_on": {
+    "object": "microwave",
+    "state": "ToggledOn"
+   },
+   "stove_on": {
+    "object": "stove",
+    "state": "ToggledOn"
+   },
+   "hand_empty": {
+    "object": "wine",
+    "state": "HandEmpty"
+   },
+   "initial_soup1_Inside": {
+    "object": "soup1",
+    "state": "Inside",
+    "target": "fridge"
+   },
+   "initial_soup2_Inside": {
+    "object": "soup2",
+    "state": "Inside",
+    "target": "fridge"
+   },
+   "initial_steak1_Inside": {
+    "object": "steak1",
+    "state": "Inside",
+    "target": "fridge"
+   },
+   "initial_steak2_Inside": {
+    "object": "steak2",
+    "state": "Inside",
+    "target": "fridge"
+   },
+   "initial_plate1_OnTop": {
+    "object": "plate1",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_plate2_OnTop": {
+    "object": "plate2",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_tray_OnTop": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "island"
+   },
+   "initial_wine_OnTop": {
+    "object": "wine",
+    "state": "OnTop",
+    "target": "utility_counter"
+   },
+   "initial_glass1_OnTop": {
+    "object": "glass1",
+    "state": "OnTop",
+    "target": "utility_counter"
+   },
+   "initial_glass2_OnTop": {
+    "object": "glass2",
+    "state": "OnTop",
+    "target": "utility_counter"
+   },
+   "initial_tray2_OnTop": {
+    "object": "tray2",
+    "state": "OnTop",
+    "target": "utility_counter"
+   },
+   "initial_veg_OnTop": {
+    "object": "veg",
+    "state": "OnTop",
+    "target": "storage"
+   }
+  },
+  "terminal": {
+   "dinner_served": {
+    "all": [
+     "soup1_hot",
+     "soup2_hot",
+     "veg_roasted",
+     {
+      "not": "veg_burnt"
+     },
+     "steak1_fried",
+     "steak2_fried",
+     {
+      "not": "steak1_burnt"
+     },
+     {
+      "not": "steak2_burnt"
+     },
+     {
+      "any": [
+       {
+        "all": [
+         "steak1_ontop_plate1",
+         "steak2_ontop_plate2"
+        ]
+       },
+       {
+        "all": [
+         "steak1_ontop_plate2",
+         "steak2_ontop_plate1"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "soup1_ontop_table",
+       {
+        "all": [
+         "soup1_ontop_tray",
+         "tray_ontop_table"
+        ]
+       },
+       {
+        "all": [
+         "soup1_ontop_tray2",
+         "tray2_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "soup2_ontop_table",
+       {
+        "all": [
+         "soup2_ontop_tray",
+         "tray_ontop_table"
+        ]
+       },
+       {
+        "all": [
+         "soup2_ontop_tray2",
+         "tray2_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "veg_ontop_table",
+       {
+        "all": [
+         "veg_ontop_tray",
+         "tray_ontop_table"
+        ]
+       },
+       {
+        "all": [
+         "veg_ontop_tray2",
+         "tray2_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "plate1_ontop_table",
+       {
+        "all": [
+         "plate1_ontop_tray",
+         "tray_ontop_table"
+        ]
+       },
+       {
+        "all": [
+         "plate1_ontop_tray2",
+         "tray2_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "plate2_ontop_table",
+       {
+        "all": [
+         "plate2_ontop_tray",
+         "tray_ontop_table"
+        ]
+       },
+       {
+        "all": [
+         "plate2_ontop_tray2",
+         "tray2_ontop_table"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "wine_served": {
+    "all": [
+     {
+      "any": [
+       "wine_ontop_table",
+       {
+        "all": [
+         "wine_ontop_tray",
+         "tray_ontop_table"
+        ]
+       },
+       {
+        "all": [
+         "wine_ontop_tray2",
+         "tray2_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "glass1_ontop_table",
+       {
+        "all": [
+         "glass1_ontop_tray",
+         "tray_ontop_table"
+        ]
+       },
+       {
+        "all": [
+         "glass1_ontop_tray2",
+         "tray2_ontop_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "glass2_ontop_table",
+       {
+        "all": [
+         "glass2_ontop_tray",
+         "tray_ontop_table"
+        ]
+       },
+       {
+        "all": [
+         "glass2_ontop_tray2",
+         "tray2_ontop_table"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "appliances_safe": {
+    "all": [
+     {
+      "not": "oven_on"
+     },
+     {
+      "not": "stove_on"
+     },
+     {
+      "not": "microwave_on"
+     },
+     {
+      "not": "oven_open"
+     },
+     {
+      "not": "microwave_open"
+     },
+     {
+      "not": "fridge_open"
+     }
+    ]
+   },
+   "hand_empty": "hand_empty"
+  },
+  "score_type": "custom_joint_terminal_and_public_history_v2"
+ },
+ "acceptance_cases": {
+  "reference_orders": [
+   "optimal_errand_in_oven_window",
+   "habit_sequential"
+  ],
+  "physical_negative_cases": [
+   "omit_stove_watch",
+   "omit_wine_errand",
+   "omit_oven_close"
+  ],
+  "fresh_restore_repetitions": 2,
+  "max_reference_action_attempts": 300
+ },
+ "reference_plan": {
+  "kind": "full_workflow",
+  "allow_strategy_variants": true,
+  "phases": {
+   "start_soup": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "open",
+      "role": "fridge"
+     },
+     {
+      "primitive": "grasp",
+      "role": "soup1",
+      "approach_role": "fridge"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "microwave"
+     },
+     {
+      "primitive": "grasp",
+      "role": "soup2",
+      "approach_role": "fridge"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "microwave"
+     },
+     {
+      "primitive": "close",
+      "role": "fridge"
+     }
+    ],
+    "after": []
+   },
+   "start_oven": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "grasp",
+      "role": "veg"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "oven",
+      "xy": [
+       8.43,
+       -1.85
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "oven"
+     }
+    ],
+    "after": []
+   },
+   "wine_errand_tray2": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "wine"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray2",
+      "uv": [
+       0.25,
+       0.3
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray2",
+      "uv": [
+       0.25,
+       0.72
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray2",
+      "uv": [
+       0.7,
+       0.5
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "tray2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.75,
+       0.75
+      ]
+     }
+    ],
+    "after": []
+   },
+   "oven_off": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "veg_roasted",
+      "seconds": 10.0,
+      "attempts": 40
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "oven"
+     }
+    ],
+    "after": [
+     "start_oven"
+    ]
+   },
+   "start_steaks": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "fridge"
+     },
+     {
+      "primitive": "grasp",
+      "role": "steak1",
+      "approach_role": "fridge"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "pan"
+     },
+     {
+      "primitive": "grasp",
+      "role": "steak2",
+      "approach_role": "fridge"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "pan"
+     },
+     {
+      "primitive": "close",
+      "role": "fridge"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "stove"
+     }
+    ],
+    "after": []
+   },
+   "stove_watch": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "steak1_fried",
+        "steak2_fried"
+       ]
+      },
+      "seconds": 5.0,
+      "attempts": 40
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "stove"
+     }
+    ],
+    "after": [
+     "start_steaks"
+    ]
+   },
+   "plate_steaks": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "any": [
+        {
+         "not": "stove_on"
+        },
+        {
+         "any": [
+          "steak1_burnt",
+          "steak2_burnt"
+         ]
+        }
+       ]
+      },
+      "seconds": 10.0,
+      "attempts": 12
+     },
+     {
+      "primitive": "grasp",
+      "role": "steak1",
+      "approach_role": "stove"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "plate1"
+     },
+     {
+      "primitive": "grasp",
+      "role": "steak2",
+      "approach_role": "stove"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "plate2"
+     }
+    ],
+    "after": [
+     "start_steaks"
+    ]
+   },
+   "tray_hot_food": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "soup1_hot",
+        "soup2_hot"
+       ]
+      },
+      "seconds": 10.0,
+      "attempts": 20
+     },
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "grasp",
+      "role": "soup1",
+      "approach_role": "microwave"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.25,
+       0.25
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "soup2",
+      "approach_role": "microwave"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.25,
+       0.75
+      ]
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "grasp",
+      "role": "veg",
+      "approach_role": "oven"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.72,
+       0.5
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "tray"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.3,
+       0.3
+      ]
+     }
+    ],
+    "after": [
+     "start_soup",
+     "oven_off"
+    ]
+   },
+   "plates_to_table": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "plate1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.22,
+       0.8
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "plate2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.55,
+       0.8
+      ]
+     }
+    ],
+    "after": [
+     "plate_steaks"
+    ]
+   },
+   "close_up": {
+    "actions": [
+     {
+      "primitive": "close",
+      "role": "microwave"
+     }
+    ],
+    "after": [
+     "tray_hot_food"
+    ]
+   },
+   "close_oven": {
+    "actions": [
+     {
+      "primitive": "close",
+      "role": "oven"
+     }
+    ],
+    "after": [
+     "tray_hot_food"
+    ]
+   },
+   "h_soup_wait_serve": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "soup1_hot",
+        "soup2_hot"
+       ]
+      },
+      "seconds": 30.0,
+      "attempts": 10
+     },
+     {
+      "primitive": "open",
+      "role": "microwave"
+     },
+     {
+      "primitive": "grasp",
+      "role": "soup1",
+      "approach_role": "microwave"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.25,
+       0.25
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "soup2",
+      "approach_role": "microwave"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.25,
+       0.5
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "microwave"
+     }
+    ],
+    "after": [
+     "start_soup"
+    ]
+   },
+   "h_oven_wait_serve": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": "veg_roasted",
+      "seconds": 10.0,
+      "attempts": 40
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "oven"
+     },
+     {
+      "primitive": "open",
+      "role": "oven"
+     },
+     {
+      "primitive": "grasp",
+      "role": "veg",
+      "approach_role": "oven"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.5,
+       0.3
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "oven"
+     }
+    ],
+    "after": [
+     "start_oven"
+    ]
+   },
+   "h_wine_singles": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "wine"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.8,
+       0.25
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.8,
+       0.5
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "glass2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "table",
+      "uv": [
+       0.8,
+       0.75
+      ]
+     }
+    ],
+    "after": []
+   }
+  },
+  "orders": {
+   "optimal_errand_in_oven_window": [
+    "start_soup",
+    "start_oven",
+    "wine_errand_tray2",
+    "oven_off",
+    "start_steaks",
+    "stove_watch",
+    "plate_steaks",
+    "tray_hot_food",
+    "plates_to_table",
+    "close_up",
+    "close_oven"
+   ],
+   "habit_sequential": [
+    "start_soup",
+    "h_soup_wait_serve",
+    "start_oven",
+    "h_oven_wait_serve",
+    "start_steaks",
+    "stove_watch",
+    "plate_steaks",
+    "plates_to_table",
+    "h_wine_singles"
+   ]
+  },
+  "negative_omissions": {
+   "omit_stove_watch": "stove_watch",
+   "omit_wine_errand": "wine_errand_tray2",
+   "omit_oven_close": "close_oven"
+  }
+ },
+ "settle_steps": 30
+}
