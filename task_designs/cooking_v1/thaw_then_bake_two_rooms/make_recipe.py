@@ -76,9 +76,9 @@ def build_recipe() -> dict:
         'is done; the oven holds both dishes at once and does not switch itself off.'
     )
     req_fish = (
-        "Serve the baked fish casserole with one fork and the bottle of tea on the low nightstand in the "
-        "children's bedroom (the north-east bedroom with the single bed, off the long east corridor), for "
-        "the person resting there: directly on the nightstand or on the serving tray resting on it."
+        "Serve the baked fish casserole with one fork and the bottle of tea on the single bed in the "
+        "children's bedroom (the north-east bedroom off the long east corridor), for the person resting "
+        "there: directly on the bed or on the serving tray resting on it."
     )
     req_lasagna = (
         'Serve the baked lasagna with two plates and two forks on the living-room coffee table (the low '
@@ -95,7 +95,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'thaw_then_bake_two_rooms',
-        'instance_id': 'thaw_then_bake_two_rooms_seed0_r1',
+        'instance_id': 'thaw_then_bake_two_rooms_seed0_r2',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -248,9 +248,9 @@ def build_recipe() -> dict:
                 **{f'{o}_ontop_{d}': {'object': o, 'state': 'OnTop', 'target': d}
                    for o in ['lasagna'] + living for d in ('table', 'tray')},
                 **{f'{o}_ontop_{d}': {'object': o, 'state': 'OnTop', 'target': d}
-                   for o in ['fish'] + north for d in ('nightstand', 'tray')},
+                   for o in ['fish'] + north for d in ('bed', 'tray')},
                 'tray_ontop_table': {'object': 'tray', 'state': 'OnTop', 'target': 'table'},
-                'tray_ontop_nightstand': {'object': 'tray', 'state': 'OnTop', 'target': 'nightstand'},
+                'tray_ontop_bed': {'object': 'tray', 'state': 'OnTop', 'target': 'bed'},
                 'fridge_open': {'object': 'fridge', 'state': 'Open'},
                 'cabinet_open': {'object': 'cabinet', 'state': 'Open'},
                 'oven_open': {'object': 'oven', 'state': 'Open'},
@@ -264,7 +264,7 @@ def build_recipe() -> dict:
             },
             'terminal': {
                 'dishes_baked': {'all': ['lasagna_baked', 'fish_baked']},
-                'fish_served': {'all': ['fish_baked'] + [served(o, 'nightstand') for o in ['fish'] + north]},
+                'fish_served': {'all': ['fish_baked'] + [served(o, 'bed') for o in ['fish'] + north]},
                 'lasagna_served': {'all': ['lasagna_baked'] + [served(o, 'table') for o in ['lasagna'] + living]},
                 'appliances_safe': {'all': [{'not': 'oven_on'}, {'not': 'microwave_on'}, {'not': 'oven_open'},
                                             {'not': 'microwave_open'}, {'not': 'fridge_open'}]},
@@ -318,7 +318,7 @@ def build_reference_plan() -> dict:
         # the microwave is closed again after the lasagna; thaw_start opens it
         'thaw_fish': {'actions': thaw_start('fish'), 'after': ['lasagna_to_oven']},
         'tray_north': {'actions': [g('fork3'), put('tray', uv=[0.25, 0.25]), g('tea'), put('tray', uv=[0.25, 0.75]),
-                                   g('tray'), put('nightstand', xy=[20.55, 14.00])],
+                                   g('tray'), put('bed', xy=[21.25, 13.20])],
                        'after': []},
         'plates_living': {'actions': [g('plate1'), put('table', uv=[0.25, 0.25]),
                                       g('plate2'), put('table', uv=[0.25, 0.75])], 'after': []},
@@ -342,7 +342,7 @@ def build_reference_plan() -> dict:
         'h_fish_to_oven': {'actions': to_oven('fish', 'fish_thawed'), 'after': ['h_thaw_fish']},
         'h_fish_bake_serve': {'actions': [wait('fish_baked', 30.0, 20), act('toggle_off', 'oven'),
                                           act('open', 'oven'), g('fish', approach_role='oven'),
-                                          put('nightstand', xy=[20.55, 13.85]), act('close', 'oven')],
+                                          put('bed', xy=[20.95, 13.20]), act('close', 'oven')],
                               'after': ['h_fish_to_oven']},
         'h_thaw_lasagna': {'actions': thaw_start('lasagna'), 'after': ['h_fish_bake_serve']},
         'h_lasagna_to_oven': {'actions': to_oven('lasagna', 'lasagna_thawed'), 'after': ['h_thaw_lasagna']},
@@ -350,8 +350,8 @@ def build_reference_plan() -> dict:
                                              act('open', 'oven'), g('lasagna', approach_role='oven'),
                                              put('table', uv=[0.70, 0.50]), act('close', 'oven')],
                                  'after': ['h_lasagna_to_oven']},
-        'h_north_singles': {'actions': [g('fork3'), put('nightstand', xy=[20.45, 14.20]),
-                                        g('tea'), put('nightstand', xy=[20.68, 14.20])], 'after': []},
+        'h_north_singles': {'actions': [g('fork3'), put('bed', xy=[21.30, 13.25]),
+                                        g('tea'), put('bed', xy=[21.55, 13.25])], 'after': []},
     }
     orders = {
         'optimal_johnson_tray': [
