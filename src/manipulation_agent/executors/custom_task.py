@@ -186,6 +186,7 @@ class CustomTaskBackend(RGBBackend):
         """Called before camera setup / first policy observation."""
         spec = self.custom_spec
         if self.build_instance:
+            self._apply_open_state_joints(spec)
             self._construct_instance()
             if self.build_instance.exists(): raise FileExistsError(self.build_instance)
             self.env.scene.save(json_path=str(self.build_instance))
@@ -202,6 +203,7 @@ class CustomTaskBackend(RGBBackend):
         for role, name in spec['roles'].items():
             if name not in self.custom_objects and role not in spec.get('future_roles', []):
                 raise ValueError('Missing custom role: ' + role)
+        self._apply_open_state_joints(spec)
         self._apply_fixed_supports(spec)
         self.custom_tracker = TemporalGoalEvaluator(spec['evaluation'])
         initial = self._predicate_values()
@@ -896,6 +898,27 @@ class CustomTaskBackend(RGBBackend):
             if any(child.states[Covered].get_value(sys) for sys in systems):
                 return child
         return candidates[0]
+
+    def _apply_open_state_joints(self, spec):
+        """Benchmark side (2026-11-21): ``open_state_joints`` {role: [joint names]} limits an appliance's Open
+        state (read and set) to the named joints, like the ``openable_joint_ids`` annotation other models carry.
+        oven/ffitak has none, so opening its door also pulled both racks out 18.6 cm and a loaded rack bouncing
+        back kept the closed oven "open" (C2 r2 lasagna, three close attempts)."""
+        rows = spec.get('open_state_joints') or {}
+        if not rows:
+            return
+        from omnigibson.object_states import Open
+        live = {o.name: o for o in self.env.scene.objects}
+        applied = {}
+        for role, names in rows.items():
+            obj = live.get(spec['roles'][role])
+            if obj is None or Open not in obj.states:
+                raise ValueError(f'open_state_joints: {role} has no Open state')
+            joints = [obj.joints[n] for n in names]
+            obj.states[Open].relevant_joints_info = (False, joints, [1] * len(joints))
+            obj.states[Open].clear_cache()
+            applied[role] = list(names)
+        self._open_state_joints_applied = applied
 
     def _released_inside_extra(self, held, target):
         # Benchmark side (2026-11-21): for an appliance with a declared Inside timed process, an item whose

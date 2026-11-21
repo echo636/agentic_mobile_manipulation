@@ -95,7 +95,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'thaw_then_bake_two_rooms',
-        'instance_id': 'thaw_then_bake_two_rooms_seed0_r2',
+        'instance_id': 'thaw_then_bake_two_rooms_seed0_r3',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -179,6 +179,9 @@ def build_recipe() -> dict:
                 'not_ready_message': 'The fish casserole in the oven is still frozen, so it is not baking.',
             },
         ],
+        # r3: the oven's Open state is its door only (ffitak's racks are openable joints too; opening pulled them
+        # out and the loaded rack bounced back, so the closed oven stayed "open" - c2r2v8 optimal)
+        'open_state_joints': {'oven': ['j_door']},
         'appliance_capacities': [
             {'appliance': 'microwave', 'capacity': 1, 'counted_items': list(DISHES),
              'full_message': 'The microwave takes only one baking dish at a time, and one is already inside.'},

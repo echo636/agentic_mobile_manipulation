@@ -53,6 +53,12 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
     from ..executors.tool_cleanliness import validate_tool_cleanliness
     validate_timed_processes(spec)
     validate_appliance_capacities(spec)
+    ojs = spec.get('open_state_joints')
+    if ojs is not None:
+        if (not isinstance(ojs, dict) or not ojs or any(r not in roles for r in ojs)
+                or any(not isinstance(v, list) or not v or not all(isinstance(n, str) and n for n in v)
+                       for v in ojs.values())):
+            raise ValueError('open_state_joints must map known roles to nonempty joint-name lists')
     validate_tool_cleanliness(spec)
     proc_items = {row['id']: set(row['items']) for row in spec.get('timed_processes', [])}
     overcook_procs = {row['id'] for row in spec.get('timed_processes', []) if 'overcook_after_seconds' in row}

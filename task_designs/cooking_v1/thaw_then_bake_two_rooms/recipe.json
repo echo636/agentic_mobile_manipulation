@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "thaw_then_bake_two_rooms",
- "instance_id": "thaw_then_bake_two_rooms_seed0_r2",
+ "instance_id": "thaw_then_bake_two_rooms_seed0_r3",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -300,6 +300,11 @@
    "not_ready_message": "The fish casserole in the oven is still frozen, so it is not baking."
   }
  ],
+ "open_state_joints": {
+  "oven": [
+   "j_door"
+  ]
+ },
  "appliance_capacities": [
   {
    "appliance": "microwave",
