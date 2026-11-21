@@ -7,7 +7,8 @@ fridge / washer and cannot see into it (T1 fridge, T2 washer: 0 px from that sta
 After (switch MAS_OPENING_STANCE, default on; off = rc1): when the clicked object -- or the openable object whose
 box contains the clicked point -- has an Open state with a door or drawer whose opening faces sideways, the stance is
 chosen in front of that opening (0.7-1.1 m out along the opening normal, at most 0.25 m off the axis, still within the
-usual reach of the clicked point); no such reachable cell -> the rc1 rule. Only the stance changes; receipts do not.
+usual reach of the clicked point); no such reachable cell, or its route is more than 2 m longer than the rc1
+stance's route -> the rc1 rule. Only the stance changes; receipts do not.
 
 Opening normal, generic (no task role, category or coordinate is read):
 1. Joints: OmniGibson's Open-state relevant joints of the object. The one used: the door/drawer link whose box
@@ -17,6 +18,7 @@ Opening normal, generic (no task role, category or coordinate is read):
    expressed in the body's own frame; the dominant horizontal body axis (relative to the body half-extent) is the
    opening side. The hinge must lie on the same side (check); otherwise -> rc1 rule, recorded.
 3. Drawer (prismatic, horizontal axis): the slide axis, signed outward (away from the body centre).
+0. A body thinner than 0.25 m (room door leaf / frame: no interior, passable from both sides) -> rc1 rule.
 4. Revolute with a horizontal hinge: a lid (closed panel on top) -> rc1 rule; a drop-down front door (oven: closed
    panel on a side face) -> that face. Vertical slide, or a panel sliding along the body's long side (sliding door,
    not a drawer) -> rc1 rule.
@@ -28,6 +30,8 @@ FRONT_MIN_M, FRONT_MAX_M, FRONT_BEST_M = 0.7, 1.1, 0.9
 LATERAL_MAX_M = 0.25
 VERTICAL_AXIS_MIN = 0.7          # |axis_z| above this = vertical hinge (door); below 1-this... = horizontal (lid / drawer)
 HINGE_FACE_MIN = 0.6             # hinge must sit at >= 60 % of the half-extent on the chosen side
+THIN_BODY_M = 0.25               # body thinner than this (a room door leaf / frame) has no inside to look into
+DETOUR_MAX_M = 2.0               # new stance's route may be at most this much longer than the rc1 stance's route
 
 
 def enabled():
@@ -74,6 +78,10 @@ def face_from_point(point, body_center, body_yaw, half_extents):
 def opening_normal(kind, axis_world, closed_ctr, hinge, body_center, body_yaw, half_extents, half_z=None):
     """World xy unit normal of the opening side, plus a reason string; (None, reason) when there is none."""
     vertical = abs(axis_world[2]) / (math.sqrt(sum(a * a for a in axis_world)) or 1.0)
+    if 2 * min(half_extents[0], half_extents[1]) < THIN_BODY_M:
+        # coordinator 23:59: a room door is a thin leaf passable from both sides, with no interior; generic by
+        # geometry (no category name)
+        return None, f'thin_body_no_interior(depth {2 * min(half_extents):.2f} m)'
     if kind == 'revolute':
         i, sgn, coord = face_from_point(closed_ctr, body_center, body_yaw, half_extents)
         if vertical < VERTICAL_AXIS_MIN:

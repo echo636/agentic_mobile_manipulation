@@ -933,8 +933,18 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                             opening_note['stance']='rc1_rule_no_reachable_cell_in_front'
                         else:
                             opening_note['rc1_endpoint']=[round(float(v),3) for v in endpoint.tolist()]
-                            endpoint=points[k];reach_fallback=None
-                            opening_note['stance']='front_of_opening'
+                            # coordinator 23:59: no detour -- the front stance's route may be at most DETOUR_MAX_M
+                            # longer than the rc1 stance's route; otherwise keep the rc1 stance
+                            _,old_len=trav.get_shortest_path(floor,start,endpoint,entire_path=False,robot=self.robot)
+                            new_path,new_len=trav.get_shortest_path(floor,start,points[k],entire_path=False,robot=self.robot)
+                            old_len=float(old_len) if old_len is not None else None
+                            new_len=float(new_len) if new_len is not None else None
+                            opening_note.update(rc1_route_m=old_len,front_route_m=new_len)
+                            if new_path is None or new_len is None or (old_len is not None and new_len-old_len>OS.DETOUR_MAX_M):
+                                opening_note['stance']='rc1_rule_front_route_detour'
+                            else:
+                                endpoint=points[k];reach_fallback=None
+                                opening_note['stance']='front_of_opening'
                 except Exception as exc:
                     opening_note={'status':'error','error':f'{type(exc).__name__}: {exc}'[:200]}
             operation=getattr(self,'_local_operation',None)

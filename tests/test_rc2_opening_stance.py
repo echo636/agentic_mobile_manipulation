@@ -84,8 +84,23 @@ def test_sliding_room_door_is_not_a_drawer():
     # sliding door: slide axis along the long side of a thin frame (T2 study_door)
     n, why = OS.opening_normal('prismatic', [0, -1, 0], [20.203, 14.664, 1.162], [20.203, 13.848, 1.163],
                                [20.203, 14.243, 2.31], 0.0, [0.05, 0.893])
-    assert n is None and why == 'sliding_panel_along_long_side'
+    assert n is None and why.startswith('thin_body_no_interior')            # caught by the thin-body rule first
+    # a thicker body with a panel sliding along its long side (wardrobe sliding door) is still not a drawer
+    n3, why3 = OS.opening_normal('prismatic', [0, -1, 0], [0.0, 0.3, 1.0], [0.0, -0.3, 1.0], [0.0, 0.0, 1.0],
+                                 0.0, [0.3, 0.9])
+    assert n3 is None and why3 == 'sliding_panel_along_long_side'
     # T2 drawer cabinet: slide along the short side -> outward
     n2, _ = OS.opening_normal('prismatic', [-1, 0, 0], [19.854, 7.491, 0.289], [19.841, 7.497, 0.241],
                               [19.89, 7.75, 0.277], math.pi, [0.202, 0.561])
     assert n2 == pytest.approx([-1.0, 0.0], abs=1e-6)
+
+
+def test_thin_room_door_falls_back():
+    # T3 garage door: leaf 0.1 m deep, revolute with a vertical hinge -- no interior, stays on the rc1 rule
+    n, why = OS.opening_normal('revolute', [0, 0, 1], [-3.887, 2.329, 1.0], [-3.887, 2.85, 1.0],
+                               [-3.887, 2.379, 1.0], -math.pi / 2, [0.05, 0.47])
+    assert n is None and why.startswith('thin_body_no_interior')
+    # the microwave (0.40 m deep) is still a container
+    n2, _ = OS.opening_normal('revolute', [0, 0, -1], [4.41, 0.747, 1.044], [4.394, 0.555, 1.043],
+                              [4.231, 0.798, 1.038], math.radians(-1.6), [0.199, 0.24])
+    assert n2 is not None
