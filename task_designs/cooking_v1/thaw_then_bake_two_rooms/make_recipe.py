@@ -14,7 +14,7 @@ first; the instruction mentions the fish first, so following the text order is t
 destinations (living room 8 m, children's bedroom 27.6 m) and an optional tray.
 Benchmark-side rules (all tiers): timed_processes v5 (`requires_completed`: a frozen dish does not bake;
 `appliance_capacities`: the microwave takes one baking dish), v4 auto-off for the microwave.
-Assets: two casseroles (rectangular mmbavt x0.8 = 18.6 x 25.7 cm, round ncbsee x0.8 = 19.6 cm), told apart by shape.
+Assets: two casseroles (rectangular mmbavt x0.8 = 18.6 x 25.7 cm, round ncbsee x1.0 = 24.5 cm), told apart by shape.
 """
 from __future__ import annotations
 
@@ -28,7 +28,8 @@ sys.path.insert(0, str(REPO_ROOT / 'src'))
 from manipulation_agent.tasks.custom_tasks import validate_spec  # noqa: E402
 
 SETTING = '9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66'
-OVEN_AIM = {'lasagna': [8.30, -1.82], 'fish': [8.56, -1.82]}
+# ffitak's racks are 41 x 22 cm: dishes must be >= ~24 cm deep or wide to rest on them (C1 r1/r2 lesson)
+OVEN_AIM = {'lasagna': [8.30, -1.85], 'fish': [8.57, -1.85]}
 DISHES = ['lasagna', 'fish']
 
 
@@ -94,7 +95,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'thaw_then_bake_two_rooms',
-        'instance_id': 'thaw_then_bake_two_rooms_seed0_r0',
+        'instance_id': 'thaw_then_bake_two_rooms_seed0_r1',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -140,7 +141,7 @@ def build_recipe() -> dict:
             native('c2_lasagna', 'casserole', 'mmbavt',
                    'c1c415281c0c235cbaeb04e3b054e95b3a3afec114009e9939fec42851c66363', 98.0, [0.8, 0.8, 0.8]),
             native('c2_fish', 'casserole', 'ncbsee',
-                   '14c40dfabcac6ca15fe71623625e7201deac519c2e0082e3727504b735475824', 101.0, [0.8, 0.8, 0.8]),
+                   '14c40dfabcac6ca15fe71623625e7201deac519c2e0082e3727504b735475824', 101.0, [1.0, 1.0, 0.8]),
         ],
         'timed_processes': [
             {
@@ -186,8 +187,9 @@ def build_recipe() -> dict:
             state('bedroom_door', 'Open', True, fully=True),
             # frozen dishes inside the closed refrigerator
             state('fridge', 'Open', True, fully=True),
-            on('lasagna', 'fridge', [7.68, -1.85], support_probe_height=1.0, initial_relation='Inside'),
-            on('fish', 'fridge', [7.95, -1.85], support_probe_height=1.0, initial_relation='Inside'),
+            # r1: one dish per shelf (the 24.5 cm round dish and the rectangular one do not fit side by side)
+            on('lasagna', 'fridge', [7.82, -1.85], yaw90=True, support_probe_height=1.0, initial_relation='Inside'),
+            on('fish', 'fridge', [7.82, -1.85], support_probe_height=0.6, initial_relation='Inside'),
             state('fridge', 'Open', False, fully=True),
             # tableware, tea and tray on the kitchen island in plain view
             on('plate1', 'island', [6.02, 0.05]),
