@@ -97,7 +97,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'dinner_burn_windows_errand',
-        'instance_id': 'dinner_burn_windows_errand_seed0_r0',
+        'instance_id': 'dinner_burn_windows_errand_seed0_r1',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -340,8 +340,8 @@ def build_reference_plan() -> dict:
                                           g('tray2'), put('table', uv=[0.75, 0.75])], 'after': []},
         'oven_off': {'actions': [wait('veg_roasted', 10.0, 40), act('toggle_off', 'oven')], 'after': ['start_oven']},
         'start_steaks': {'actions': [act('open', 'fridge'),
-                                     g('steak1', approach_role='fridge'), put('pan'),
-                                     g('steak2', approach_role='fridge'), put('pan'),
+                                     g('steak1', approach_role='fridge'), put('pan', xy=[4.15, -0.39]),
+                                     g('steak2', approach_role='fridge'), put('pan', xy=[4.27, -0.39]),
                                      act('close', 'fridge'), act('toggle_on', 'stove')], 'after': []},
         # stay by the stove: detect "done" within 5 s and switch off before the 30 s window closes
         'stove_watch': {'actions': [wait(steaks_done, 5.0, 40), act('toggle_off', 'stove')],

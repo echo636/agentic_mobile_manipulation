@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "three_appliance_brunch",
- "instance_id": "three_appliance_brunch_seed0_r3",
+ "instance_id": "three_appliance_brunch_seed0_r4",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -1334,7 +1334,11 @@
      },
      {
       "primitive": "place_on_top",
-      "role": "pan"
+      "role": "pan",
+      "xy": [
+       4.15,
+       -0.39
+      ]
      },
      {
       "primitive": "grasp",
@@ -1343,7 +1347,11 @@
      },
      {
       "primitive": "place_on_top",
-      "role": "pan"
+      "role": "pan",
+      "xy": [
+       4.26,
+       -0.39
+      ]
      },
      {
       "primitive": "close",

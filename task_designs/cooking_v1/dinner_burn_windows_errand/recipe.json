@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "dinner_burn_windows_errand",
- "instance_id": "dinner_burn_windows_errand_seed0_r0",
+ "instance_id": "dinner_burn_windows_errand_seed0_r1",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -1513,7 +1513,11 @@
      },
      {
       "primitive": "place_on_top",
-      "role": "pan"
+      "role": "pan",
+      "xy": [
+       4.15,
+       -0.39
+      ]
      },
      {
       "primitive": "grasp",
@@ -1522,7 +1526,11 @@
      },
      {
       "primitive": "place_on_top",
-      "role": "pan"
+      "role": "pan",
+      "xy": [
+       4.27,
+       -0.39
+      ]
      },
      {
       "primitive": "close",

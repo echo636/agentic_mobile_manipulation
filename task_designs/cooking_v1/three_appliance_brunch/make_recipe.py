@@ -35,6 +35,9 @@ PLATE_UV = {'sausage': [0.50, 0.28], 'bagel': [0.50, 0.72]}
 # r3: ffitak's racks are only 41 x 22 cm; 16 cm potatoes (r1) and mini quiches (r2) slid off onto the cavity floor,
 # where native Inside is false. One 24 cm quiche, the size of the C4 pie that rests on the rack, at the pie's aim.
 OVEN_AIM = [8.43, -1.85]
+# r4: the pan's bowl is its north end (y ~ -0.39); without an aim the reference clicked the south rim and the
+# sausage landed on the bare burner beside the pan (c1r3 optimal). Reference tooling only.
+PAN_AIM = {'sausage1': [4.15, -0.39], 'sausage2': [4.26, -0.39]}
 
 
 def native(name, category, model, sha, x, scale=None, fixed=False):
@@ -102,7 +105,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'three_appliance_brunch',
-        'instance_id': 'three_appliance_brunch_seed0_r3',
+        'instance_id': 'three_appliance_brunch_seed0_r4',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -330,7 +333,7 @@ def build_reference_plan() -> dict:
         'start_stove': {'actions': [{'primitive': 'open', 'role': 'fridge'}]
                         + [a for s in ('sausage1', 'sausage2') for a in (
                             {'primitive': 'grasp', 'role': s, 'approach_role': 'fridge'},
-                            {'primitive': 'place_on_top', 'role': 'pan'})]
+                            {'primitive': 'place_on_top', 'role': 'pan', 'xy': PAN_AIM[s]})]
                         + [{'primitive': 'close', 'role': 'fridge'}, {'primitive': 'toggle_on', 'role': 'stove'}],
                         'after': []},
         'deliver_cold_batch_on_tray': {
