@@ -14,7 +14,7 @@ Changes against the paper design (my call under "less trouble for the agent", re
   - the griddle pan is fixed on the stove: moving the pan is not part of the planning structure.
 
 Planning structure: three processes of very different length (360 / 150 / 90 s) -> start the longest first;
-fill the waits with the cold tray run to the living room (8 m); plate in completion order.
+fill the waits with the cold-item trips to the living room (8 m); plate in completion order (r9: no tray).
 Benchmark-side rules (all tiers): timed_processes v4 (microwave switch_off_when_complete; the oven and the
 stove do not stop by themselves, stated in the public text as appliance facts). No overcook window in C1.
 """
@@ -70,7 +70,10 @@ def state(obj, name, value, fully=False):
 
 
 def served(item):
-    return {'any': [f'{item}_ontop_table', {'all': [f'{item}_ontop_tray', 'tray_ontop_table']}]}
+    # r9: no tray in C1. A carried 48 cm tray lands anywhere near the 98 cm table's centre and collided with the
+    # plates (c1r6-r8c: trays and plates knocked to the floor), for references and models alike. C1 is accepted
+    # on time saving (three overlapping appliances); the tray's 8 m batch was a minor part.
+    return f'{item}_ontop_table'
 
 
 def one_each(food):
@@ -81,8 +84,7 @@ def one_each(food):
 def build_recipe() -> dict:
     req_hot = (
         'Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm '
-        'bagel, and the baked quiche served whole (each plate and the quiche directly on the coffee table or on '
-        'the serving tray resting on it). Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 '
+        'bagel, and the baked quiche served whole, directly on the coffee table. Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 '
         'minutes with the oven door closed and the oven switched on. Fry both sausages in the griddle pan on '
         'the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both '
         'bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave '
@@ -92,20 +94,19 @@ def build_recipe() -> dict:
         'square table in front of the sofas east of the kitchen.'
     )
     req_cold = (
-        'Serve the two cups and the tea bottle at the living-room coffee table, placed either directly on '
-        'the coffee table or on the serving tray resting on the coffee table. The two cups, the tea bottle '
-        'and the serving tray start on the kitchen island.'
+        'Serve the two cups and the tea bottle on the living-room coffee table. They start on the kitchen '
+        'island.'
     )
     req_reset = 'Leave the oven and the stove switched off, and the oven, microwave and refrigerator closed.'
     req_hand = 'Finish with no object held.'
 
     items = [f'{f}{i}' for f in FOODS for i in (1, 2)]
     cold = ['cup1', 'cup2', 'tea']   # r8: forks dropped (no planning role; room for the quiche on the tray)
-    island_items = ['plate1', 'plate2', 'tray'] + cold
+    island_items = ['plate1', 'plate2'] + cold
     spec = {
         'schema_version': 3,
         'id': 'three_appliance_brunch',
-        'instance_id': 'three_appliance_brunch_seed0_r8c',
+        'instance_id': 'three_appliance_brunch_seed0_r9',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -122,7 +123,6 @@ def build_recipe() -> dict:
             'floor': 'floors_qgmjvd_0',
             'pan': 'c1_pan',
             'tea': 'bottle_of_tea_208',
-            'tray': 'c1_tray',
             'plate1': 'c1_plate1', 'plate2': 'c1_plate2',
             'cup1': 'c1_cup1', 'cup2': 'c1_cup2',
             'quiche': 'c1_quiche',
@@ -151,8 +151,6 @@ def build_recipe() -> dict:
             imported('c1_cup2', 'setting_the_table', 'water_glass_bbpraa_0', 134.0, [1.25, 1.25, 1.15]),
         ],
         'native_assets': [
-            native('c1_tray', 'tray', 'coqeme',
-                   'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd', 95.0, [3.38, 2.16, 1.5]),
             native('c1_pan', 'griddle_pan', 'ryvqep',
                    '704c9e825784e54cb78730585111263a3832e79caa357c22963e87e47f8ce63e', 98.0, [1.5, 1.6, 1.0],
                    fixed=True),
@@ -212,7 +210,6 @@ def build_recipe() -> dict:
             # tableware, drink and tray on the kitchen island in plain view
             on('plate1', 'island', [6.00, 0.08]),
             on('plate2', 'island', [6.40, 0.08]),
-            on('tray', 'island', [7.00, 0.08], yaw90=True),
             on('cup1', 'island', [7.50, 0.05]),
             on('cup2', 'island', [7.76, 0.05]),
             on('tea', 'island', [8.54, 0.05]),
@@ -268,9 +265,6 @@ def build_recipe() -> dict:
                    for o in items for p in (1, 2)},
                 **{f'{o}_ontop_table': {'object': o, 'state': 'OnTop', 'target': 'table'}
                    for o in ['plate1', 'plate2', 'quiche'] + cold},
-                **{f'{o}_ontop_tray': {'object': o, 'state': 'OnTop', 'target': 'tray'}
-                   for o in ['plate1', 'plate2', 'quiche'] + cold},
-                'tray_ontop_table': {'object': 'tray', 'state': 'OnTop', 'target': 'table'},
                 'fridge_open': {'object': 'fridge', 'state': 'Open'},
                 'cabinet_open': {'object': 'cabinet', 'state': 'Open'},
                 'oven_open': {'object': 'oven', 'state': 'Open'},
@@ -299,7 +293,7 @@ def build_recipe() -> dict:
             'score_type': 'custom_joint_terminal_and_public_history_v2',
         },
         'acceptance_cases': {
-            'reference_orders': ['optimal_longest_first_tray', 'habit_sequential'],
+            'reference_orders': ['optimal_longest_first', 'habit_sequential'],
             'physical_negative_cases': ['omit_plate_delivery', 'omit_cold_delivery', 'omit_stove_off'],
             'fresh_restore_repetitions': 2,
             'max_reference_action_attempts': 300,
@@ -338,23 +332,13 @@ def build_reference_plan() -> dict:
                             {'primitive': 'place_on_top', 'role': 'pan', 'xy': PAN_AIM[s]})]
                         + [{'primitive': 'close', 'role': 'fridge'}, {'primitive': 'toggle_on', 'role': 'stove'}],
                         'after': []},
-        'deliver_cold_batch_on_tray': {
-            'actions': [{'primitive': 'grasp', 'role': 'cup1'},
-                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.22, 0.24]},
-                        {'primitive': 'grasp', 'role': 'tea'},
-                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.50, 0.24]},
-                        {'primitive': 'grasp', 'role': 'cup2'},
-                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.78, 0.24]},
-                        {'primitive': 'grasp', 'role': 'tray'},
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.71, 0.50]}],
-            'after': []},
         'deliver_cold_single_trips': {
             'actions': [{'primitive': 'grasp', 'role': 'cup1'},
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.62, 0.18]},
+                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.80, 0.22]},
                         {'primitive': 'grasp', 'role': 'cup2'},
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.84, 0.18]},
+                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.80, 0.78]},
                         {'primitive': 'grasp', 'role': 'tea'},
-                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.84, 0.45]},
+                        {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.86, 0.50]},
 ],
             'after': []},
         'idle_wait_oven': {'actions': [wait('quiche_done', 60.0, 8)], 'after': ['start_oven']},
@@ -370,25 +354,19 @@ def build_reference_plan() -> dict:
         'serve_quiche': {'actions': [wait('quiche_done', 20.0, 20), {'primitive': 'toggle_off', 'role': 'oven'},
                                      {'primitive': 'open', 'role': 'oven'},
                                      {'primitive': 'grasp', 'role': 'quiche', 'approach_role': 'oven'},
-                                     {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.47, 0.50]}],
+                                     {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.50, 0.50]}],
                          'after': ['start_oven']},
-        # optimal: onto the tray already on the table (free bottom-right quadrant)
-        'serve_quiche_tray': {'actions': [wait('quiche_done', 20.0, 20), {'primitive': 'toggle_off', 'role': 'oven'},
-                                          {'primitive': 'open', 'role': 'oven'},
-                                          {'primitive': 'grasp', 'role': 'quiche', 'approach_role': 'oven'},
-                                          {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.50, 0.72]}],
-                              'after': ['start_oven', 'deliver_cold_batch_on_tray']},
         'close_oven': {'actions': [{'primitive': 'close', 'role': 'oven'}], 'after': ['start_oven']},
         'deliver_plates': {'actions': [{'primitive': 'grasp', 'role': 'plate1'},
-                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.25, 0.82]},   # r8b: both plates in the free north band (tray sits mid/south)
+                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.22, 0.25]},
                                        {'primitive': 'grasp', 'role': 'plate2'},
-                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.70, 0.82]}],
+                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.22, 0.75]}],
                            'after': ['plate_bagels', 'plate_sausages']},
     }
     orders = {
-        'optimal_longest_first_tray': [
-            'start_oven', 'start_microwave', 'start_stove', 'deliver_cold_batch_on_tray',
-            'plate_bagels', 'plate_sausages', 'stove_off', 'serve_quiche_tray', 'close_oven', 'deliver_plates',
+        'optimal_longest_first': [
+            'start_oven', 'start_microwave', 'start_stove', 'deliver_cold_single_trips',
+            'plate_bagels', 'plate_sausages', 'stove_off', 'serve_quiche', 'close_oven', 'deliver_plates',
         ],
         'habit_sequential': [
             'start_oven', 'idle_wait_oven', 'serve_quiche', 'close_oven',
@@ -404,7 +382,7 @@ def build_reference_plan() -> dict:
         'orders': orders,
         'negative_omissions': {
             'omit_plate_delivery': 'deliver_plates',
-            'omit_cold_delivery': 'deliver_cold_batch_on_tray',
+            'omit_cold_delivery': 'deliver_cold_single_trips',
             'omit_stove_off': 'stove_off',
         },
     }

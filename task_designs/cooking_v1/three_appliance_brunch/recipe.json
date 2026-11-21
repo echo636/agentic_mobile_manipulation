@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "three_appliance_brunch",
- "instance_id": "three_appliance_brunch_seed0_r8c",
+ "instance_id": "three_appliance_brunch_seed0_r9",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -22,7 +22,6 @@
   "floor": "floors_qgmjvd_0",
   "pan": "c1_pan",
   "tea": "bottle_of_tea_208",
-  "tray": "c1_tray",
   "plate1": "c1_plate1",
   "plate2": "c1_plate2",
   "cup1": "c1_cup1",
@@ -144,29 +143,6 @@
   }
  ],
  "native_assets": [
-  {
-   "name": "c1_tray",
-   "category": "tray",
-   "model": "coqeme",
-   "usd_sha256": "f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd",
-   "prim_type": 0,
-   "position": [
-    95.0,
-    50.0,
-    2.0
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.0,
-    1.0
-   ],
-   "scale": [
-    3.38,
-    2.16,
-    1.5
-   ]
-  },
   {
    "name": "c1_pan",
    "category": "griddle_pan",
@@ -501,21 +477,6 @@
    ]
   },
   {
-   "object": "tray",
-   "target": "island",
-   "place_on_support": true,
-   "xy": [
-    7.0,
-    0.08
-   ],
-   "orientation": [
-    0.0,
-    0.0,
-    0.70710678,
-    0.70710678
-   ]
-  },
-  {
    "object": "cup1",
    "target": "island",
    "place_on_support": true,
@@ -708,7 +669,6 @@
   "bagel2_on_storage": "initial_bagel2_OnTop",
   "plate1_on_island": "initial_plate1_OnTop",
   "plate2_on_island": "initial_plate2_OnTop",
-  "tray_on_island": "initial_tray_OnTop",
   "cup1_on_island": "initial_cup1_OnTop",
   "cup2_on_island": "initial_cup2_OnTop",
   "tea_on_island": "initial_tea_OnTop",
@@ -739,22 +699,22 @@
  "replacements": [],
  "public_instruction": "Cook and serve brunch for two on the living-room coffee table: a baked quiche, fried sausages and warm bagels on two plates, with cups and tea, and leave the kitchen appliances off and closed.",
  "public_context": [
-  "Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm bagel, and the baked quiche served whole (each plate and the quiche directly on the coffee table or on the serving tray resting on it). Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 minutes with the oven door closed and the oven switched on. Fry both sausages in the griddle pan on the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave switched on; the microwave switches itself off when it is done, the oven and the stove do not. The quiche and the bagels start on the counter between the sink and the refrigerator, the sausages inside the refrigerator, and the two plates on the kitchen island. The living-room coffee table is the low square table in front of the sofas east of the kitchen.",
-  "Serve the two cups and the tea bottle at the living-room coffee table, placed either directly on the coffee table or on the serving tray resting on the coffee table. The two cups, the tea bottle and the serving tray start on the kitchen island.",
+  "Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm bagel, and the baked quiche served whole, directly on the coffee table. Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 minutes with the oven door closed and the oven switched on. Fry both sausages in the griddle pan on the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave switched on; the microwave switches itself off when it is done, the oven and the stove do not. The quiche and the bagels start on the counter between the sink and the refrigerator, the sausages inside the refrigerator, and the two plates on the kitchen island. The living-room coffee table is the low square table in front of the sofas east of the kitchen.",
+  "Serve the two cups and the tea bottle on the living-room coffee table. They start on the kitchen island.",
   "Leave the oven and the stove switched off, and the oven, microwave and refrigerator closed.",
   "Finish with no object held."
  ],
  "requirements": [
   {
    "id": "serve_hot_plates",
-   "text": "Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm bagel, and the baked quiche served whole (each plate and the quiche directly on the coffee table or on the serving tray resting on it). Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 minutes with the oven door closed and the oven switched on. Fry both sausages in the griddle pan on the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave switched on; the microwave switches itself off when it is done, the oven and the stove do not. The quiche and the bagels start on the counter between the sink and the refrigerator, the sausages inside the refrigerator, and the two plates on the kitchen island. The living-room coffee table is the low square table in front of the sofas east of the kitchen.",
+   "text": "Serve brunch at the living-room coffee table: two plates, each with one fried sausage and one warm bagel, and the baked quiche served whole, directly on the coffee table. Bake the quiche in the black built-in oven to the right of the refrigerator: about 6 minutes with the oven door closed and the oven switched on. Fry both sausages in the griddle pan on the stove on the west preparation counter: about 2.5 minutes with the stove switched on. Warm both bagels in the microwave beside the stove: about 1.5 minutes with the door closed and the microwave switched on; the microwave switches itself off when it is done, the oven and the stove do not. The quiche and the bagels start on the counter between the sink and the refrigerator, the sausages inside the refrigerator, and the two plates on the kitchen island. The living-room coffee table is the low square table in front of the sofas east of the kitchen.",
    "terminal": [
     "plates_served"
    ]
   },
   {
    "id": "serve_tableware_and_tea",
-   "text": "Serve the two cups and the tea bottle at the living-room coffee table, placed either directly on the coffee table or on the serving tray resting on the coffee table. The two cups, the tea bottle and the serving tray start on the kitchen island.",
+   "text": "Serve the two cups and the tea bottle on the living-room coffee table. They start on the kitchen island.",
    "terminal": [
     "tableware_served"
    ]
@@ -871,41 +831,6 @@
     "state": "OnTop",
     "target": "table"
    },
-   "plate1_ontop_tray": {
-    "object": "plate1",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "plate2_ontop_tray": {
-    "object": "plate2",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "quiche_ontop_tray": {
-    "object": "quiche",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "cup1_ontop_tray": {
-    "object": "cup1",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "cup2_ontop_tray": {
-    "object": "cup2",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "tea_ontop_tray": {
-    "object": "tea",
-    "state": "OnTop",
-    "target": "tray"
-   },
-   "tray_ontop_table": {
-    "object": "tray",
-    "state": "OnTop",
-    "target": "table"
-   },
    "fridge_open": {
     "object": "fridge",
     "state": "Open"
@@ -973,11 +898,6 @@
     "state": "OnTop",
     "target": "island"
    },
-   "initial_tray_OnTop": {
-    "object": "tray",
-    "state": "OnTop",
-    "target": "island"
-   },
    "initial_cup1_OnTop": {
     "object": "cup1",
     "state": "OnTop",
@@ -1033,77 +953,17 @@
        }
       ]
      },
-     {
-      "any": [
-       "plate1_ontop_table",
-       {
-        "all": [
-         "plate1_ontop_tray",
-         "tray_ontop_table"
-        ]
-       }
-      ]
-     },
-     {
-      "any": [
-       "plate2_ontop_table",
-       {
-        "all": [
-         "plate2_ontop_tray",
-         "tray_ontop_table"
-        ]
-       }
-      ]
-     },
+     "plate1_ontop_table",
+     "plate2_ontop_table",
      "quiche_done",
-     {
-      "any": [
-       "quiche_ontop_table",
-       {
-        "all": [
-         "quiche_ontop_tray",
-         "tray_ontop_table"
-        ]
-       }
-      ]
-     }
+     "quiche_ontop_table"
     ]
    },
    "tableware_served": {
     "all": [
-     {
-      "any": [
-       "cup1_ontop_table",
-       {
-        "all": [
-         "cup1_ontop_tray",
-         "tray_ontop_table"
-        ]
-       }
-      ]
-     },
-     {
-      "any": [
-       "cup2_ontop_table",
-       {
-        "all": [
-         "cup2_ontop_tray",
-         "tray_ontop_table"
-        ]
-       }
-      ]
-     },
-     {
-      "any": [
-       "tea_ontop_table",
-       {
-        "all": [
-         "tea_ontop_tray",
-         "tray_ontop_table"
-        ]
-       }
-      ]
-     }
+     "cup1_ontop_table",
+     "cup2_ontop_table",
+     "tea_ontop_table"
     ]
    },
    "appliances_safe": {
@@ -1134,7 +994,7 @@
  },
  "acceptance_cases": {
   "reference_orders": [
-   "optimal_longest_first_tray",
+   "optimal_longest_first",
    "habit_sequential"
   ],
   "physical_negative_cases": [
@@ -1254,59 +1114,6 @@
     ],
     "after": []
    },
-   "deliver_cold_batch_on_tray": {
-    "actions": [
-     {
-      "primitive": "grasp",
-      "role": "cup1"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "tray",
-      "uv": [
-       0.22,
-       0.24
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "tea"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "tray",
-      "uv": [
-       0.5,
-       0.24
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "cup2"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "tray",
-      "uv": [
-       0.78,
-       0.24
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "tray"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "table",
-      "uv": [
-       0.71,
-       0.5
-      ]
-     }
-    ],
-    "after": []
-   },
    "deliver_cold_single_trips": {
     "actions": [
      {
@@ -1317,8 +1124,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.62,
-       0.18
+       0.8,
+       0.22
       ]
      },
      {
@@ -1329,8 +1136,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.84,
-       0.18
+       0.8,
+       0.78
       ]
      },
      {
@@ -1341,8 +1148,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.84,
-       0.45
+       0.86,
+       0.5
       ]
      }
     ],
@@ -1529,48 +1336,13 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.47,
+       0.5,
        0.5
       ]
      }
     ],
     "after": [
      "start_oven"
-    ]
-   },
-   "serve_quiche_tray": {
-    "actions": [
-     {
-      "primitive": "wait_for",
-      "condition": "quiche_done",
-      "seconds": 20.0,
-      "attempts": 20
-     },
-     {
-      "primitive": "toggle_off",
-      "role": "oven"
-     },
-     {
-      "primitive": "open",
-      "role": "oven"
-     },
-     {
-      "primitive": "grasp",
-      "role": "quiche",
-      "approach_role": "oven"
-     },
-     {
-      "primitive": "place_on_top",
-      "role": "tray",
-      "uv": [
-       0.5,
-       0.72
-      ]
-     }
-    ],
-    "after": [
-     "start_oven",
-     "deliver_cold_batch_on_tray"
     ]
    },
    "close_oven": {
@@ -1594,8 +1366,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.25,
-       0.82
+       0.22,
+       0.25
       ]
      },
      {
@@ -1606,8 +1378,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.7,
-       0.82
+       0.22,
+       0.75
       ]
      }
     ],
@@ -1618,15 +1390,15 @@
    }
   },
   "orders": {
-   "optimal_longest_first_tray": [
+   "optimal_longest_first": [
     "start_oven",
     "start_microwave",
     "start_stove",
-    "deliver_cold_batch_on_tray",
+    "deliver_cold_single_trips",
     "plate_bagels",
     "plate_sausages",
     "stove_off",
-    "serve_quiche_tray",
+    "serve_quiche",
     "close_oven",
     "deliver_plates"
    ],
@@ -1648,7 +1420,7 @@
   },
   "negative_omissions": {
    "omit_plate_delivery": "deliver_plates",
-   "omit_cold_delivery": "deliver_cold_batch_on_tray",
+   "omit_cold_delivery": "deliver_cold_single_trips",
    "omit_stove_off": "stove_off"
   }
  },
