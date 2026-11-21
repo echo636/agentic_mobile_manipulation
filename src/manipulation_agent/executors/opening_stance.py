@@ -281,3 +281,21 @@ def opening_info(backend, obj, point):
         info['normal'] = [round(normal[0], 4), round(normal[1], 4)]
         info['face_center'] = [round(v, 3) for v in face_center(bc, yaw, half, normal)]
     return info
+
+
+def floor_click_is_object_approach(backend, obj, point):
+    """rc2 (coordinator 03:26): a floor-height click becomes an approach to an openable body only if the click lies in
+    that body's own (root link) box, the body is not thin, AND the body has a sideways opening normal. A large open
+    roll-up garage door (no sideways opening) must not turn the garage floor into "approach the door".
+    Returns (decision, body name or None, reason)."""
+    body = _container_of_point(backend, obj, point)
+    if body is None:
+        return False, None, 'no_openable_body'
+    if is_thin(body):
+        return False, body.name, 'thin_body'
+    if not point_in_box([float(v) for v in point], *_body_box(body)):
+        return False, body.name, 'outside_body_box'
+    info = opening_info(backend, body, point)
+    if not info.get('normal'):
+        return False, body.name, 'no_side_opening:' + str(info.get('basis') or info.get('status'))
+    return True, body.name, 'side_opening'

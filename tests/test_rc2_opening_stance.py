@@ -129,3 +129,32 @@ def test_body_box_ignores_open_door_sweep():
     assert OS.point_in_box(floor_under_door, *OS._box(washer)) is True         # the whole-object box would swallow it
     assert OS.point_in_box([0.3, 0.3, 0.05], *OS._body_box(washer)) is True    # the machine's own foot
     assert OS.is_thin(washer) is False
+
+
+def _fake_scene(monkeypatch, bodies, normals):
+    from types import SimpleNamespace as NS
+    backend = NS(env=NS(scene=NS(objects=bodies)))
+    monkeypatch.setattr(OS, '_openable', lambda o: o is not None and getattr(o, 'openable', False))
+    monkeypatch.setattr(OS, 'opening_info', lambda b, o, p: {'normal': normals.get(o.name), 'status': 'ok' if normals.get(o.name) else 'no_side_opening'})
+    return backend
+
+
+def _body(name, lo, hi):
+    from types import SimpleNamespace as NS
+    link = NS(aabb=(list(lo), list(hi)))
+    return NS(name=name, openable=True, aabb=(list(lo), list(hi)), root_link_name='base_link', links={'base_link': link})
+
+
+def test_floor_click_in_big_body_without_side_opening_stays_floor(monkeypatch):
+    garage_door = _body('garage_door', [-8.9, 2.6, 0.0], [-6.0, 8.3, 2.6])      # open roll-up door: huge box, no normal
+    backend = _fake_scene(monkeypatch, [garage_door], {})
+    ok, body, why = OS.floor_click_is_object_approach(backend, None, [-6.02, 5.58, 0.0])
+    assert ok is False and body == 'garage_door' and why.startswith('no_side_opening')
+
+
+def test_floor_click_at_oven_foot_inside_door_box_still_approaches_oven(monkeypatch):
+    garage_door = _body('garage_door', [-8.9, 2.6, 0.0], [-6.0, 8.3, 2.6])
+    kiln = _body('kiln', [-6.37, 6.15, 0.0], [-5.67, 6.86, 0.73])
+    backend = _fake_scene(monkeypatch, [garage_door, kiln], {'kiln': [0.0, -1.0]})
+    ok, body, why = OS.floor_click_is_object_approach(backend, None, [-6.33, 6.74, 0.09])
+    assert ok is True and body == 'kiln' and why == 'side_opening'

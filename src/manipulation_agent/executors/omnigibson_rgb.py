@@ -804,12 +804,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         # approach, not a floor destination (stance probe S_T3b_on step 16, 00:45)
         from . import opening_stance as OS
         if floor_click and OS.enabled():
-            try:   # the clicked object, or the openable body whose box holds the click (pixel at an oven's foot)
-                body=OS._container_of_point(self,getattr(target,'selected_object',None),point)
-                # room doors keep the rc1 floor-click rule; the clicked point must lie in the body link's own box (an
-                # open door's sweep does not count), also when the clicked object itself is the openable one
-                if (body is not None and not OS.is_thin(body)
-                        and OS.point_in_box([float(v) for v in point],*OS._body_box(body))):
+            try:   # the clicked object, or the openable body whose box holds the click (pixel at an oven's foot);
+                # only bodies with a sideways opening (oven, fridge, washer, cabinet) -- not room / garage doors or lids
+                approach,_body,_why=OS.floor_click_is_object_approach(self,getattr(target,'selected_object',None),point)
+                if approach:
                     floor_click=False
             except Exception:
                 pass
