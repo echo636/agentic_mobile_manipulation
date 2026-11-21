@@ -189,6 +189,11 @@ def _openable(obj):
         return False
 
 
+def is_thin(body):
+    lo, hi = _box(body)
+    return min(hi[0] - lo[0], hi[1] - lo[1]) < THIN_BODY_M
+
+
 def _container_of_point(backend, obj, point):
     if _openable(obj):
         return obj
