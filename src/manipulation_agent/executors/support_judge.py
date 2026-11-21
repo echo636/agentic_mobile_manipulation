@@ -1,6 +1,11 @@
-"""rc2 MAS_SUPPORT_JUDGE (2026-11-22, benchmark side, coordinator 06:14): one placement criterion for the receipt --
-the item has settled, is released, is not held up by the robot, and rests on an upward horizontal surface of the
-target. Independent of MAS_PLACE_TRANSACTIONAL; both off = the 1d19707 behaviour. Default off until the rc2
+"""rc2 MAS_SUPPORT_JUDGE (2026-11-22, benchmark side, coordinator 06:14 / 06:29):
+a passed placement receipt <=> the task evaluator's native predicate also holds (two written exceptions).
+Concretely: the item has settled, is released, is not held up by the robot, rests on an upward horizontal surface of
+the target, AND native OnTop(target) or Inside(target) is true. Exceptions (receipt only, the evaluator is unchanged):
+case (3) below (clicked a small item lying on a support; judged by the native OnTop on that support) and case (5)
+(floor boundary). When the native predicate is false the placement fails after release: with MAS_PLACE_TRANSACTIONAL
+on it is rolled back (not_placed), with it off it keeps the 1d19707 result_unconfirmed path.
+The evaluator is NOT loosened (coordinator 06:29: e.g. the T1 coffee table's lower shelf must not count as on it). Independent of MAS_PLACE_TRANSACTIONAL; both off = the 1d19707 behaviour. Default off until the rc2
 reference reruns.
 
 Cases it changes (sec20/released_failures/JUDGE_MISMATCH_TABLE_20261122.md, table A):
@@ -21,6 +26,7 @@ Every rescue is recorded privately (placement_diagnostics `support_judge`), neve
 import os
 
 FLAT_MAX_HEIGHT_M = 0.08
+NATIVE_EXCEPTIONS = frozenset({'on_support_under_clicked_item', 'floor_touching_only_structure'})
 RESCUE_REQUIRED = ('released', 'upward_support', 'bottom_near_support', 'not_supported_by_robot')
 STRUCTURE_CATEGORIES = frozenset({'floors', 'walls', 'ceilings', 'fixed_window', 'window', 'door', 'sliding_door',
                                   'garage_door', 'roof'})
@@ -107,3 +113,13 @@ def contact_categories(backend, contact_paths):
         obj = reg('name', name) if (reg is not None and name) else None
         out.append(getattr(obj, 'category', None))
     return out
+
+
+def native_gate(supported, official_on_top, official_inside, rescue_reason):
+    """Last step for place_on_top: a passed result also needs the native OnTop / Inside of the target, except for the
+    two written exceptions. Returns (passed, reason_if_blocked)."""
+    if not enabled() or not supported:
+        return supported, None
+    if official_on_top or official_inside or rescue_reason in NATIVE_EXCEPTIONS:
+        return True, None
+    return False, 'native_predicate_false'

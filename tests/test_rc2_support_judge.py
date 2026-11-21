@@ -85,3 +85,49 @@ def test_case5_floor_touching_only_structure(on):
                            contact_categories=['floors']) == (False, None)
     assert SJ.judge_on_top({**checks, 'support_ray_hits_selected_object': False}, False, 'floors_b', False, None,
                            target_is_floor=True, contact_categories=['floors']) == (False, None)
+
+
+def test_native_gate(on):
+    assert SJ.native_gate(True, True, False, None) == (True, None)
+    assert SJ.native_gate(True, False, True, None) == (True, None)                 # interior shelf: Inside counts
+    assert SJ.native_gate(True, False, False, None) == (False, 'native_predicate_false')   # open lower shelf, E1
+    assert SJ.native_gate(True, False, False, 'on_support_under_clicked_item') == (True, None)
+    assert SJ.native_gate(True, False, False, 'floor_touching_only_structure') == (True, None)
+    assert SJ.native_gate(False, True, True, None) == (False, None)
+
+
+def test_native_gate_off(monkeypatch):
+    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+    assert SJ.native_gate(True, False, False, None) == (True, None)
+
+
+@pytest.mark.parametrize('sj,tx,expected', [('off', 'off', 'passed'), ('on', 'off', 'result_unconfirmed'),
+                                            ('off', 'on', 'passed'), ('on', 'on', 'not_placed')])
+def test_four_switch_combinations_native_false(monkeypatch, sj, tx, expected):
+    """Executor checks pass but the native predicate is false (open lower shelf / E1)."""
+    from manipulation_agent.contracts import SkillError
+    from manipulation_agent.executors import placement_transaction as TX
+    from manipulation_agent.executors.carry import ControlledCarry
+    from manipulation_agent.observations.boundary import factual_execution_error
+    monkeypatch.setenv('MAS_SUPPORT_JUDGE', sj); monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', tx)
+    monkeypatch.setattr(TX, 'snapshot', lambda b: 'snap')
+    monkeypatch.setattr(TX, 'restore', lambda b, s: (True, None))
+
+    class Fake:
+        records = []
+        primitives = type('P', (), {'_empty_action': staticmethod(lambda: None)})()
+        def _get_held(self): return 'book'
+        _carry_contents = []
+        def _placement_record(self, r): self.records.append(r)
+        def _step(self, a): pass
+        def _place_state_once(self, *a, **k):
+            ok, _ = SJ.native_gate(True, False, False, None)      # what release_and_check decides
+            if not ok:
+                raise SkillError('postcondition_error', 'x', changed=True, stage='released_placement_unconfirmed')
+            return 'placed'
+    try:
+        ControlledCarry._place_state(Fake(), 'place_on_top', 'desk', 10, None)
+        got = 'passed'
+    except SkillError as exc:
+        got = factual_execution_error(exc, 'place_on_top', 'holding_item' if tx == 'on' else 'empty')['code']
+    assert got == expected

@@ -762,6 +762,17 @@ class CheckedPlacement:
                 if rescued:
                     supported = True
                     support['support_judge'] = why
+            if SJ.enabled() and supported:
+                # rc2 MAS_SUPPORT_JUDGE: receipt success needs the evaluator's native OnTop / Inside of the target
+                # (two written exceptions); otherwise this release failed like any other failed check.
+                from omnigibson.object_states import Inside as _Inside
+                try:
+                    inside_target = bool(_Inside in held.states and held.states[_Inside].get_value(target))
+                except Exception:
+                    inside_target = False
+                supported, blocked = SJ.native_gate(supported, official, inside_target, support.get('support_judge'))
+                if blocked:
+                    support['support_judge'] = blocked
             self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
                 'position': held.get_position_orientation()[0].tolist(),
                 'official_on_top': official,
