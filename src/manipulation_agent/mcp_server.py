@@ -49,6 +49,7 @@ from .tools.finish_guard import FinishGuard
 from .agent.state_memory import StateMemory, PRIVATE_ODOMETRY_KEY
 from .agent.place_options import place_catalog, prepare as place_prepare, apply_name as place_apply_name
 from .agent.place_options import load_memory as place_load_memory, save_memory as place_save_memory
+from .agent.receipt_next_step import next_step as receipt_next_step
 from .agent.failure_memory import FailureMemory
 from .agent.stance_repeat import StanceRepeatGuard
 from .tools.zoom_select import ZOOM_LIMIT, ZOOM_TOOL, compose_region, two_step_catalog, zoom_image, zoom_to_full
@@ -321,7 +322,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         failure_memory=False, place_look_again=False, finish_evidence=False,
                         finish_evidence_judge=None, finish_evidence_dir=None, stance_repeat_guard=False,
                         stance_repeat_state=None, echo_full_frame=False, two_step_select=False,
-                        place_names=False, place_return=False, place_memory_state=None):
+                        place_names=False, place_return=False, place_memory_state=None, receipt_next_step_on=False):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -496,6 +497,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         )
                 if isinstance(result, dict):
                     result.pop(PRIVATE_ODOMETRY_KEY, None)   # bridge -> memory only, never to the model
+                if receipt_next_step_on:
+                    receipt_next_step(result, name, forward_args)
                 if failures is not None and isinstance(result, dict):
                     summary = failures.observe(name, arguments if isinstance(arguments, dict) else {}, result)
                     if summary is not None:
@@ -815,7 +818,7 @@ async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, fini
               failure_look_again=False, failure_memory=False, place_look_again=False, finish_evidence=False,
               finish_evidence_judge=None, finish_evidence_dir=None, stance_repeat_guard=False,
               stance_repeat_state=None, echo_full_frame=False, two_step_select=False,
-              place_names=False, place_return=False, place_memory_state=None):
+              place_names=False, place_return=False, place_memory_state=None, receipt_next_step_on=False):
     server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
                                  enable_click_echo=enable_click_echo,
                                  max_inline_image_bytes=max_inline_image_bytes,
@@ -830,7 +833,7 @@ async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, fini
                                  stance_repeat_guard=stance_repeat_guard, stance_repeat_state=stance_repeat_state,
                                  echo_full_frame=echo_full_frame, two_step_select=two_step_select,
                                  place_names=place_names, place_return=place_return,
-                                 place_memory_state=place_memory_state)
+                                 place_memory_state=place_memory_state, receipt_next_step_on=receipt_next_step_on)
     _startup('serving')
     if transport == 'stdio' and argument_tolerance:
         await run_stdio_parsing_string_arguments(server)
@@ -892,6 +895,8 @@ def main():
                         help='harness option: act/look accept name_here to name the current place in state_memory')
     parser.add_argument('--place-return', choices=('off', 'on'), default='off',
                         help='harness option: act primitive return_to drives back to a named or visited place')
+    parser.add_argument('--receipt-next-step', choices=('off', 'on'), default='off',
+                        help='harness option: empty_hand / hand_occupied receipts add the operation to call next')
     parser.add_argument('--place-memory-state', default=None,
                         help='with --place-names/--place-return: file keeping the proxy state_memory across restarts')
     parser.add_argument('--two-step-select', choices=('off', 'on'), default='off',
@@ -918,7 +923,8 @@ def main():
                     echo_full_frame=args.echo_full_frame == 'on',
                     two_step_select=args.two_step_select == 'on',
                     place_names=args.place_names == 'on', place_return=args.place_return == 'on',
-                    place_memory_state=args.place_memory_state))
+                    place_memory_state=args.place_memory_state,
+                    receipt_next_step_on=args.receipt_next_step == 'on'))
 
 
 if __name__ == '__main__':
