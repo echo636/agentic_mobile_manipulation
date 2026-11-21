@@ -31,7 +31,7 @@ from manipulation_agent.tasks.custom_tasks import validate_spec  # noqa: E402
 
 FOODS = ['sausage', 'bagel']   # one each per plate; the quiche is served whole
 SETTING = '9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66'
-PLATE_UV = {'sausage': [0.50, 0.28], 'bagel': [0.50, 0.72]}
+PLATE_UV = {'sausage': [0.50, 0.30], 'bagel': [0.50, 0.72]}
 # r3: ffitak's racks are only 41 x 22 cm; 16 cm potatoes (r1) and mini quiches (r2) slid off onto the cavity floor,
 # where native Inside is false. One 24 cm quiche, the size of the C4 pie that rests on the rack, at the pie's aim.
 OVEN_AIM = [8.43, -1.85]
@@ -105,7 +105,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'three_appliance_brunch',
-        'instance_id': 'three_appliance_brunch_seed0_r5',
+        'instance_id': 'three_appliance_brunch_seed0_r6',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -142,9 +142,10 @@ def build_recipe() -> dict:
         'construction_asset_scales': [{'object': 'unused_board', 'scale': [1.0, 1.0, 1.0],
                                        'reason': 'Native board size so it fits inside the closed pantry cabinet.'}],
         'asset_imports': [
-            # T1 plates (25.6 cm), two items each
-            imported('c1_plate1', 'setting_the_table', 'plate_243', 119.0, [1.5, 1.5, 1.0]),
-            imported('c1_plate2', 'setting_the_table', 'plate_244', 122.0, [1.5, 1.5, 1.0]),
+            # r6: 34 cm plates; on 25.6 cm plates the 23 cm sausage reached the rim, touched the island and was
+            # left behind when the plate was lifted (c1r5 habit, grasp payload left in place)
+            imported('c1_plate1', 'setting_the_table', 'plate_243', 119.0, [2.0, 2.0, 1.0]),
+            imported('c1_plate2', 'setting_the_table', 'plate_244', 122.0, [2.0, 2.0, 1.0]),
             imported('c1_fork1', 'setting_the_table', 'tablefork_247', 125.0, [0.85, 2.2, 1.5]),
             imported('c1_fork2', 'setting_the_table', 'tablefork_248', 128.0, [0.85, 2.2, 1.5]),
             imported('c1_cup1', 'setting_the_table', 'water_glass_bbpraa_0', 131.0, [1.25, 1.25, 1.15]),
@@ -166,6 +167,8 @@ def build_recipe() -> dict:
                      '57467aa695bccaa4ffce63eaac4b507b25c2837c2d537883e2415c783a4b66ab', 108.0 + 2 * i,
                      [0.8, 0.8, 0.8]) for i in (1, 2)],
         ],
+        # r6: the oven's Open state is its door only (its racks are openable joints too; see C2 r3)
+        'open_state_joints': {'oven': ['j_door']},
         'timed_processes': [
             {
                 'id': 'bake_quiche', 'appliance': 'oven', 'items': ['quiche'],
@@ -380,9 +383,9 @@ def build_reference_plan() -> dict:
                          'after': ['start_oven']},
         'close_oven': {'actions': [{'primitive': 'close', 'role': 'oven'}], 'after': ['serve_quiche']},
         'deliver_plates': {'actions': [{'primitive': 'grasp', 'role': 'plate1'},
-                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.17, 0.80]},
+                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.21, 0.81]},
                                        {'primitive': 'grasp', 'role': 'plate2'},
-                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.17, 0.20]}],
+                                       {'primitive': 'place_on_top', 'role': 'table', 'uv': [0.21, 0.19]}],
                            'after': ['plate_bagels', 'plate_sausages']},
     }
     orders = {
