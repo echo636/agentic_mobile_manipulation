@@ -54,15 +54,25 @@ def _rotate_about(v, axis, ang):
     return [v[i] * c + cross[i] * s + k[i] * dot * (1 - c) for i in range(3)]
 
 
-def closed_center(kind, center, pivot, axis, q, body_center):
-    """Door/drawer link centre with the joint at 0. Sign of q is not trusted: of the two candidates the one whose
-    horizontal distance to the body centre is smaller is returned (a closed door lies on the body)."""
+def _box_distance(p, lo, hi):
+    return math.sqrt(sum(max(lo[i] - p[i], 0.0, p[i] - hi[i]) ** 2 for i in range(3)))
+
+
+def closed_center(kind, center, pivot, axis, q, body_center, body_box=None):
+    """Door/drawer link centre with the joint at 0. Sign of q is not trusted: of the two candidates the one that lies
+    on / in the body box is returned (a closed door lies on the body). Without a box: the one horizontally nearer the
+    body centre. (00:35: horizontal distance alone tied for a drop-down oven door -- the wrong sense hangs the panel
+    below the hinge, straight under the right one.)"""
     if kind == 'revolute':
         rel = [center[i] - pivot[i] for i in range(3)]
         cands = [[pivot[i] + r for i, r in enumerate(_rotate_about(rel, axis, s * q))] for s in (-1, 1)]
     else:
         n = math.sqrt(sum(a * a for a in axis)) or 1.0
         cands = [[center[i] - s * q * axis[i] / n for i in range(3)] for s in (-1, 1)]
+    if body_box is not None:
+        lo, hi = body_box
+        return min(cands, key=lambda c: (round(_box_distance(c, lo, hi), 3),
+                                         math.hypot(c[0] - body_center[0], c[1] - body_center[1])))
     return min(cands, key=lambda c: math.hypot(c[0] - body_center[0], c[1] - body_center[1]))
 
 
@@ -191,6 +201,8 @@ def _container_of_point(backend, obj, point):
             lo, hi = _box(o)
         except Exception:
             continue
+        if min(hi[0] - lo[0], hi[1] - lo[1]) < THIN_BODY_M:      # a room door has no inside to hold the clicked thing
+            continue
         if all(lo[i] - .02 <= p[i] <= hi[i] + .02 for i in range(3)):
             vol = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2])
             if best is None or vol < best[0]:
@@ -241,7 +253,7 @@ def opening_info(backend, obj, point):
     q = float(j.get_state()[0][0])
     kind = 'revolute' if j.is_revolute else 'prismatic'
     center = [(lo[i] + hi[i]) / 2 for i in range(3)]
-    closed = closed_center(kind, center, pivot, axis_w, q, bc)
+    closed = closed_center(kind, center, pivot, axis_w, q, bc, body_box=(blo, bhi))
     normal, why = opening_normal(kind, axis_w, closed, pivot, bc, yaw, half, half_z=(bhi[2] - blo[2]) / 2)
     info = {'status': 'ok' if normal else 'no_side_opening', 'body': body.name, 'joint': j.joint_name, 'kind': kind,
             'clicked_link': bool(inside), 'joint_q': round(q, 3), 'axis_world': [round(v, 3) for v in axis_w],

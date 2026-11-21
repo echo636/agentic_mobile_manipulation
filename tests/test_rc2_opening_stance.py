@@ -104,3 +104,13 @@ def test_thin_room_door_falls_back():
     n2, _ = OS.opening_normal('revolute', [0, 0, -1], [4.41, 0.747, 1.044], [4.394, 0.555, 1.043],
                               [4.231, 0.798, 1.038], math.radians(-1.6), [0.199, 0.24])
     assert n2 is not None
+
+
+def test_open_drop_down_door_closed_centre_uses_body_box():
+    # oven open 90 deg: panel lies flat in front of the bottom hinge; the wrong sense would hang it below the hinge
+    pivot = [0.0, -0.36, 0.125]; center = [0.0, -0.36 - 0.22, 0.125]           # panel 0.44 tall lying outward (-y)
+    box = ([-0.35, -0.36, 0.0], [0.35, 0.36, 0.73])
+    c = OS.closed_center('revolute', center, pivot, [1, 0, 0], math.pi / 2, [0, 0, 0.364], body_box=box)
+    assert c == pytest.approx([0.0, -0.36, 0.345], abs=1e-6)                  # upright on the front face
+    n, why = OS.opening_normal('revolute', [1, 0, 0], c, pivot, [0, 0, 0.364], 0.0, [0.35, 0.36], half_z=0.365)
+    assert n == pytest.approx([0.0, -1.0], abs=1e-6) and why.startswith('drop_down_door')
