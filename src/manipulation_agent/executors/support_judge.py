@@ -11,14 +11,19 @@ Cases it changes (sec20/released_failures/JUDGE_MISMATCH_TABLE_20261122.md, tabl
  (3) place_on_top where the clicked target is a movable item lying on a support S (a half apple on a plate, a mug on
      a tray) and the item ends settled on S: success (coordinator choice (ii)). Receipt only; the task evaluator still
      judges the relations written in the task goal.
+(5) place_on_top onto a floor (coordinator 06:21): the support ray hits the target floor and the item touches only other
+     floor pieces and fixed structure (walls, windows, doors, ceilings) -- e.g. a rag across two floor objects at a room
+     boundary: the executor's contact-consistency check no longer fails it. Touching any other object still fails.
 Not changed: an item hanging over a carrier edge (no upward support under it), a tray leaning on a plate (not
-settled / no upward support), cloth (pending, cause of the contact check failure first).
+settled / no upward support).
 Every rescue is recorded privately (placement_diagnostics `support_judge`), never shown to the model.
 """
 import os
 
 FLAT_MAX_HEIGHT_M = 0.08
 RESCUE_REQUIRED = ('released', 'upward_support', 'bottom_near_support', 'not_supported_by_robot')
+STRUCTURE_CATEGORIES = frozenset({'floors', 'walls', 'ceilings', 'fixed_window', 'window', 'door', 'sliding_door',
+                                  'garage_door', 'roof'})
 
 
 def enabled():
@@ -37,10 +42,16 @@ def is_flat_target(fixed_base, height_m):
     return (not fixed_base) and height_m is not None and height_m <= FLAT_MAX_HEIGHT_M
 
 
-def judge_on_top(checks, official_on_top, support_owner, target_movable, target_support_name, extra_checks=None):
+def judge_on_top(checks, official_on_top, support_owner, target_movable, target_support_name, extra_checks=None, *,
+                 target_is_floor=False, contact_categories=None):
     """Pure decision for place_on_top after the normal checks failed. Returns (passed, reason)."""
     if not enabled():
         return False, None
+    failed = {k for k, v in checks.items() if not v}
+    if (target_is_floor and failed == {'selected_contact_consistent'} and contact_categories
+            and all(c in STRUCTURE_CATEGORIES for c in contact_categories)
+            and not (extra_checks and not all(extra_checks.values()))):
+        return True, 'floor_touching_only_structure'           # case (5)
     if not all(checks.get(k) for k in RESCUE_REQUIRED) or not checks.get('settled', False):
         return False, None
     if extra_checks and not all(extra_checks.values()):
@@ -85,3 +96,14 @@ def flat_target(target):
         return is_flat_target(bool(getattr(target, 'fixed_base', False)), float(hi[2] - lo[2]))
     except Exception:
         return False
+
+
+def contact_categories(backend, contact_paths):
+    """Categories of the objects owning the contact bodies (None for an unknown body)."""
+    out = []
+    reg = getattr(backend.env.scene, 'object_registry', None)
+    for path in contact_paths or ():
+        name = owner_name(path)
+        obj = reg('name', name) if (reg is not None and name) else None
+        out.append(getattr(obj, 'category', None))
+    return out

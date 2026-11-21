@@ -69,3 +69,19 @@ def test_flat_target_rule():
     assert SJ.is_flat_target(False, 0.03) is True                               # tray / plate
     assert SJ.is_flat_target(False, 0.30) is False                              # box, basket
     assert SJ.is_flat_target(True, 0.03) is False                               # fixed furniture
+
+
+def test_case5_floor_touching_only_structure(on):
+    checks = {**GOOD, 'selected_contact_consistent': False}
+    assert SJ.judge_on_top(checks, False, 'floors_a', False, None, target_is_floor=True,
+                           contact_categories=['floors', 'fixed_window']) == (True, 'floor_touching_only_structure')
+    # touching a movable object or another piece of furniture still fails
+    assert SJ.judge_on_top(checks, False, 'floors_a', False, None, target_is_floor=True,
+                           contact_categories=['floors', 'chair']) == (False, None)
+    assert SJ.judge_on_top(checks, False, 'floors_a', False, None, target_is_floor=True,
+                           contact_categories=['floors', None]) == (False, None)
+    # only for floor targets, and only when the contact check is the sole failure
+    assert SJ.judge_on_top(checks, False, 'x', False, None, target_is_floor=False,
+                           contact_categories=['floors']) == (False, None)
+    assert SJ.judge_on_top({**checks, 'support_ray_hits_selected_object': False}, False, 'floors_b', False, None,
+                           target_is_floor=True, contact_categories=['floors']) == (False, None)

@@ -751,10 +751,14 @@ class CheckedPlacement:
             if not supported:
                 # rc2 MAS_SUPPORT_JUDGE (default off): settled on an upward surface of the target (or of the support
                 # under a clicked movable item) counts; the private record keeps the reason.
+                target_is_floor = getattr(target, 'category', None) == 'floors'
                 rescued, why = SJ.judge_on_top(support['checks'], official, SJ.owner_name(support.get('support_hit_body')),
                                                target_movable, target_support,
                                                {k: support['checks'][k] for k in ('upright_kept', 'carried_contents_kept')
-                                                if k in support['checks']})
+                                                if k in support['checks']},
+                                               target_is_floor=target_is_floor,
+                                               contact_categories=SJ.contact_categories(self, support.get('contact_bodies'))
+                                               if target_is_floor else None)
                 if rescued:
                     supported = True
                     support['support_judge'] = why
