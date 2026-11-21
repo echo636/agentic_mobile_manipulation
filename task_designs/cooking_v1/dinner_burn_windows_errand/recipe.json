@@ -1613,7 +1613,7 @@
      "start_steaks"
     ]
    },
-   "tray_hot_food": {
+   "hot_food_by_hand": {
     "actions": [
      {
       "primitive": "wait_for",
@@ -1637,9 +1637,9 @@
      },
      {
       "primitive": "place_on_top",
-      "role": "tray",
+      "role": "table",
       "uv": [
-       0.25,
+       0.92,
        0.25
       ]
      },
@@ -1650,9 +1650,9 @@
      },
      {
       "primitive": "place_on_top",
-      "role": "tray",
+      "role": "table",
       "uv": [
-       0.25,
+       0.92,
        0.75
       ]
      },
@@ -1667,22 +1667,10 @@
      },
      {
       "primitive": "place_on_top",
-      "role": "tray",
-      "uv": [
-       0.72,
-       0.5
-      ]
-     },
-     {
-      "primitive": "grasp",
-      "role": "tray"
-     },
-     {
-      "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.3,
-       0.3
+       0.55,
+       0.1
       ]
      }
     ],
@@ -1701,8 +1689,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.22,
-       0.8
+       0.14,
+       0.2
       ]
      },
      {
@@ -1713,7 +1701,7 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.55,
+       0.14,
        0.8
       ]
      }
@@ -1730,7 +1718,7 @@
      }
     ],
     "after": [
-     "tray_hot_food"
+     "hot_food_by_hand"
     ]
    },
    "close_oven": {
@@ -1741,7 +1729,7 @@
      }
     ],
     "after": [
-     "tray_hot_food"
+     "hot_food_by_hand"
     ]
    },
    "h_soup_wait_serve": {
@@ -1770,7 +1758,7 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.25,
+       0.92,
        0.25
       ]
      },
@@ -1783,8 +1771,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.25,
-       0.5
+       0.92,
+       0.75
       ]
      },
      {
@@ -1821,8 +1809,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.5,
-       0.3
+       0.55,
+       0.1
       ]
      },
      {
@@ -1844,8 +1832,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.8,
-       0.25
+       0.5,
+       0.4
       ]
      },
      {
@@ -1856,8 +1844,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.8,
-       0.5
+       0.5,
+       0.56
       ]
      },
      {
@@ -1868,8 +1856,8 @@
       "primitive": "place_on_top",
       "role": "table",
       "uv": [
-       0.8,
-       0.75
+       0.5,
+       0.72
       ]
      }
     ],
@@ -1885,7 +1873,7 @@
     "start_steaks",
     "stove_watch",
     "plate_steaks",
-    "tray_hot_food",
+    "hot_food_by_hand",
     "plates_to_table",
     "close_up",
     "close_oven"
