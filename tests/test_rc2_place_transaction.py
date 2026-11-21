@@ -158,3 +158,24 @@ def test_rolled_back_after_local_wrapper_still_not_placed():
     assert receipt['code'] == 'not_placed'
     assert receipt['message'] == 'The item was not placed. The item is still in your hand. Inspect the returned RGB.'
     assert receipt['hand'] == 'holding_item'
+
+
+def _through_local_wrapper(exc):
+    """What local_manipulation.run does to every failure after env steps advanced."""
+    exc.changed |= True
+    return exc
+
+
+def test_judge_only_native_false_reaches_model_as_result_unconfirmed():
+    exc = _through_local_wrapper(SkillError('postcondition_error', 'x', changed=True,
+                                            stage='released_placement_unconfirmed'))
+    receipt = factual_execution_error(exc, 'place_on_top', 'empty')
+    assert receipt['code'] == 'result_unconfirmed'
+    assert receipt['message'] == ('The object was released; your hand is empty. Where it ended up could not be '
+                                  'confirmed. Inspect the returned RGB before choosing the next action.')
+
+
+def test_refusal_before_release_after_local_approach_is_unchanged():
+    exc = _through_local_wrapper(SkillError('placement_surface_unavailable', 'x', changed=False))
+    receipt = factual_execution_error(exc, 'place_on_top', 'holding_item')
+    assert receipt['code'] == 'placement_surface_unavailable'
