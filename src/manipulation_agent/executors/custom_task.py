@@ -897,6 +897,25 @@ class CustomTaskBackend(RGBBackend):
                 return child
         return candidates[0]
 
+    def _released_inside_extra(self, held, target):
+        # Benchmark side (2026-11-21): for an appliance with a declared Inside timed process, an item whose
+        # centre rests within the appliance body (base link, door excluded) is inside its cavity. Native Inside
+        # misses the cavity floor below ffitak's 41 x 22 cm racks, where dishes slide (C1 r1-r3, C2 r2 on 4090).
+        roles = self.custom_spec.get('roles', {})
+        name = getattr(target, 'name', None)
+        appliances = {roles.get(r['appliance']) for r in self.custom_spec.get('timed_processes') or []
+                      if r.get('containment', 'Inside') == 'Inside'}
+        if name not in appliances:
+            return False
+        try:
+            body = target.links.get('base_link') if hasattr(target, 'links') else None
+            lo, hi = (body.aabb if body is not None else target.aabb)
+            ilo, ihi = held.aabb
+            c = [float(ilo[i] + ihi[i]) * 0.5 for i in range(3)]
+            return all(float(lo[i]) <= c[i] <= float(hi[i]) for i in range(3))
+        except Exception:
+            return False
+
     def _checked_place_inside(self, target, max_steps, point=None):
         # Benchmark side (timed_processes v5): a declared appliance capacity rejects before any motion.
         if self.custom_spec.get('appliance_capacities'):

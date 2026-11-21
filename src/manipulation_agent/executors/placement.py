@@ -972,7 +972,8 @@ class CheckedPlacement:
             resting = RestingMotionWindow(self.og.sim.get_sim_step_dt()) if ST.enabled() else None
             self._settle_surface_contacts(held, target, payload_objs, max_steps, resting=resting,
                                           extra_until_rest=ST.extra_settle_steps())
-            inside = bool(held.states[Inside].get_value(target))
+            official = bool(held.states[Inside].get_value(target))
+            inside = official or self._released_inside_extra(held, target)
             extra = ST.after_settle(self, held, st_before)
             upright_failed = (ST.upright_failures(held, st_before)
                               if extra.get('upright_kept') is False else [])
@@ -989,7 +990,7 @@ class CheckedPlacement:
                                                   flat, extra)
                 inside = inside or ok_flat
             self._placement_record({'status': 'inside_result', 'held': held.name, 'target': target.name,
-                'official_inside': bool(held.states[Inside].get_value(target)),
+                'official_inside': official, 'accepted_inside': inside,
                 'position': held.get_position_orientation()[0].tolist(),
                 **({'transaction_checks': extra} if extra else {}),
                 **({'upright_failures': upright_failed} if upright_failed else {}),
@@ -1039,6 +1040,20 @@ class CheckedPlacement:
                 'postcondition': 'Inside_after_free_settling',
                 'failure_policy': 'retain_physical_result',
                 'sampling_physics_steps': self.sampling_physics_steps - before}
+
+    def _released_inside_extra(self, held, target):
+        """Extra acceptance after a release besides native Inside (none by default)."""
+        return False
+
+    def released_inside(self, held, target):
+        """Native Inside, or a task-declared extra acceptance (used by references too)."""
+        from omnigibson.object_states import Inside
+        try:
+            if Inside in held.states and held.states[Inside].get_value(target):
+                return True
+        except Exception:
+            pass
+        return bool(self._released_inside_extra(held, target))
 
     def _inside_resting_check(self,held,target,contents,*,residents=()):
         """Observe native free settling without restoring any body pose."""

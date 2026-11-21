@@ -563,3 +563,31 @@ class StagesAndCapacityTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CavityInsideAcceptanceTests(unittest.TestCase):
+    """2026-11-21: an item resting on the cavity floor of a declared Inside appliance counts as inside."""
+
+    def _backend(self):
+        from manipulation_agent.executors.custom_task import CustomTaskBackend
+        b = CustomTaskBackend.__new__(CustomTaskBackend)
+        b.custom_spec = _thaw_bake_spec()
+        return b
+
+    class _Obj:
+        def __init__(self, name, lo, hi, body=None):
+            self.name, self.aabb = name, (lo, hi)
+            if body is not None:
+                self.links = {'base_link': type('L', (), {'aabb': body})()}
+
+    def test_floor_of_cavity_counts_door_does_not(self):
+        b = self._backend()
+        # whole oven aabb includes the open door reaching y=1.0; the body is y in [0, 0.5]
+        oven = self._Obj('oven_0', (0, 0, 0), (0.6, 1.0, 0.6), body=((0, 0, 0), (0.6, 0.5, 0.6)))
+        on_floor = self._Obj('dish_0', (0.2, 0.15, 0.05), (0.4, 0.35, 0.10))
+        on_door = self._Obj('dish_0', (0.2, 0.7, 0.05), (0.4, 0.9, 0.10))
+        self.assertTrue(b._released_inside_extra(on_floor, oven))
+        self.assertFalse(b._released_inside_extra(on_door, oven))
+        # an appliance without a declared Inside process gets no extra acceptance
+        cup = self._Obj('cup_1', (0, 0, 0), (0.6, 0.5, 0.6), body=((0, 0, 0), (0.6, 0.5, 0.6)))
+        self.assertFalse(b._released_inside_extra(on_floor, cup))

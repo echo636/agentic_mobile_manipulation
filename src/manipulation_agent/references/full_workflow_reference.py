@@ -330,7 +330,10 @@ class FullWorkflowReference:
         state=object_states.Inside if primitive=='place_inside' else object_states.OnTop
         placed=False
         if item is not None and target is not None and state in item.states:
-            try:placed=bool(item.states[state].get_value(target))
+            try:
+                placed=(bool(self.backend.released_inside(item,target))
+                        if primitive=='place_inside' and hasattr(self.backend,'released_inside')
+                        else bool(item.states[state].get_value(target)))
             except Exception:placed=False
         self.ref.log('workflow_released_placement_check',primitive=primitive,role=role,
                      item=held_name,placed=placed,code=exc.code)
