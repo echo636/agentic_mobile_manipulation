@@ -37,7 +37,7 @@ PLATE_UV = {'sausage': [0.50, 0.30], 'bagel': [0.50, 0.72]}
 OVEN_AIM = [8.43, -1.85]
 # r4: the pan's bowl is its north end (y ~ -0.39); without an aim the reference clicked the south rim and the
 # sausage landed on the bare burner beside the pan (c1r3 optimal). Reference tooling only.
-PAN_AIM = {'sausage1': [4.17, -0.58], 'sausage2': [4.17, -0.42]}
+PAN_AIM = {'sausage1': [4.17, -0.64], 'sausage2': [4.17, -0.50]}  # r8c: -0.42 was pushed onto the handle end (c1r8b habit)
 
 
 def native(name, category, model, sha, x, scale=None, fixed=False):
@@ -105,7 +105,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'three_appliance_brunch',
-        'instance_id': 'three_appliance_brunch_seed0_r8b',
+        'instance_id': 'three_appliance_brunch_seed0_r8c',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
