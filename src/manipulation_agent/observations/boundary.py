@@ -155,6 +155,12 @@ def factual_execution_error(exc: SkillError, primitive: str | None, hand: str | 
                 'message': 'The door or lid motion was carried out. Whether it reached the intended state and '
                            'whether existing contents stayed in place could not be confirmed. Inspect the returned '
                            'RGB; repeating the door or lid operation alone does not recover displaced contents.'}
+    if stage == 'released_rolled_back' and hand == 'holding_item':
+        # rc2 MAS_PLACE_TRANSACTIONAL: the scene was restored with the item in the hand. The local-manipulation
+        # wrapper marks every failure after env steps as changed=True, so map by stage, not by the changed flag.
+        return {'code': 'not_placed', 'message': ' '.join((FACTUAL_MESSAGES['not_placed'], 'The item is still in your hand.',
+                                                           'Inspect the returned RGB.')),
+                'world_may_have_changed': bool(exc.changed), 'hand': hand}
     factual = _factual_code(code, primitive, exc.changed, hand)
     if factual is None:
         return public_execution_error(exc)

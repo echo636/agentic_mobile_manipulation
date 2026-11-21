@@ -147,3 +147,14 @@ def test_refusal_before_release_is_not_rolled_back(monkeypatch):
     with pytest.raises(SkillError) as info:
         place(b, 'place_on_top', 'table', 10, None)
     assert info.value is err and b.restored == 0
+
+
+def test_rolled_back_after_local_wrapper_still_not_placed():
+    """The local-manipulation wrapper sets changed=True after any env step (found by the 2026-11-22 sim probe:
+    the model saw result_unconfirmed although the item was back in the hand)."""
+    exc = SkillError('pre_condition_error', 'x', changed=False, stage='released_rolled_back')
+    exc.changed |= True
+    receipt = factual_execution_error(exc, 'place_on_top', 'holding_item')
+    assert receipt['code'] == 'not_placed'
+    assert receipt['message'] == 'The item was not placed. The item is still in your hand. Inspect the returned RGB.'
+    assert receipt['hand'] == 'holding_item'
