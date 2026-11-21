@@ -97,7 +97,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'dinner_burn_windows_errand',
-        'instance_id': 'dinner_burn_windows_errand_seed0_r2',
+        'instance_id': 'dinner_burn_windows_errand_seed0_r3',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
