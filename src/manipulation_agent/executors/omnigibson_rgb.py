@@ -618,6 +618,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         images=[];audit=[]
         capture = {'capture_id':f'capture-{self.capture_index:05d}', 'captured_at':now(),
                    'sim_step':start_step,'sim_time_seconds':start_step*self.og.sim.get_sim_step_dt()}
+        try:   # rc2 record layer: held object (and carried items) prim paths, once per capture
+            _held=self._get_held()
+            _held_paths=[getattr(o,'prim_path',None) for o in ([_held,*[c for c,_ in self._carry_contents]] if _held is not None else [])]
+        except Exception:
+            _held_paths=[]
         for view,sensor in self.rig.items():
             ref=f'rgb-{self.capture_index:05d}-{view}'
             pixels=rendered[view]
@@ -635,8 +640,15 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 frame['instance_labels']=dict(info['_renderer_instance_labels'])
                 arrays['instance_ids']=frame['instance_ids'].numpy()
             np.savez_compressed(private_folder/f'{ref}.npz',**arrays)
+            # rc2 record layer (KNOWN_ISSUES #23): private occupancy of this view; never sent to the model
+            from .frame_occupancy import occupancy as _occupancy
+            try:
+                _occ=_occupancy(arrays['depth_linear'],arrays.get('instance_ids'),frame.get('instance_labels'),
+                                getattr(self.robot,'prim_path',None),_held_paths)
+            except Exception as _exc:
+                _occ={'error':type(_exc).__name__}
             (private_folder/f'{ref}.json').write_text(json.dumps({'audience':'executor_private_only',
-                'image_ref':ref,'rgb_sha256':digest,
+                'image_ref':ref,'rgb_sha256':digest,'occupancy':_occ,
                 'position':position.tolist(),'orientation':orientation.tolist(),'intrinsic':frame['intrinsic'].tolist(),
                 **({'instance_labels':frame['instance_labels']} if 'instance_labels' in frame else {})}))
             self.current_frames[ref]=frame
@@ -651,7 +663,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         after_joints = self.robot.get_joint_positions()
         unchanged = self.steps == start_step and self.torch.equal(before_pos,after_pos) and self.torch.equal(before_quat,after_quat) and self.torch.equal(before_joints,after_joints)
         with (self.output/'observation_capture_audit.jsonl').open('a') as stream:
+            from .frame_occupancy import posture as _posture   # rc2 record layer (KNOWN_ISSUES #23)
             stream.write(json.dumps({'capture':capture,'audience':'executor_private','no_robot_motion':bool(unchanged),
+                'robot_posture':_posture(self.robot),
                 'start_step':start_step,'end_step':self.steps,'before_position':before_pos.tolist(),
                 'after_position':after_pos.tolist(),'before_orientation':before_quat.tolist(),
                 'after_orientation':after_quat.tolist(),'rig_sensor_names':[s.name for s in self.rig.values()],
