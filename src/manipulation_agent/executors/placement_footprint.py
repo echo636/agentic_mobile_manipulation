@@ -20,8 +20,9 @@ the rc1 A5 limit, DIRECTIONS directions, the centre support re-measured at every
 placement is refused BEFORE the release with the existing placement_surface_unavailable text and the item stays in
 the hand. Applies to every place_on_top except cloth; place_inside is unchanged (curved container bottoms; an item
 that tips inside a container is still Inside). Open-cavity rim candidates (surface_kind open_fillable_rim: the tray's
-inside, plates) are checked and RECORDED only, never moved or refused (coordinator 12:00 b: plates are concave; decide
-from the record-mode table). When the clicked target is a movable item lying on a support (coordinator 12:00 c, as
+inside, plates) are checked like any other candidate (coordinator 13:22, option (i); 12:00 b had made them record-only).
+Evidence FP_RIM_RECORD_L4 at 5 deg: plate centre and tray centre unchanged, plate near edge moved inward 4-5 cm, never
+refused (one plate model, plate1; bowls untested -- the rc2 reference reruns in record mode cover the rest). When the clicked target is a movable item lying on a support (coordinator 12:00 c, as
 support_judge case 3: a cup clicked on a fork lying in the tray), hits on that support count as the target.
 Modes: off (default) | record (compute and write the private record only; behaviour and model-visible output are
 byte-identical to off) | on.
@@ -274,7 +275,7 @@ def apply(backend, held, target, point, candidate, payload, score):
                    shift_xy_m=found and found['footprint_shift_m'], refused=found is None)
         chosen = found
     backend._placement_record(row)
-    if m == 'record' or rim:
+    if m == 'record':
         return candidate
     if chosen is None:
         raise SkillError('placement_surface_unavailable', REFUSAL_TEXT)

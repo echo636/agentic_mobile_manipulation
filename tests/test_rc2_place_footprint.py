@@ -186,15 +186,35 @@ def test_default_threshold_is_5_deg(monkeypatch):
     assert FP.normal_max_deg() == 5.
 
 
-def test_rim_candidates_are_recorded_only(monkeypatch):
-    """(b) open-cavity rim candidates (tray inside, plates): checked and recorded, never moved or refused."""
-    monkeypatch.setenv('MAS_PLACE_FOOTPRINT', 'on'); _world(monkeypatch, edge_x=-1.)    # nothing fits: on would refuse
+def test_rim_candidates_are_checked_like_any_other(monkeypatch):
+    """13:22 option (i): open-cavity rim candidates (tray inside, plates) are moved / refused like surface candidates."""
+    monkeypatch.setenv('MAS_PLACE_FOOTPRINT', 'on')
+    # plate centre: fits -> unchanged
+    _world(monkeypatch, edge_x=1.)
     c = _candidate(); c['surface_kind'] = 'open_fillable_rim'
     b = _Backend()
     got = FP.apply(b, _Obj('hotdog'), _Obj('plate'), torch.tensor([0., 0., 1.]), c, [], lambda s: 0)
-    assert got is c
-    r = b.records[-1]
-    assert r['candidate_kind'] == 'rim' and r['first_ok'] is False and r['refused'] is True   # what on WOULD do
+    assert got is c and b.records[-1]['candidate_kind'] == 'rim' and b.records[-1]['first_ok'] is True
+    # plate / tray inside near the edge: moved inward, not refused
+    _world(monkeypatch, edge_x=.03)
+    c = _candidate(); c['surface_kind'] = 'open_fillable_rim'
+    b = _Backend()
+    got = FP.apply(b, _Obj('hotdog'), _Obj('plate'), torch.tensor([0., 0., 1.]), c, [], lambda s: 0)
+    assert got is not c and math.hypot(*got['footprint_shift_m']) == pytest.approx(.01, abs=1e-3)
+    assert b.records[-1]['refused'] is False
+    # nothing fits: refused before the release, like a surface candidate
+    _world(monkeypatch, edge_x=-1.)
+    c = _candidate(); c['surface_kind'] = 'open_fillable_rim'
+    with pytest.raises(SkillError):
+        FP.apply(_Backend(), _Obj('tea'), _Obj('tray'), torch.tensor([0., 0., 1.]), c, [], lambda s: 0)
+
+
+def test_rim_candidates_unchanged_in_record_mode(monkeypatch):
+    monkeypatch.setenv('MAS_PLACE_FOOTPRINT', 'record'); _world(monkeypatch, edge_x=-1.)
+    c = _candidate(); c['surface_kind'] = 'open_fillable_rim'
+    b = _Backend()
+    assert FP.apply(b, _Obj('tea'), _Obj('tray'), torch.tensor([0., 0., 1.]), c, [], lambda s: 0) is c
+    assert b.records[-1]['refused'] is True
 
 
 def test_small_clicked_item_threshold():
