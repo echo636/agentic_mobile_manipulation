@@ -149,3 +149,354 @@ def test_four_switch_combinations_fallen_item(monkeypatch, stable, tx, expected)
     except SkillError as exc:
         got = factual_execution_error(exc, 'place_on_top', 'holding_item' if tx == 'on' else 'empty')['code']
     assert got == expected
+
+
+def _patch_og_states(monkeypatch):
+    import sys
+    from types import ModuleType
+    og = ModuleType('omnigibson')
+    og_states = ModuleType('omnigibson.object_states')
+    og_states.OnTop = 'OnTop'
+    og_states.Inside = 'Inside'
+    monkeypatch.setitem(sys.modules, 'omnigibson', og)
+    monkeypatch.setitem(sys.modules, 'omnigibson.object_states', og_states)
+
+
+class _PoseObj:
+    def __init__(self, name, pos, ori, *, on_target=True, inside_target=False, aabb=None,
+                 fixed_base=False, has_keep_still=True):
+        self.name = name
+        self.pos = pos
+        self.ori = ori
+        self.fixed_base = fixed_base
+        self.aabb = aabb or ([0.0, 0.0, 0.8], [0.1, 0.1, 1.0])
+        self.links = {}
+        self.keep_still_calls = 0
+        self.set_pose_calls = 0
+        self.states = {
+            'OnTop': type('S', (), {'get_value': staticmethod(lambda t: on_target)})(),
+            'Inside': type('S', (), {'get_value': staticmethod(lambda t: inside_target)})(),
+        }
+        if has_keep_still:
+            self.keep_still = self._keep_still
+
+    def _keep_still(self):
+        self.keep_still_calls += 1
+
+    def get_position_orientation(self):
+        return (self.pos, self.ori)
+
+    def set_position_orientation(self, pos, ori):
+        self.set_pose_calls += 1
+        self.pos = pos
+        self.ori = ori
+
+    def wake(self):
+        pass
+
+
+def test_before_release_clones_neighbour_poses_and_restore_recovers_and_keeps_still(monkeypatch):
+    import torch
+    _patch_og_states(monkeypatch)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
+
+    t_pos = torch.tensor([1.0, 2.0, 0.85])
+    t_ori = torch.tensor([0.0, 0.0, 0.0, 1.0])
+    l_pos = [1.1, 2.0, 0.85]
+    l_ori = [0.0, 0.0, 0.0, 1.0]
+    u_pos = (1.2, 2.0, 0.85)
+    u_ori = (0.0, 0.0, 0.0, 1.0)
+
+    target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
+    held = _PoseObj('fork', [0.0, 0.0, 1.0], [0., 0., 0., 1.], aabb=([0., 0., 1.], [0.1, 0.1, 1.1]))
+    robot = _PoseObj('robot', [0.0, 0.0, 0.0], [0., 0., 0., 1.])
+    n_tensor = _PoseObj('tea_bottle', t_pos, t_ori, aabb=([0.98, 1.98, 0.82], [1.04, 2.04, 1.0]))
+    n_list = _PoseObj('mug', l_pos, l_ori, aabb=([1.08, 1.98, 0.82], [1.14, 2.04, 0.95]))
+    n_tuple = _PoseObj('bulb', u_pos, u_ori, aabb=([1.18, 1.98, 0.82], [1.24, 2.04, 0.9]), has_keep_still=False)
+
+    backend = type('B', (), {
+        'robot': robot,
+        'env': type('E', (), {'scene': type('S', (), {'objects': [target, held, robot, n_tensor, n_list, n_tuple]})()})(),
+        '_pregrasp_orientations': {},
+    })()
+
+    st_before = ST.before_release(backend, held, target, [])
+    assert st_before is not None
+    assert [o.name for o in st_before['neighbours']] == ['tea_bottle', 'mug', 'bulb']
+    assert len(st_before['neighbour_poses']) == 3
+
+    # Mutate original pose buffers in-place and tip all three neighbours 90 deg
+    s = 2 ** -.5
+    t_pos[0] = 9.9
+    t_ori[:] = torch.tensor([s, 0.0, 0.0, s])
+    l_pos[0] = 8.8
+    l_ori[:] = [s, 0.0, 0.0, s]
+    n_tuple.pos = (7.7, 2.0, 0.85)
+    n_tuple.ori = (s, 0.0, 0.0, s)
+
+    assert ST.tilt_deg(n_tensor.get_position_orientation()[1]) == pytest.approx(90., abs=0.1)
+    assert ST.tilt_deg(n_list.get_position_orientation()[1]) == pytest.approx(90., abs=0.1)
+    assert ST.tilt_deg(n_tuple.get_position_orientation()[1]) == pytest.approx(90., abs=0.1)
+
+    ST.restore_neighbours(st_before)
+    assert n_tensor.pos.tolist() == pytest.approx([1.0, 2.0, 0.85])
+    assert n_tensor.ori.tolist() == pytest.approx([0.0, 0.0, 0.0, 1.0])
+    assert n_tensor.keep_still_calls == 1
+    assert n_list.pos == pytest.approx([1.1, 2.0, 0.85])
+    assert n_list.ori == pytest.approx([0.0, 0.0, 0.0, 1.0])
+    assert n_list.keep_still_calls == 1
+    assert n_tuple.pos == (1.2, 2.0, 0.85)
+    assert n_tuple.ori == (0.0, 0.0, 0.0, 1.0)
+    assert n_tuple.keep_still_calls == 0
+
+    # Mutating restored buffers in-place must not corrupt the snapshot stored in st_before
+    n_tensor.pos[1] = -5.0
+    n_list.pos[1] = -5.0
+    ST.restore_neighbours(st_before)
+    assert n_tensor.pos.tolist() == pytest.approx([1.0, 2.0, 0.85])
+    assert n_list.pos == pytest.approx([1.1, 2.0, 0.85])
+    assert n_tensor.keep_still_calls == 2 and n_list.keep_still_calls == 2
+
+
+def test_off_before_release_none_and_restore_neighbours_noop(monkeypatch):
+    monkeypatch.delenv('MAS_PLACE_STABLE_CHECK', raising=False)
+    assert ST.before_release(object(), object(), object(), []) is None
+    assert ST.restore_neighbours(None) is None
+    assert ST.upright_failures(object(), None) == []
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'off')
+    assert ST.before_release(object(), object(), object(), []) is None
+    assert ST.restore_neighbours(None) is None
+
+
+def test_upright_failures_reports_tilted_held_and_neighbours():
+    import math
+    q_up = [0.0, 0.0, 0.0, 1.0]
+    q_90 = [math.sin(math.radians(45.)), 0.0, 0.0, math.cos(math.radians(45.))]
+    q_60 = [math.sin(math.radians(30.)), 0.0, 0.0, math.cos(math.radians(30.))]
+    q_10 = [math.sin(math.radians(5.)), 0.0, 0.0, math.cos(math.radians(5.))]
+
+    held = _PoseObj('cup', [0, 0, 0], q_90)
+    n_bad = _PoseObj('tea_bottle', [0, 0, 0], q_60)
+    n_ok = _PoseObj('mug', [0, 0, 0], q_10)
+
+    before_standing = {'held_standing': True, 'neighbours': [n_bad, n_ok], 'contents': []}
+    fails = ST.upright_failures(held, before_standing)
+    assert len(fails) == 2
+    assert fails[0]['name'] == 'cup' and fails[0]['role'] == 'held' and fails[0]['tilt_deg'] == pytest.approx(90., abs=0.1)
+    assert fails[1]['name'] == 'tea_bottle' and fails[1]['role'] == 'neighbour' and fails[1]['tilt_deg'] == pytest.approx(60., abs=0.1)
+
+    # Lying held item is excluded even when tilted 90 deg
+    before_lying = {'held_standing': False, 'neighbours': [n_bad, n_ok], 'contents': []}
+    fails_lying = ST.upright_failures(held, before_lying)
+    assert len(fails_lying) == 1 and fails_lying[0]['name'] == 'tea_bottle'
+
+    # All upright -> empty
+    n_bad.ori = q_up
+    assert ST.upright_failures(held, before_lying) == []
+
+
+class _Vec:
+    def __init__(self, vals):
+        self._v = list(vals)
+
+    def __iter__(self):
+        return iter(self._v)
+
+    def __getitem__(self, idx):
+        return self._v[idx]
+
+    def tolist(self):
+        return list(self._v)
+
+    def clone(self):
+        return _Vec(self._v)
+
+
+class _A5PlaceBackend:
+    """Minimal CPU harness for CheckedPlacement._try_place_on_top / _checked_place_inside A5 neighbour recovery."""
+
+    def __init__(self, held, target, neighbour, candidates, *, bad_xs, primitive='place_on_top'):
+        self.held = held
+        self.target = target
+        self.neighbour = neighbour
+        self.robot = _PoseObj('robot', [0., 0., 0.], [0., 0., 0., 1.])
+        self.env = type('E', (), {'scene': type('S', (), {'objects': [target, held, self.robot, neighbour]})()})()
+        self.og = type('OG', (), {'sim': _Sim()})()
+        self.primitives = type('P', (), {'_empty_action': staticmethod(lambda: None)})()
+        self._carry_contents = []
+        self._pregrasp_orientations = {}
+        self.sampling_physics_steps = 0
+        self.frames_revision = 0
+        self.records = []
+        self.steps = 0
+        self._candidates = list(candidates)
+        self._bad_xs = set(bad_xs)
+        self._primitive = primitive
+        self.selector_neighbour_tilts = []
+        self.settle_keep_still_counts = []
+
+    def _get_held(self):
+        return self.held
+
+    def _carry_detach(self):
+        self.held = None
+
+    def _relocate_contents(self, held, contents):
+        pass
+
+    def _placement_record(self, row):
+        self.records.append(row)
+
+    def _step(self, action):
+        self.steps += 1
+
+    def _container_payload(self, target):
+        return []
+
+    def _select_surface_candidate(self, held, target, point, yaw_degrees, payload, *, roll_degrees=None,
+                                  exclude_positions=()):
+        self.selector_neighbour_tilts.append(ST.tilt_deg(self.neighbour.get_position_orientation()[1]))
+        tried_x = {round(float(p.tolist()[0] if hasattr(p, 'tolist') else p[0]), 4) for p in exclude_positions}
+        for c in self._candidates:
+            if round(float(c['pose'][0].tolist()[0]), 4) not in tried_x:
+                return c
+        raise SkillError('placement_surface_unavailable', 'none left')
+
+    def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None, extra_until_rest=0):
+        self.settle_keep_still_counts.append(self.neighbour.keep_still_calls)
+        x = round(float(held.get_position_orientation()[0].tolist()[0]), 4)
+        if x in self._bad_xs:
+            # Simulate first/bad candidate knocking the standing neighbour over to 90 deg
+            s = 2 ** -.5
+            self.neighbour.pos = [1.2, 2.1, 0.78]
+            self.neighbour.ori = [s, 0.0, 0.0, s]
+        if resting is not None:
+            for _ in range(10):
+                resting.add([x, 2.0, 0.85], [0., 0., 0., 1.])
+
+    def _placement_contacts(self, held, payload=()):
+        return []
+
+    def _selected_surface_support(self, held, target, vpoint, touching, payload=(), *, resting=None):
+        return True, {'checks': {'released': True, 'support_ray_hits_selected_object': True,
+                                 'upward_support': True, 'bottom_near_support': True,
+                                 'selected_shelf_height': True, 'selected_surface_neighborhood': True,
+                                 'selected_contact_consistent': True, 'settled': True,
+                                 'not_supported_by_robot': True},
+                      'contact_bodies': []}
+
+
+def test_try_place_on_top_a5_restores_neighbours_and_recovers(monkeypatch):
+    from manipulation_agent.executors.placement import CheckedPlacement
+    _patch_og_states(monkeypatch)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
+    monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'on')
+    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+
+    target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
+    held = _PoseObj('fork', _Vec([0.0, 0.0, 1.0]), _Vec([0., 0., 0., 1.]), on_target=True)
+    tea = _PoseObj('tea_bottle', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=([0.98, 1.98, 0.82], [1.04, 2.04, 1.0]))
+    c0 = {'index': 0, 'pose': (_Vec([1.01, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
+    c1 = {'index': 1, 'pose': (_Vec([1.15, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
+
+    b = _A5PlaceBackend(held, target, tea, [c0, c1], bad_xs={1.01})
+    out = CheckedPlacement._try_place_on_top(b, held, target, 50, _Vec([1.0, 2.0, 0.8]))
+    assert out == 'selected_surface_collision_support_after_free_settling'
+
+    # Selector was called twice (initial + A5 next_1), and saw tea upright both times (restored before overlap check)
+    assert len(b.selector_neighbour_tilts) == 2
+    assert all(t < 1.0 for t in b.selector_neighbour_tilts)
+
+    # First normal release did not call restore_neighbours; A5 retries did
+    assert b.settle_keep_still_counts[0] == 0 and b.settle_keep_still_counts[1] >= 1
+
+    # Tea bottle ended upright at its pre-release pose and had keep_still invoked during A5 recovery
+    assert tea.pos == pytest.approx([1.0, 2.0, 0.85])
+    assert ST.tilt_deg(tea.ori) < 1.0
+    assert tea.keep_still_calls >= 2
+
+    # Private diagnostics: failed attempts carry upright_failures; final passing c1 does not
+    post = [r for r in b.records if r['status'] == 'postcondition_check']
+    assert len(post) == 3                                       # first c0 + same_pose c0 + next_1 c1
+    assert post[0]['supported'] is False
+    assert post[0]['upright_failures'] == [{'name': 'tea_bottle', 'role': 'neighbour', 'tilt_deg': 90.0}]
+    assert post[1]['supported'] is False
+    assert post[1]['upright_failures'] == [{'name': 'tea_bottle', 'role': 'neighbour', 'tilt_deg': 90.0}]
+    assert post[2]['supported'] is True
+    assert 'upright_failures' not in post[2]
+
+    fb = [r for r in b.records if r['status'] == 'settle_fallback']
+    assert len(fb) == 1 and fb[0]['result'] == 'passed'
+    assert [a['candidate'] for a in fb[0]['attempts']] == ['same_pose', 'next_1']
+
+
+def test_try_place_on_top_all_a5_fail_retains_last_physical_state_and_no_receipt_leak(monkeypatch):
+    from manipulation_agent.executors.placement import CheckedPlacement
+    _patch_og_states(monkeypatch)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
+    monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'on')
+    monkeypatch.delenv('MAS_PLACE_TRANSACTIONAL', raising=False)
+    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+
+    target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
+    held = _PoseObj('fork', _Vec([0.0, 0.0, 1.0]), _Vec([0., 0., 0., 1.]), on_target=True)
+    tea = _PoseObj('tea_bottle', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=([0.98, 1.98, 0.82], [1.04, 2.04, 1.0]))
+    c0 = {'index': 0, 'pose': (_Vec([1.01, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
+    c1 = {'index': 1, 'pose': (_Vec([1.05, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
+    c2 = {'index': 2, 'pose': (_Vec([1.09, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
+
+    b = _A5PlaceBackend(held, target, tea, [c0, c1, c2], bad_xs={1.01, 1.05, 1.09})
+    with pytest.raises(SkillError) as info:
+        CheckedPlacement._try_place_on_top(b, held, target, 50, _Vec([1.0, 2.0, 0.8]))
+    assert info.value.code == 'postcondition_error'
+    assert info.value.stage == 'released_placement_unconfirmed'
+    assert 'tea_bottle' not in str(info.value) and 'upright' not in str(info.value)
+    receipt = factual_execution_error(info.value, 'place_on_top', 'empty')
+    assert receipt['code'] == 'result_unconfirmed'
+    assert 'tea_bottle' not in str(receipt) and 'upright_failures' not in receipt
+
+    # Non-transactional semantics: after all retries fail, last attempt's physical state is retained (not rewound)
+    assert ST.tilt_deg(tea.ori) == pytest.approx(90., abs=0.1)
+    assert tea.pos == pytest.approx([1.2, 2.1, 0.78])
+
+
+def test_checked_place_inside_a5_restores_neighbours_and_recovers(monkeypatch):
+    from manipulation_agent.executors import inside_sampling
+    from manipulation_agent.executors.placement import CheckedPlacement
+    _patch_og_states(monkeypatch)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
+    monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'on')
+    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+
+    volume = type('L', (), {'is_meta_link': True, 'meta_link_type': 'openfillable'})()
+    target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
+    target.links = {'vol': volume}
+    held = _PoseObj('brush', _Vec([0.0, 0.0, 1.0]), _Vec([0., 0., 0., 1.]), inside_target=True)
+    bulb = _PoseObj('ggpp_bulb1', [1.0, 2.0, 0.85], [0., 0., 0., 1.], inside_target=True,
+                    aabb=([0.98, 1.98, 0.82], [1.04, 2.04, 0.90]))
+    c0 = {'index': 0, 'pose': (_Vec([1.01, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
+    c1 = {'index': 1, 'pose': (_Vec([1.15, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
+
+    b = _A5PlaceBackend(held, target, bulb, [c0, c1], bad_xs={1.01}, primitive='place_inside')
+
+    def fake_select(backend, held_, target_, contents, point=None, residents=(), exclude_positions=()):
+        backend.selector_neighbour_tilts.append(ST.tilt_deg(bulb.get_position_orientation()[1]))
+        tried_x = {round(float(p.tolist()[0] if hasattr(p, 'tolist') else p[0]), 4) for p in exclude_positions}
+        for c in (c0, c1):
+            if round(float(c['pose'][0].tolist()[0]), 4) not in tried_x:
+                return c
+        raise SkillError('placement_surface_unavailable', 'none left')
+
+    monkeypatch.setattr(inside_sampling, 'select_inside_release', fake_select)
+    res = CheckedPlacement._checked_place_inside(b, target, 50, _Vec([1.0, 2.0, 0.8]))
+    assert res['primitive'] == 'place_inside'
+    assert len(b.selector_neighbour_tilts) == 2 and all(t < 1.0 for t in b.selector_neighbour_tilts)
+    assert bulb.pos == pytest.approx([1.0, 2.0, 0.85]) and ST.tilt_deg(bulb.ori) < 1.0
+    assert bulb.keep_still_calls >= 2
+
+    inside_recs = [r for r in b.records if r['status'] == 'inside_result']
+    assert len(inside_recs) == 3
+    assert inside_recs[0]['upright_failures'] == [{'name': 'ggpp_bulb1', 'role': 'neighbour', 'tilt_deg': 90.0}]
+    assert inside_recs[1]['upright_failures'] == [{'name': 'ggpp_bulb1', 'role': 'neighbour', 'tilt_deg': 90.0}]
+    assert 'upright_failures' not in inside_recs[2]
+    assert inside_recs[2]['transaction_checks']['upright_kept'] is True

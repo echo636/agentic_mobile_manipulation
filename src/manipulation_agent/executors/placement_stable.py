@@ -74,15 +74,42 @@ def _standing_neighbours(backend, held, target, payload):
     return out
 
 
+def _clone_vec(v):
+    """Copy a pose vector (torch tensor, ndarray, list or tuple) so physics steps cannot mutate it in place."""
+    if hasattr(v, 'detach') and hasattr(v, 'clone'):
+        return v.detach().clone()
+    if hasattr(v, 'clone'):
+        return v.clone()
+    if hasattr(v, 'copy'):
+        return v.copy()
+    return tuple(v)
+
+
 def before_release(backend, held, target, contents):
     """What must still hold after the release; read before the item leaves the hand. None when off."""
     if not enabled():
         return None
     payload = [obj for obj, _ in contents]
     ref = (getattr(backend, '_pregrasp_orientations', None) or {}).get(id(held))
+    neighbours = _standing_neighbours(backend, held, target, payload)
+    neighbour_poses = []
+    for obj in neighbours:
+        pos, ori = obj.get_position_orientation()
+        neighbour_poses.append((obj, (_clone_vec(pos), _clone_vec(ori))))
     return {'held_standing': ref is not None and tilt_deg(ref) <= STANDING_MAX_DEG,
-            'neighbours': _standing_neighbours(backend, held, target, payload),
+            'neighbours': neighbours,
+            'neighbour_poses': neighbour_poses,
             'contents': payload}
+
+
+def restore_neighbours(before):
+    """Put standing neighbours back at their pre-release poses (with zero velocity) before an A5 retry."""
+    if before is None:
+        return
+    for obj, (pos, ori) in before.get('neighbour_poses', ()):
+        obj.set_position_orientation(_clone_vec(pos), _clone_vec(ori))
+        if hasattr(obj, 'keep_still'):
+            obj.keep_still()
 
 
 def evaluate(held_tilt, neighbour_tilts, contents_on_carrier, before):
@@ -94,6 +121,22 @@ def evaluate(held_tilt, neighbour_tilts, contents_on_carrier, before):
     if before['contents']:
         checks['carried_contents_kept'] = all(contents_on_carrier)
     return checks
+
+
+def upright_failures(held, before):
+    """Private diagnostic list of objects tilted > FALLEN_MIN_DEG; never enters model-visible receipts."""
+    if before is None:
+        return []
+    out = []
+    if before.get('held_standing') and held is not None:
+        t = tilt_deg(held.get_position_orientation()[1])
+        if t > FALLEN_MIN_DEG:
+            out.append({'name': getattr(held, 'name', str(held)), 'role': 'held', 'tilt_deg': round(t, 2)})
+    for obj in before.get('neighbours', ()):
+        t = tilt_deg(obj.get_position_orientation()[1])
+        if t > FALLEN_MIN_DEG:
+            out.append({'name': getattr(obj, 'name', str(obj)), 'role': 'neighbour', 'tilt_deg': round(t, 2)})
+    return out
 
 
 def after_settle(backend, held, before):

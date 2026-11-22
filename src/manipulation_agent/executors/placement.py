@@ -769,6 +769,8 @@ class CheckedPlacement:
                 held, target, vpoint, touching, payload, resting=resting.report())
             # rc2 MAS_PLACE_STABLE_CHECK: upright_kept / carried_contents_kept join the checks (A5 sees them too)
             support['checks'].update(ST.after_settle(self, held, st_before))
+            upright_failed = (ST.upright_failures(held, st_before)
+                              if support['checks'].get('upright_kept') is False else [])
             # Residual motion is diagnostic unless MAS_PLACE_STABLE_CHECK is on (then `settled` counts); losing the
             # requested support is a failed result. No rewind here; the rc1 A5 settle fallback below re-runs this
             # same release and check (placement_settle.py).
@@ -803,20 +805,26 @@ class CheckedPlacement:
                 'position': held.get_position_orientation()[0].tolist(),
                 'official_on_top': official,
                 'selected_surface_support': support, 'supported': supported,
-                'verification_point': vpoint.tolist(), 'grasp_released': self._get_held() is None})
+                'verification_point': vpoint.tolist(), 'grasp_released': self._get_held() is None,
+                **({'upright_failures': upright_failed} if upright_failed else {})})
             return supported, {'official_on_top': official, 'checks': dict(support['checks']),
                                'failed_checks': [k for k, v in support['checks'].items() if not v and k != 'settled'],
-                               'position': held.get_position_orientation()[0].tolist()}
+                               'position': held.get_position_orientation()[0].tolist(),
+                               **({'upright_failures': upright_failed} if upright_failed else {})}
         try:
             supported, first = release_and_check(candidate)
             if not supported:
                 # rc1 A5: same pose, same settling, same checks; then up to 2 next candidates (placement_settle.py).
                 from . import placement_settle as PS
                 if PS.enabled():
+                    def retry_release_and_check(cand):
+                        ST.restore_neighbours(st_before)
+                        return release_and_check(cand)
                     def next_candidate(tried):
                         # The selector reads the held object's current pose and shape; put the assembly back at the
                         # first selected pose (no physics step) so the next proposals are built from that pose.
                         held.set_position_orientation(*candidate['pose']); self._relocate_contents(held, contents)
+                        ST.restore_neighbours(st_before)
                         try:
                             return self._select_surface_candidate(held, target, point, yaw_degrees, payload,
                                                                   roll_degrees=roll_degrees, exclude_positions=tried)
@@ -828,7 +836,7 @@ class CheckedPlacement:
                             'first_failure': PS.first_failure_kind('place_on_top', first['official_on_top'], first['checks']),
                             'first_failed_checks': first['failed_checks'], 'first_position': first['position'],
                             'attempts': attempts, 'result': 'passed' if ok else 'failed'})
-                    supported, _ = PS.run(release_and_check, next_candidate, candidate, record)
+                    supported, _ = PS.run(retry_release_and_check, next_candidate, candidate, record)
             if not supported:
                 raise SkillError('postcondition_error', 'Object did not settle on the selected surface',
                                  changed=True, stage='released_placement_unconfirmed')
@@ -963,6 +971,8 @@ class CheckedPlacement:
                                           extra_until_rest=ST.extra_settle_steps())
             inside = bool(held.states[Inside].get_value(target))
             extra = ST.after_settle(self, held, st_before)
+            upright_failed = (ST.upright_failures(held, st_before)
+                              if extra.get('upright_kept') is False else [])
             if resting is not None:
                 # rc2 MAS_PLACE_STABLE_CHECK: the measured pose window must be stable, as for place_on_top
                 extra['settled'] = bool(resting.report()['stable'])
@@ -978,20 +988,27 @@ class CheckedPlacement:
             self._placement_record({'status': 'inside_result', 'held': held.name, 'target': target.name,
                 'official_inside': bool(held.states[Inside].get_value(target)),
                 'position': held.get_position_orientation()[0].tolist(),
-                **({'transaction_checks': extra} if extra else {}), **({'support_judge': judged} if judged else {})})
+                **({'transaction_checks': extra} if extra else {}),
+                **({'upright_failures': upright_failed} if upright_failed else {}),
+                **({'support_judge': judged} if judged else {})})
             ok = inside and all(extra.values())
             return ok, {'official_inside': bool(held.states[Inside].get_value(target)), 'position': held.get_position_orientation()[0].tolist(),
-                        **({'transaction_checks': extra} if extra else {})}
+                        **({'transaction_checks': extra} if extra else {}),
+                        **({'upright_failures': upright_failed} if upright_failed else {})}
         try:
             inside, first = release_and_check(candidate)
             if not inside:
                 # rc1 A5: same pose, same settling, same official Inside; then up to 2 next candidates.
                 from . import placement_settle as PS
                 if PS.enabled():
+                    def retry_release_and_check(cand):
+                        ST.restore_neighbours(st_before)
+                        return release_and_check(cand)
                     def next_candidate(tried):
                         # The selector reads the held object's current pose and shape; put the assembly back at the
                         # first selected pose (no physics step) so the next proposals are built from that pose.
                         held.set_position_orientation(*candidate['pose']); self._relocate_contents(held, contents)
+                        ST.restore_neighbours(st_before)
                         try:
                             return select_inside_release(self, held, target, contents, point=point,
                                                          residents=residents, exclude_positions=tried)
@@ -1003,7 +1020,7 @@ class CheckedPlacement:
                             'first_failure': PS.first_failure_kind('place_inside', False, None),
                             'first_position': first['position'], 'attempts': attempts,
                             'result': 'passed' if ok else 'failed'})
-                    inside, _ = PS.run(release_and_check, next_candidate, candidate, record)
+                    inside, _ = PS.run(retry_release_and_check, next_candidate, candidate, record)
             if not inside:
                 raise SkillError('postcondition_error', 'Object did not remain inside after release',
                                  changed=True, stage='released_placement_unconfirmed')
