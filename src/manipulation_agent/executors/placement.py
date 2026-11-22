@@ -410,7 +410,8 @@ class CheckedPlacement:
             root[2] += clearance
             candidates.append({'index': index, 'pose': (root, orientation.clone()),
                                'support_position': support.tolist(), 'offset_xy_m': [x, y],
-                               'bottom_anchor_offset': anchor.tolist(), 'clearance_m': clearance})
+                               'bottom_anchor_offset': anchor.tolist(), 'clearance_m': clearance,
+                               'relative_vertices': vertices})   # rc2 MAS_PLACE_FOOTPRINT reads the bottom footprint
         self._placement_record({'status': 'candidates_constructed', 'method': 'selected_surface_collision_geometry',
             'target': target.name, 'held': held.name, 'selected_point': point.tolist(),
             'yaw_degrees': yaw_degrees, 'roll_degrees': roll_degrees, 'collision_vertex_count': len(vertices),
@@ -634,6 +635,12 @@ class CheckedPlacement:
             'scores': [{'index': row['index'], 'offset_xy_m': row.get('offset_xy_m'),
                         'overlap_score': row.get('proposal_overlap_score'),
                         'rim': bool(row.get('selected_rim_surface'))} for row in candidates]})
+        if not is_cloth:
+            # rc2 MAS_PLACE_FOOTPRINT (default off): the bottom must lie on a flat, free part of the target; move by
+            # the smallest displacement (<= 12 cm) or refuse here, before the release (placement_footprint.py).
+            from . import placement_footprint as FP
+            candidate = FP.apply(self, held, target, candidate.get('verification_point', point), candidate,
+                                 payload, score)
         return candidate
 
     def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None, *, roll_degrees=None):
