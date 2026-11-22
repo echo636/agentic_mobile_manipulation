@@ -100,20 +100,31 @@ class CompleteWorkflowContracts(unittest.TestCase):
         s['requirements'][0]['constraints']=[]
         with self.assertRaisesRegex(ValueError,'Hidden/unmapped'):validate_spec(s)
 
-    def test_grasp_threshold_matches_executor_reach(self):
+    def test_grasp_uses_1p2m_threshold_while_non_grasp_uses_executor_reach(self):
         flow=FullWorkflowReference.__new__(FullWorkflowReference)
         flow.backend=SimpleNamespace(robot=SimpleNamespace(get_position_orientation=lambda:([0.,0.,0.],None)))
         flow.ref=SimpleNamespace(action=Mock())
-        # Within LocalLimits.reach_m (1.4 m): no redundant implicit navigate_to even with approach_role.
-        flow.surface_point=Mock(return_value=[1.35,0.,.8])
+        # Grasp within 1.2 m skips implicit navigate_to.
+        flow.surface_point=Mock(return_value=[1.15,0.,.8])
         flow.action(dict(primitive='grasp',role='hotdog1',approach_role='fridge'))
-        self.assertEqual([c.args for c in flow.ref.action.call_args_list],[('grasp','hotdog1',[1.35,0.,.8])])
-        # Beyond 1.4 m: openable container approach_role is preserved.
+        self.assertEqual([c.args for c in flow.ref.action.call_args_list],[('grasp','hotdog1',[1.15,0.,.8])])
+        # Grasp at 1.25 m (> 1.2 m) still triggers safe close-range approach (preserving openable approach_role).
         flow.ref.action.reset_mock()
-        flow.surface_point=Mock(side_effect=[[1.48,0.,.8],[1.42,0.,1.0],[1.48,0.,.8]])
+        flow.surface_point=Mock(side_effect=[[1.25,0.,.8],[1.22,0.,1.0],[1.25,0.,.8]])
         flow.action(dict(primitive='grasp',role='log_half1',approach_role='kiln'))
         self.assertEqual([c.args for c in flow.ref.action.call_args_list],[
-            ('navigate_to','kiln',[1.42,0.,1.0]),('grasp','log_half1',[1.48,0.,.8])])
+            ('navigate_to','kiln',[1.22,0.,1.0]),('grasp','log_half1',[1.25,0.,.8])])
+        # Non-grasp within LocalLimits.reach_m (1.35 m <= 1.4 m) skips redundant implicit navigate_to.
+        flow.ref.action.reset_mock()
+        flow.surface_point=Mock(return_value=[1.35,0.,.8])
+        flow.action(dict(primitive='place_on_top',role='tray'))
+        self.assertEqual([c.args for c in flow.ref.action.call_args_list],[('place_on_top','tray',[1.35,0.,.8])])
+        # Non-grasp beyond 1.4 m triggers implicit navigate_to.
+        flow.ref.action.reset_mock()
+        flow.surface_point=Mock(side_effect=[[1.48,0.,.8],[1.48,0.,.8]])
+        flow.action(dict(primitive='place_on_top',role='tray'))
+        self.assertEqual([c.args for c in flow.ref.action.call_args_list],[
+            ('navigate_to','tray',[1.48,0.,.8]),('place_on_top','tray',[1.48,0.,.8])])
 
     def test_explicit_floor_navigation_skips_in_place_noop(self):
         flow=FullWorkflowReference.__new__(FullWorkflowReference)

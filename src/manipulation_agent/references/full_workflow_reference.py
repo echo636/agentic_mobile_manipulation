@@ -238,7 +238,10 @@ class FullWorkflowReference:
                     limits=getattr(self.backend,'local_limits',None)
                     reach=float(getattr(limits,'reach_m',1.4))
                     fallback_reach=float(getattr(limits,'fallback_reach_m',2.0))
-                    if force_approach or distance>reach:
+                    # Keep grasp's tighter 1.2 m approach threshold (matching rc1) to avoid
+                    # 1.2-1.4 m full-extension grasps twisting/flipping long items or trays.
+                    threshold=1.2 if primitive=='grasp' else reach
+                    if force_approach or distance>threshold:
                         # Approach a containing appliance's visible exterior
                         # before selecting a low, recessed item. This is an
                         # ordinary recorded navigation, followed by the same
