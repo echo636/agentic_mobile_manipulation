@@ -38,9 +38,9 @@ RING_STEP_M = .01
 DIRECTIONS = 16
 MAX_HULL = 16
 SMALL_TARGET_FACTOR = 4.
-DEFAULT_NORMAL_MAX_DEG = 5.   # 12:00 (a): scanned 15 / 10 / 8 / 5 deg; only 5 kept the near-edge tea standing (8 deg:
-#   9/9 fell after a 1 cm shift the check accepted); no margin on the wide side. Evidence: FOOTPRINT_L4 (sec20/
-#   footprint_plan_20261122/FOOTPRINT_RESULTS_20261122.md)
+DEFAULT_NORMAL_MAX_DEG = 10.  # 2026-11-22 14:30 (coordinator 13:27 III.5): 5 deg was an empirical value on the coqeme
+#   tray, whose 6-7 deg slope band tipped tall items (FOOTPRINT_L4, TEA_MECH); with the flat tray (T1 l5, mhhoga) 10 deg
+#   has margin -- mhhoga / uekqey / huwhjg near-edge 3/3 standing at 10 deg (TRAYALT6 / TRAYALT2, sec20/t1_alt_trays_20261122)
 FLOOR_LIKE = frozenset({'floors', 'rug', 'carpet', 'mat', 'doormat', 'bath_rug'})
 REFUSAL_TEXT = 'No upward receiving surface near the selected point'   # the existing placement_surface_unavailable text
 
@@ -51,7 +51,7 @@ def mode():
 
 
 def normal_max_deg():
-    """Calibration knob for probes; default 5 deg (FOOTPRINT_L4 scan, coordinator 12:00 a)."""
+    """Calibration knob for probes; default 10 deg (flat tray, coordinator 13:27 III.5; 5 deg was coqeme-specific)."""
     try:
         return float(os.environ.get('MAS_PLACE_FOOTPRINT_NORMAL_DEG', DEFAULT_NORMAL_MAX_DEG))
     except ValueError:

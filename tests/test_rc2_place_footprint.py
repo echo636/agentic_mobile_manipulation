@@ -18,7 +18,7 @@ def test_modes(monkeypatch):
     monkeypatch.setenv('MAS_PLACE_FOOTPRINT', 'yes')
     assert FP.mode() == 'off'
     monkeypatch.delenv('MAS_PLACE_FOOTPRINT_NORMAL_DEG', raising=False)
-    assert FP.normal_max_deg() == 5.                                    # 12:00 (a)
+    assert FP.normal_max_deg() == 10.                                   # 14:30: flat tray
     monkeypatch.setenv('MAS_PLACE_FOOTPRINT_NORMAL_DEG', '5')
     assert FP.normal_max_deg() == 5.
 
@@ -181,9 +181,9 @@ def test_floor_target_accepts_rugs_and_other_floor_pieces():
 
 # ---------------------------------------------------------------- 12:00 (a) (b) (c)
 
-def test_default_threshold_is_5_deg(monkeypatch):
+def test_default_threshold_is_10_deg(monkeypatch):
     monkeypatch.delenv('MAS_PLACE_FOOTPRINT_NORMAL_DEG', raising=False)
-    assert FP.normal_max_deg() == 5.
+    assert FP.normal_max_deg() == 10.
 
 
 def test_rim_candidates_are_checked_like_any_other(monkeypatch):
