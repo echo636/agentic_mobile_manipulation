@@ -18,7 +18,7 @@ def test_modes(monkeypatch):
     monkeypatch.setenv('MAS_PLACE_FOOTPRINT', 'yes')
     assert FP.mode() == 'off'
     monkeypatch.delenv('MAS_PLACE_FOOTPRINT_NORMAL_DEG', raising=False)
-    assert FP.normal_max_deg() == 10.
+    assert FP.normal_max_deg() == 5.                                    # 12:00 (a)
     monkeypatch.setenv('MAS_PLACE_FOOTPRINT_NORMAL_DEG', '5')
     assert FP.normal_max_deg() == 5.
 
@@ -102,7 +102,7 @@ def _world(monkeypatch, edge_x):
         return [_hit(nz=1. if rxy[0] + sx <= edge_x else math.cos(math.radians(18)), z=cz) for sx, sy in samples]
     monkeypatch.setattr(FP, '_rays', rays)
     monkeypatch.setattr(FP, '_centre_support', lambda b, xy, z, ig, acc: z)
-    monkeypatch.setattr(FP, '_acceptor', lambda b, t: (lambda o: True))
+    monkeypatch.setattr(FP, '_acceptor', lambda b, t, under=None: (lambda o: True))
 
 
 def test_off_returns_the_same_candidate_without_any_record(monkeypatch):
@@ -177,3 +177,48 @@ def test_floor_target_accepts_rugs_and_other_floor_pieces():
     tray = _Obj('tray', 'tray')
     acc = FP._acceptor(b, tray)
     assert not acc(path('floors_a'))
+
+
+# ---------------------------------------------------------------- 12:00 (a) (b) (c)
+
+def test_default_threshold_is_5_deg(monkeypatch):
+    monkeypatch.delenv('MAS_PLACE_FOOTPRINT_NORMAL_DEG', raising=False)
+    assert FP.normal_max_deg() == 5.
+
+
+def test_rim_candidates_are_recorded_only(monkeypatch):
+    """(b) open-cavity rim candidates (tray inside, plates): checked and recorded, never moved or refused."""
+    monkeypatch.setenv('MAS_PLACE_FOOTPRINT', 'on'); _world(monkeypatch, edge_x=-1.)    # nothing fits: on would refuse
+    c = _candidate(); c['surface_kind'] = 'open_fillable_rim'
+    b = _Backend()
+    got = FP.apply(b, _Obj('hotdog'), _Obj('plate'), torch.tensor([0., 0., 1.]), c, [], lambda s: 0)
+    assert got is c
+    r = b.records[-1]
+    assert r['candidate_kind'] == 'rim' and r['first_ok'] is False and r['refused'] is True   # what on WOULD do
+
+
+def test_small_clicked_item_threshold():
+    cup = FP.polygon_area(FP.footprint_samples(_cylinder(.04, .1))[0][:FP.MAX_HULL])
+    assert cup == pytest.approx(math.pi * .04 ** 2, rel=.05)
+    assert FP.clicked_item_too_small(.13 * .13, cup)              # a fork (diagonal box) clicked with a cup in hand
+    assert not FP.clicked_item_too_small(.5 * .35, cup)           # a tray
+    tea = math.pi * .035 ** 2
+    assert not FP.clicked_item_too_small(.25 * .25, tea)          # a plate is not "small" for a tea bottle
+    assert FP.polygon_area([(0, 0), (1, 0)]) == 0.
+
+
+def test_support_under_small_clicked_item_counts_as_target(monkeypatch):
+    """(c) a cup clicked on a fork lying in the tray: rays hitting the tray count as the target."""
+    b = _Backend()
+    objs = {'fork1': _Obj('fork1', 'fork'), 'tray': _Obj('tray', 'tray'), 'mug': _Obj('mug', 'mug')}
+    b.env.scene.object_registry = lambda key, name: objs.get(name)
+    path = lambda n: f'/World/scene_0/{n}/base_link/collisions'
+    acc = FP._acceptor(b, objs['fork1'], under='tray')
+    assert acc(path('fork1')) and acc(path('tray')) and not acc(path('mug'))
+    acc = FP._acceptor(b, objs['fork1'])                          # without the support: the old refusal
+    assert not acc(path('tray'))
+
+
+def test_fixed_target_has_no_support_under():
+    o = _Obj('island'); o.fixed_base = True
+    assert FP.support_under(_Backend(), o) is None

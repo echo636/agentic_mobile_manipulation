@@ -19,7 +19,10 @@ Not met: the pose is moved by the smallest displacement that meets it (rings of 
 the rc1 A5 limit, DIRECTIONS directions, the centre support re-measured at every shifted pose); if none does, the
 placement is refused BEFORE the release with the existing placement_surface_unavailable text and the item stays in
 the hand. Applies to every place_on_top except cloth; place_inside is unchanged (curved container bottoms; an item
-that tips inside a container is still Inside).
+that tips inside a container is still Inside). Open-cavity rim candidates (surface_kind open_fillable_rim: the tray's
+inside, plates) are checked and RECORDED only, never moved or refused (coordinator 12:00 b: plates are concave; decide
+from the record-mode table). When the clicked target is a movable item lying on a support (coordinator 12:00 c, as
+support_judge case 3: a cup clicked on a fork lying in the tray), hits on that support count as the target.
 Modes: off (default) | record (compute and write the private record only; behaviour and model-visible output are
 byte-identical to off) | on.
 Private record: placement_diagnostics `status: footprint_check`.
@@ -33,7 +36,10 @@ MAX_SHIFT_M = .12
 RING_STEP_M = .01
 DIRECTIONS = 16
 MAX_HULL = 16
-DEFAULT_NORMAL_MAX_DEG = 10.
+SMALL_TARGET_FACTOR = 4.
+DEFAULT_NORMAL_MAX_DEG = 5.   # 12:00 (a): scanned 15 / 10 / 8 / 5 deg; only 5 kept the near-edge tea standing (8 deg:
+#   9/9 fell after a 1 cm shift the check accepted); no margin on the wide side. Evidence: FOOTPRINT_L4 (sec20/
+#   footprint_plan_20261122/FOOTPRINT_RESULTS_20261122.md)
 FLOOR_LIKE = frozenset({'floors', 'rug', 'carpet', 'mat', 'doormat', 'bath_rug'})
 REFUSAL_TEXT = 'No upward receiving surface near the selected point'   # the existing placement_surface_unavailable text
 
@@ -44,7 +50,7 @@ def mode():
 
 
 def normal_max_deg():
-    """Calibration knob for the probe (coordinator 10:59 I.1: scan 5 / 8 / 10 / 15 deg); default until calibrated."""
+    """Calibration knob for probes; default 5 deg (FOOTPRINT_L4 scan, coordinator 12:00 a)."""
     try:
         return float(os.environ.get('MAS_PLACE_FOOTPRINT_NORMAL_DEG', DEFAULT_NORMAL_MAX_DEG))
     except ValueError:
@@ -117,6 +123,20 @@ def judge_hits(hits, centre_z, normal_max, *, accept):
     return not any(failures.values()), {k: v for k, v in failures.items() if v}
 
 
+def polygon_area(pts):
+    if len(pts) < 3:
+        return 0.
+    return abs(sum(pts[i][0] * pts[(i + 1) % len(pts)][1] - pts[(i + 1) % len(pts)][0] * pts[i][1]
+                   for i in range(len(pts)))) / 2
+
+
+def clicked_item_too_small(target_xy_area, footprint_area):
+    """12:00 c: the clicked target counts as 'a small item lying on a support' (its support then counts as the target)
+    when its top-view box is smaller than SMALL_TARGET_FACTOR footprints of the held item (fork vs cup: yes; tray or
+    plate vs tea / hotdog: no -- so a tray's own support never excuses an overhang past the tray edge)."""
+    return footprint_area > 0 and target_xy_area < SMALL_TARGET_FACTOR * footprint_area
+
+
 def shift_rings(max_shift=MAX_SHIFT_M, step=RING_STEP_M, directions=DIRECTIONS):
     """(dx, dy) shifts in order of increasing displacement: rings of `step` up to max_shift, `directions` each."""
     out = []
@@ -138,7 +158,23 @@ def _owner(backend, path):
     return name, (reg('name', name) if (reg is not None and name) else None)
 
 
-def _acceptor(backend, target):
+def support_under(backend, obj):
+    """Name of the body directly under a movable obj's bottom centre (downward ray; obj and robot ignored), else None."""
+    if getattr(obj, 'fixed_base', False):
+        return None
+    try:
+        from omnigibson.utils.sampling_utils import raytest
+        from .support_judge import owner_name
+        lo, hi = obj.aabb
+        start = backend.torch.tensor([float(lo[0] + hi[0]) / 2, float(lo[1] + hi[1]) / 2, float(lo[2]) + 0.01])
+        ignored = [link.prim_path for o in (obj, backend.robot) for link in o.links.values()]
+        hit = raytest(start, start - backend.torch.tensor([0., 0., 0.10]), ignore_bodies=ignored)
+        return owner_name(hit.get('rigidBody')) if hit.get('hit') else None
+    except Exception:
+        return None
+
+
+def _acceptor(backend, target, under=None):
     floor = getattr(target, 'category', None) == 'floors'
     tname = getattr(target, 'name', None)
     cache = {}
@@ -147,8 +183,9 @@ def _acceptor(backend, target):
         if path in cache:
             return cache[path]
         name, obj = _owner(backend, path)
-        ok = name == tname or (floor and obj is not None and (getattr(obj, 'category', None) in FLOOR_LIKE
-                                                              or getattr(obj, 'fixed_base', False)))
+        ok = name == tname or (under is not None and name == under) or \
+            (floor and obj is not None and (getattr(obj, 'category', None) in FLOOR_LIKE
+                                            or getattr(obj, 'fixed_base', False)))
         cache[path] = ok
         return ok
     return accept
@@ -189,8 +226,15 @@ def apply(backend, held, target, point, candidate, payload, score):
     from ..contracts import SkillError
     torch = backend.torch
     ignored = [link.prim_path for obj in (held, backend.robot, *payload) for link in obj.links.values()]
-    accept = _acceptor(backend, target)
+    rim = candidate.get('surface_kind') == 'open_fillable_rim'
     samples, bottom_rel_z = footprint_samples(candidate['relative_vertices'])
+    try:
+        tlo, thi = target.aabb
+        t_area = float(thi[0] - tlo[0]) * float(thi[1] - tlo[1])
+    except Exception:
+        t_area = float('inf')
+    under = support_under(backend, target) if clicked_item_too_small(t_area, polygon_area(samples[:(len(samples) - 1) // 2])) else None
+    accept = _acceptor(backend, target, under)
     nmax = normal_max_deg()
     root, quat = candidate['pose']
     anchor = candidate['bottom_anchor_offset']
@@ -205,7 +249,8 @@ def apply(backend, held, target, point, candidate, payload, score):
     first_ok, first_why = check(root_xy, centre_z, candidate.get('proposal_overlap_score') or 0.)
     row = {'status': 'footprint_check', 'mode': m, 'held': held.name, 'target': target.name,
            'normal_max_deg': nmax, 'samples': len(samples), 'candidate': candidate.get('index'),
-           'first_ok': first_ok, 'first_failures': first_why}
+           'first_ok': first_ok, 'first_failures': first_why, 'candidate_kind': 'rim' if rim else 'surface',
+           'support_under_target': under}
     chosen = candidate
     if not first_ok:
         found = None
@@ -229,7 +274,7 @@ def apply(backend, held, target, point, candidate, payload, score):
                    shift_xy_m=found and found['footprint_shift_m'], refused=found is None)
         chosen = found
     backend._placement_record(row)
-    if m == 'record':
+    if m == 'record' or rim:
         return candidate
     if chosen is None:
         raise SkillError('placement_surface_unavailable', REFUSAL_TEXT)

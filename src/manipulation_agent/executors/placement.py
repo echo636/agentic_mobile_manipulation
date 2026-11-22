@@ -583,7 +583,8 @@ class CheckedPlacement:
                     'support_position':list(map(float,hit['position'])),'offset_xy_m':[dx,dy],
                     'bottom_anchor_offset':anchor.tolist(),'clearance_m':clearance,
                     'verification_point':verification,'surface_kind':'open_fillable_rim',
-                    'selected_cavity':volume.prim_path,'selected_rim_surface':not floor_selected})
+                    'selected_cavity':volume.prim_path,'selected_rim_surface':not floor_selected,
+                    'relative_vertices':vertices})   # rc2 MAS_PLACE_FOOTPRINT: recorded only for this kind (12:00 b)
         if proposals:
             self._placement_record({'status':'rim_candidates_constructed','target':target.name,'held':held.name,
                 'selected_point':point.tolist(),'candidate_count':len(proposals),
