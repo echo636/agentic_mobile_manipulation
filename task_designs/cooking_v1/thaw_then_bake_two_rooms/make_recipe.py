@@ -60,6 +60,10 @@ def state(obj, name, value, fully=False):
     return row
 
 
+FORKS = ['fork1', 'fork2', 'fork3']
+FORK_PAIRS = [('fork1', 'fork2'), ('fork1', 'fork3'), ('fork2', 'fork3')]
+
+
 def served(item, dest):
     return {'any': [f'{item}_ontop_{dest}', {'all': [f'{item}_ontop_tray', f'tray_ontop_{dest}']}]}
 
@@ -77,8 +81,9 @@ def build_recipe() -> dict:
     )
     req_fish = (
         "Serve the baked fish casserole with one fork and the bottle of tea on the single bed in the "
-        "children's bedroom (the north-east bedroom off the long east corridor), for the person resting "
-        "there: directly on the bed or on the serving tray resting on it."
+        "children's bedroom whose sliding door stands open (off the long east corridor; the doors of the other "
+        "bedrooms are closed), for the person resting there: directly on the bed or on the serving tray "
+        "resting on it."
     )
     req_lasagna = (
         'Serve the baked lasagna with two plates and two forks on the living-room coffee table (the low '
@@ -95,7 +100,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'thaw_then_bake_two_rooms',
-        'instance_id': 'thaw_then_bake_two_rooms_seed0_r3',
+        'instance_id': 'thaw_then_bake_two_rooms_seed0_r4',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -252,6 +257,9 @@ def build_recipe() -> dict:
                    for o in ['lasagna'] + living for d in ('table', 'tray')},
                 **{f'{o}_ontop_{d}': {'object': o, 'state': 'OnTop', 'target': d}
                    for o in ['fish'] + north for d in ('bed', 'tray')},
+                # r4: the three forks look alike, so any fork may go to either destination.
+                **{f'{o}_ontop_{d}': {'object': o, 'state': 'OnTop', 'target': d}
+                   for o in FORKS for d in ('bed', 'table', 'tray')},
                 'tray_ontop_table': {'object': 'tray', 'state': 'OnTop', 'target': 'table'},
                 'tray_ontop_bed': {'object': 'tray', 'state': 'OnTop', 'target': 'bed'},
                 'fridge_open': {'object': 'fridge', 'state': 'Open'},
@@ -267,8 +275,11 @@ def build_recipe() -> dict:
             },
             'terminal': {
                 'dishes_baked': {'all': ['lasagna_baked', 'fish_baked']},
-                'fish_served': {'all': ['fish_baked'] + [served(o, 'bed') for o in ['fish'] + north]},
-                'lasagna_served': {'all': ['lasagna_baked'] + [served(o, 'table') for o in ['lasagna'] + living]},
+                'fish_served': {'all': ['fish_baked', served('fish', 'bed'), served('tea', 'bed'),
+                                        {'any': [served(f, 'bed') for f in FORKS]}]},
+                'lasagna_served': {'all': ['lasagna_baked'] + [served(o, 'table') for o in ['lasagna', 'plate1', 'plate2']]
+                                   + [{'any': [{'all': [served(a, 'table'), served(b, 'table')]}
+                                               for a, b in FORK_PAIRS]}]},
                 'appliances_safe': {'all': [{'not': 'oven_on'}, {'not': 'microwave_on'}, {'not': 'oven_open'},
                                             {'not': 'microwave_open'}, {'not': 'fridge_open'}]},
                 'hand_empty': 'hand_empty',
