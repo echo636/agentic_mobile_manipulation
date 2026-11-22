@@ -8,17 +8,19 @@ from manipulation_agent.executors import placement_transaction as TX
 from manipulation_agent.observations.boundary import factual_execution_error
 
 
-def test_switch_default_off(monkeypatch):
+def test_switch_default_on(monkeypatch):
     monkeypatch.delenv('MAS_PLACE_STABLE_CHECK', raising=False)
+    assert ST.enabled() is True and ST.extra_settle_steps() == 100 and ST.settled_counts() is True
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'off')
     assert ST.enabled() is False and ST.extra_settle_steps() == 0 and ST.settled_counts() is False
     monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
     assert ST.enabled() is True and ST.extra_settle_steps() == 100 and ST.settled_counts() is True
 
 
 def test_independent_of_transaction_switch(monkeypatch):
-    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'on'); monkeypatch.delenv('MAS_PLACE_STABLE_CHECK', raising=False)
+    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'on'); monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'off')
     assert ST.before_release(object(), object(), object(), []) is None          # TX on alone adds no checks
-    monkeypatch.delenv('MAS_PLACE_TRANSACTIONAL', raising=False); monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
+    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'off'); monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
     assert TX.enabled() is False
 
 
@@ -51,8 +53,10 @@ def test_carrier_contents_must_stay_on_it():
 
 def test_settled_counts_only_when_on(monkeypatch):
     checks = {'released': True, 'upward_support': True, 'settled': False}
-    monkeypatch.delenv('MAS_PLACE_STABLE_CHECK', raising=False)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'off')
     assert ST.passes(checks) is True                                     # 1d19707: residual motion is diagnostic
+    monkeypatch.delenv('MAS_PLACE_STABLE_CHECK', raising=False)
+    assert ST.passes(checks) is False
     monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
     assert ST.passes(checks) is False
     assert ST.passes({**checks, 'settled': True}) is True
@@ -259,13 +263,10 @@ def test_before_release_clones_neighbour_poses_and_restore_recovers_and_keeps_st
 
 
 def test_off_before_release_none_and_restore_neighbours_noop(monkeypatch):
-    monkeypatch.delenv('MAS_PLACE_STABLE_CHECK', raising=False)
-    assert ST.before_release(object(), object(), object(), []) is None
-    assert ST.restore_neighbours(None) is None
-    assert ST.upright_failures(object(), None) == []
     monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'off')
     assert ST.before_release(object(), object(), object(), []) is None
     assert ST.restore_neighbours(None) is None
+    assert ST.upright_failures(object(), None) == []
 
 
 def test_upright_failures_reports_tilted_held_and_neighbours():
@@ -391,7 +392,7 @@ def test_try_place_on_top_a5_restores_neighbours_and_recovers(monkeypatch):
     _patch_og_states(monkeypatch)
     monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
     monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'on')
-    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+    monkeypatch.setenv('MAS_SUPPORT_JUDGE', 'off')
 
     target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
     held = _PoseObj('fork', _Vec([0.0, 0.0, 1.0]), _Vec([0., 0., 0., 1.]), on_target=True)
@@ -435,8 +436,8 @@ def test_try_place_on_top_all_a5_fail_retains_last_physical_state_and_no_receipt
     _patch_og_states(monkeypatch)
     monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
     monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'on')
-    monkeypatch.delenv('MAS_PLACE_TRANSACTIONAL', raising=False)
-    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'off')
+    monkeypatch.setenv('MAS_SUPPORT_JUDGE', 'off')
 
     target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
     held = _PoseObj('fork', _Vec([0.0, 0.0, 1.0]), _Vec([0., 0., 0., 1.]), on_target=True)
@@ -466,7 +467,7 @@ def test_checked_place_inside_a5_restores_neighbours_and_recovers(monkeypatch):
     _patch_og_states(monkeypatch)
     monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
     monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'on')
-    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+    monkeypatch.setenv('MAS_SUPPORT_JUDGE', 'off')
 
     volume = type('L', (), {'is_meta_link': True, 'meta_link_type': 'openfillable'})()
     target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
@@ -656,7 +657,7 @@ def test_a5_next_candidate_sets_and_clears_restored_neighbour_aabbs_on_top_and_i
     _patch_og_states(monkeypatch)
     monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
     monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'on')
-    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+    monkeypatch.setenv('MAS_SUPPORT_JUDGE', 'off')
 
     # 1) place_on_top path (both recovery and SkillError cleanup)
     target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))

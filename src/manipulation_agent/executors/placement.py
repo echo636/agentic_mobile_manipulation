@@ -777,7 +777,7 @@ class CheckedPlacement:
             supported = ST.passes(support['checks'])
             official = bool(held.states[OnTop].get_value(target))
             if not supported:
-                # rc2 MAS_SUPPORT_JUDGE (default off): settled on an upward surface of the target (or of the support
+                # rc2 MAS_SUPPORT_JUDGE (default on): settled on an upward surface of the target (or of the support
                 # under a clicked movable item) counts; the private record keeps the reason.
                 target_is_floor = getattr(target, 'category', None) == 'floors'
                 rescued, why = SJ.judge_on_top(support['checks'], official, SJ.owner_name(support.get('support_hit_body')),

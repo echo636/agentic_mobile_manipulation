@@ -137,7 +137,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         self._demo_focus = None
         self.fixed_surround_rgb = True
         self.private_viewer_grounding = False
-        self.renderer_pixel_owner = os.environ.get('MAS_RENDERER_PIXEL_OWNER','0') == '1'
+        self.renderer_pixel_owner = os.environ.get('MAS_RENDERER_PIXEL_OWNER','1') == '1'
         self._renderer_owner_annotators = {}
         self.record_video = record_video
         self.video = None

@@ -5,8 +5,7 @@ the target, AND native OnTop(target) or Inside(target) is true. Exceptions (rece
 case (3) below (clicked a small item lying on a support; judged by the native OnTop on that support) and case (5)
 (floor boundary). When the native predicate is false the placement fails after release: with MAS_PLACE_TRANSACTIONAL
 on it is rolled back (not_placed), with it off it keeps the 1d19707 result_unconfirmed path.
-The evaluator is NOT loosened (coordinator 06:29: e.g. the T1 coffee table's lower shelf must not count as on it). Independent of MAS_PLACE_TRANSACTIONAL; both off = the 1d19707 behaviour. Default off until the rc2
-reference reruns.
+The evaluator is NOT loosened (coordinator 06:29: e.g. the T1 coffee table's lower shelf must not count as on it). Independent of MAS_PLACE_TRANSACTIONAL; both off = the 1d19707 behaviour. Default on in rc2 (off restores 1d19707).
 
 Cases it changes (sec20/released_failures/JUDGE_MISMATCH_TABLE_20261122.md, table A):
  (1) place_on_top where native OnTop(target) is true but the executor's own patch checks failed because the item slid
@@ -44,7 +43,7 @@ STRUCTURE_CATEGORIES = frozenset({'floors', 'walls', 'ceilings', 'fixed_window',
 
 
 def enabled():
-    return os.environ.get('MAS_SUPPORT_JUDGE', 'off') == 'on'
+    return os.environ.get('MAS_SUPPORT_JUDGE', 'on') == 'on'
 
 
 def owner_name(prim_path):

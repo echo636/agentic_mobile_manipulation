@@ -38,3 +38,10 @@ def test_private_record_fields_are_private_only():
     assert "'robot_posture':_posture(self.robot)" in src and "'audience':'executor_private'" in src
     ret = src[src.rindex('return '):]
     assert 'occupancy' not in ret and 'posture' not in ret
+
+
+def test_renderer_pixel_owner_default_on():
+    import inspect
+    from manipulation_agent.executors import omnigibson_rgb
+    src = inspect.getsource(omnigibson_rgb.RGBBackend.__init__)
+    assert "os.environ.get('MAS_RENDERER_PIXEL_OWNER','1') == '1'" in src

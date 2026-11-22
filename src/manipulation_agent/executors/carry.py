@@ -234,7 +234,7 @@ class ControlledCarry:
         held=self._get_held()
         contents=self._carry_contents
         from . import placement_transaction as TX
-        # rc2 MAS_PLACE_TRANSACTIONAL (default off): one snapshot before the placement; a failure after the release
+        # rc2 MAS_PLACE_TRANSACTIONAL (default on): one snapshot before the placement; a failure after the release
         # restores it, so the item is back in the hand and the receipt is the existing not_placed.
         transaction=TX.snapshot(self) if TX.enabled() and held is not None else None
         try:

@@ -222,7 +222,9 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         b._inside_pose_overlap_ranker=lambda *a,**kw:None
         b._thin_support_base = lambda *a, **kw: ()  # needs a simulator ray query
         b._settle_surface_contacts=lambda *a,**kw:None
-        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+        import os
+        with patch.dict(os.environ, {'MAS_PLACE_STABLE_CHECK': 'off', 'MAS_SUPPORT_JUDGE': 'off'}), \
+             patch.dict('sys.modules',{'omnigibson.object_states':states}):
             for correct_shelf in (False,True):
                 with self.subTest(correct_shelf=correct_shelf):
                     # R387: the accepted placement retained support and native

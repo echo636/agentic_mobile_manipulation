@@ -16,7 +16,7 @@ to 2 nearby candidates) treats them like any other failed check:
     Extra steps do not change robot time (the robot clock only notes that physics ran).
 Independent of MAS_PLACE_TRANSACTIONAL: stable check alone -> a failed release ends as result_unconfirmed (the item
 stays where it fell, the receipt says so); both on -> the release is rolled back and the receipt is not_placed.
-Off (default): the 1d19707 behaviour.
+On (default in rc2); off restores the 1d19707 behaviour.
 """
 import math
 import os
@@ -55,7 +55,7 @@ def _upright_meaningful(obj):
 
 
 def enabled():
-    return os.environ.get('MAS_PLACE_STABLE_CHECK', 'off') == 'on'
+    return os.environ.get('MAS_PLACE_STABLE_CHECK', 'on') == 'on'
 
 
 def tilt_deg(q):

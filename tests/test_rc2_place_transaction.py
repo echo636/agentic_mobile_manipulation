@@ -6,8 +6,10 @@ from manipulation_agent.executors import placement_transaction as TX
 from manipulation_agent.observations.boundary import factual_execution_error
 
 
-def test_switch_default_off(monkeypatch):
+def test_switch_default_on(monkeypatch):
     monkeypatch.delenv('MAS_PLACE_TRANSACTIONAL', raising=False)
+    assert TX.enabled() is True
+    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'off')
     assert TX.enabled() is False
     monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'on')
     assert TX.enabled() is True
@@ -99,7 +101,7 @@ def test_place_state_keeps_old_error_when_restore_fails(monkeypatch):
 
 
 def test_place_state_off_is_unchanged(monkeypatch):
-    monkeypatch.delenv('MAS_PLACE_TRANSACTIONAL', raising=False)
+    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'off')
     place = _wire(monkeypatch)
     err = SkillError('postcondition_error', 'x', changed=True, stage='released_placement_unconfirmed')
     b = _Fake(err)
@@ -290,7 +292,7 @@ def test_cloth_not_supported_respects_transactional_off_and_on(monkeypatch):
     _patch_cloth_env(monkeypatch)
 
     # Off: cloth drop raises stage='released_placement_unconfirmed' -> result_unconfirmed (released)
-    monkeypatch.delenv('MAS_PLACE_TRANSACTIONAL', raising=False)
+    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'off')
     b_off = _ClothBackend(distance=1.0, on_top=False)
     with pytest.raises(SkillError) as info_off:
         LocalOperation(b_off, 'place_on_top', b_off.binding, 10, {}).run()

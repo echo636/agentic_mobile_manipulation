@@ -13,8 +13,10 @@ def on(monkeypatch):
     monkeypatch.setenv('MAS_SUPPORT_JUDGE', 'on')
 
 
-def test_switch_default_off(monkeypatch):
+def test_switch_default_on_and_off(monkeypatch):
     monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+    assert SJ.enabled() is True
+    monkeypatch.setenv('MAS_SUPPORT_JUDGE', 'off')
     assert SJ.enabled() is False
     slid = {**GOOD, 'selected_surface_neighborhood': False}
     assert SJ.judge_on_top(slid, True, 'tray', False, None) == (False, None)      # off = 1d19707
@@ -97,7 +99,7 @@ def test_native_gate(on):
 
 
 def test_native_gate_off(monkeypatch):
-    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+    monkeypatch.setenv('MAS_SUPPORT_JUDGE', 'off')
     assert SJ.native_gate(True, False, False, None) == (True, None)
 
 

@@ -12,7 +12,7 @@ When the switch is on:
    that stepped physics.
 Which checks a release must pass is not decided here: upright_kept / carried_contents_kept / settled moved to
 MAS_PLACE_STABLE_CHECK (placement_stable.py, coordinator 10:59 II); the two switches are independent.
-Off (default until the rc2 reference reruns): the 1d19707 behaviour -- the release is real even when its result
+Default on in rc2; off restores the 1d19707 behaviour -- the release is real even when its result
 fails, receipt `result_unconfirmed`.
 Private record: placement_diagnostics `status: transaction_rolled_back` / `transaction_not_rolled_back`.
 """
@@ -27,7 +27,7 @@ BOOKKEEPING = ('_grasped_payload', '_grasped_registered_ids', '_pregrasp_orienta
 
 
 def enabled():
-    return os.environ.get('MAS_PLACE_TRANSACTIONAL', 'off') == 'on'
+    return os.environ.get('MAS_PLACE_TRANSACTIONAL', 'on') == 'on'
 
 
 def should_roll_back(exc):
