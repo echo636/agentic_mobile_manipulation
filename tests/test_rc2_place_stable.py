@@ -500,3 +500,186 @@ def test_checked_place_inside_a5_restores_neighbours_and_recovers(monkeypatch):
     assert inside_recs[1]['upright_failures'] == [{'name': 'ggpp_bulb1', 'role': 'neighbour', 'tilt_deg': 90.0}]
     assert 'upright_failures' not in inside_recs[2]
     assert inside_recs[2]['transaction_checks']['upright_kept'] is True
+
+
+def _aabb_of(hx, hy, hz, *, cx=1.0, cy=2.0, z0=0.82):
+    return ([cx - hx / 2, cy - hy / 2, z0], [cx + hx / 2, cy + hy / 2, z0 + hz])
+
+
+def test_cloth_exempt_in_held_and_neighbours(monkeypatch):
+    import math
+    _patch_og_states(monkeypatch)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
+
+    target = _PoseObj('prep_counter', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.5, 1.5, 0.78], [1.5, 2.5, 0.85]))
+    robot = _PoseObj('robot', [0., 0., 0.], [0., 0., 0., 1.])
+
+    rag_cat = _PoseObj('cdkr_rag', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.008, 0.372, 0.373))
+    rag_cat.category = 'rag'
+
+    cloth_pt = _PoseObj('towel_pt', [1.05, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.30, 0.30, 0.15))
+    cloth_pt.prim_type = 1
+
+    cloth_particles = _PoseObj('cloth_part', [1.10, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.30, 0.30, 0.15))
+    cloth_particles.root_link = type('RL', (), {'compute_particle_positions': lambda self: None})()
+
+    mug = _PoseObj('mug', [1.15, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.09, 0.09, 0.11, cx=1.15))
+
+    for held_cloth in (rag_cat, cloth_pt, cloth_particles):
+        assert ST._is_cloth(held_cloth) is True
+        assert ST._upright_meaningful(held_cloth) is False
+        backend = type('B', (), {
+            'robot': robot,
+            'env': type('E', (), {'scene': type('S', (), {'objects': [target, robot, rag_cat, cloth_pt, cloth_particles, mug]})()})(),
+            '_pregrasp_orientations': {id(held_cloth): [0.0, 0.0, 0.0, 1.0]},
+        })()
+        st_before = ST.before_release(backend, held_cloth, target, [])
+        assert st_before is not None
+        assert st_before['held_standing'] is False
+        assert [o.name for o in st_before['neighbours']] == ['mug']
+
+        # Released with root_link stuck at 92.11 deg (T5 r7 cdkr_rag failure mode) still passes upright_kept
+        half = math.radians(92.11) / 2.0
+        held_cloth.ori = [math.sin(half), 0.0, 0.0, math.cos(half)]
+        assert ST.after_settle(backend, held_cloth, st_before) == {'upright_kept': True}
+        assert ST.upright_failures(held_cloth, st_before) == []
+
+
+def test_thin_flat_tools_exempt_while_upright_objects_retained(monkeypatch):
+    import math
+    _patch_og_states(monkeypatch)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
+
+    target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.5, 1.5, 0.78], [1.5, 2.5, 0.85]))
+    robot = _PoseObj('robot', [0., 0., 0.], [0., 0., 0., 1.])
+
+    brush = _PoseObj('ggpp_brush', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.240, 0.123, 0.048))
+    fork = _PoseObj('hl2_fork1', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.175, 0.080, 0.034))
+    tea = _PoseObj('tea_bottle', [1.05, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.07, 0.07, 0.22, cx=1.05))
+    bowl = _PoseObj('bowl', [1.10, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.15, 0.14, 0.08, cx=1.10))
+    bulb = _PoseObj('ggpp_bulb1', [1.15, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.08, 0.08, 0.10, cx=1.15))
+    small_cube = _PoseObj('small_cube', [1.20, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.05, 0.05, 0.05, cx=1.20))
+    no_aabb = type('MockNoAabb', (), {'name': 'mock_upright', 'get_position_orientation': lambda self: ([0., 0., 0.], [0., 0., 0., 1.])})()
+
+    assert ST._upright_meaningful(brush) is False
+    assert ST._upright_meaningful(fork) is False
+    for obj in (tea, bowl, bulb, small_cube, no_aabb):
+        assert ST._upright_meaningful(obj) is True
+
+    # Flat brush held upright before grasp -> exempted from held_standing; flipping to 179 deg still passes
+    backend = type('B', (), {
+        'robot': robot,
+        'env': type('E', (), {'scene': type('S', (), {'objects': [target, robot, brush, fork, tea, bowl, bulb]})()})(),
+        '_pregrasp_orientations': {id(o): [0.0, 0.0, 0.0, 1.0] for o in (brush, tea, bowl, bulb)},
+    })()
+    st_brush = ST.before_release(backend, brush, target, [])
+    assert st_brush['held_standing'] is False
+    assert [o.name for o in st_brush['neighbours']] == ['tea_bottle', 'bowl', 'ggpp_bulb1']
+    half_179 = math.radians(179.0) / 2.0
+    brush.ori = [math.sin(half_179), 0.0, 0.0, math.cos(half_179)]
+    assert ST.after_settle(backend, brush, st_brush) == {'upright_kept': True}
+
+    # Tea bottle, bowl, and bulb all keep held_standing=True
+    for upright_obj in (tea, bowl, bulb):
+        st_obj = ST.before_release(backend, upright_obj, target, [])
+        assert st_obj['held_standing'] is True
+
+    # Flat carrier tray still checks carried_contents_kept even though tray itself is thin
+    tray_carrier = _PoseObj('mhhoga_tray', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.76, 0.71, 0.025))
+    assert ST._upright_meaningful(tray_carrier) is False
+    st_carrier = ST.before_release(backend, tray_carrier, target, [(tea, None)])
+    assert st_carrier['held_standing'] is False and st_carrier['contents'] == [tea]
+    assert ST.evaluate(0.0, [], [False], st_carrier)['carried_contents_kept'] is False
+
+
+def test_restore_neighbours_syncs_physx_scene_query_with_zero_dt(monkeypatch):
+    from contextlib import contextmanager
+    events = []
+
+    class FakeSim:
+        current_time = 12.5
+        _editing_usd = False
+
+        def __init__(self):
+            self.psi = type('PSI', (), {'flush_changes': lambda _s: events.append(('flush_changes', self._editing_usd))})()
+            self.pi = type('PI', (), {'update_simulation': lambda _s, dt, t: events.append(('update_simulation', dt, t, self._editing_usd))})()
+
+        @contextmanager
+        def editing_usd(self):
+            events.append(('editing_usd_enter',))
+            self._editing_usd = True
+            try:
+                yield
+            finally:
+                self._editing_usd = False
+                events.append(('editing_usd_exit',))
+
+        def sync_physx_to_fabric(self):
+            events.append(('sync_physx_to_fabric', self._editing_usd))
+
+    bulb = _PoseObj('ggpp_bulb1', [1.2, 2.1, 0.78], [2 ** -.5, 0., 0., 2 ** -.5])
+    before = {'neighbour_poses': [(bulb, ([1.0, 2.0, 0.85], [0., 0., 0., 1.]))]}
+    backend = type('B', (), {'og': type('OG', (), {'sim': FakeSim()})()})()
+
+    ST.restore_neighbours(before, backend)
+    assert bulb.pos == pytest.approx([1.0, 2.0, 0.85])
+    assert bulb.keep_still_calls == 1
+    assert events == [
+        ('editing_usd_enter',),
+        ('flush_changes', True),
+        ('update_simulation', 0.0, 12.5, True),
+        ('editing_usd_exit',),
+        ('sync_physx_to_fabric', False),
+    ]
+
+    # When already inside editing_usd, do not re-enter editing_usd
+    events.clear()
+    backend.og.sim._editing_usd = True
+    ST.restore_neighbours(before, backend)
+    assert events == [
+        ('flush_changes', True),
+        ('update_simulation', 0.0, 12.5, True),
+        ('sync_physx_to_fabric', True),
+    ]
+
+    # When switch is off (before is None), never touches PhysX sync hooks
+    events.clear()
+    ST.restore_neighbours(None, backend)
+    assert events == []
+
+
+def test_try_place_on_top_a5_calls_physx_broadphase_sync_before_next_candidate(monkeypatch):
+    from manipulation_agent.executors.placement import CheckedPlacement
+    _patch_og_states(monkeypatch)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
+    monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'on')
+    monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
+
+    sync_calls = []
+
+    class _SyncSim(_Sim):
+        current_time = 3.25
+        psi = type('PSI', (), {'flush_changes': staticmethod(lambda: sync_calls.append('flush'))})()
+        pi = type('PI', (), {'update_simulation': staticmethod(lambda dt, t: sync_calls.append(('update', dt, t)))})()
+
+    target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
+    held = _PoseObj('cup', _Vec([0.0, 0.0, 1.0]), _Vec([0., 0., 0., 1.]), on_target=True)
+    bulb = _PoseObj('ggpp_bulb1', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.08, 0.08, 0.10))
+    c0 = {'index': 0, 'pose': (_Vec([1.01, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
+    c1 = {'index': 1, 'pose': (_Vec([1.15, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
+
+    b = _A5PlaceBackend(held, target, bulb, [c0, c1], bad_xs={1.01})
+    b.og = type('OG', (), {'sim': _SyncSim()})()
+    sync_at_select = []
+    orig_select = b._select_surface_candidate
+
+    def tracked_select(*a, **k):
+        sync_at_select.append(len(sync_calls))
+        return orig_select(*a, **k)
+
+    b._select_surface_candidate = tracked_select
+    out = CheckedPlacement._try_place_on_top(b, held, target, 50, _Vec([1.0, 2.0, 0.8]))
+    assert out == 'selected_surface_collision_support_after_free_settling'
+    # Initial select had 0 syncs; A5 next_1 select ran AFTER restore_neighbours synced PhysX broadphase
+    assert sync_at_select[0] == 0 and sync_at_select[1] >= 4
+    assert ('update', 0.0, 3.25) in sync_calls and 'flush' in sync_calls

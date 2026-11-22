@@ -18,12 +18,41 @@ Independent of MAS_PLACE_TRANSACTIONAL: stable check alone -> a failed release e
 stays where it fell, the receipt says so); both on -> the release is rolled back and the receipt is not_placed.
 Off (default): the 1d19707 behaviour.
 """
+from contextlib import nullcontext
 import math
 import os
 
 STANDING_MAX_DEG = 15.
 FALLEN_MIN_DEG = 45.
 EXTRA_SETTLE_STEPS = 100
+FLAT_MAX_HEIGHT_M = 0.06
+FLAT_MAX_ASPECT = 0.35
+_CLOTH_CATEGORIES = frozenset({'rag', 'cloth', 'towel', 'dishtowel'})
+
+
+def _is_cloth(obj):
+    return (
+        getattr(obj, 'category', None) in _CLOTH_CATEGORIES
+        or getattr(obj, 'prim_type', None) == 1
+        or hasattr(getattr(obj, 'root_link', None), 'compute_particle_positions')
+    )
+
+
+def _upright_meaningful(obj):
+    """Whether keeping an object upright is physically meaningful (excludes cloth and thin/flat tools)."""
+    if obj is None or _is_cloth(obj):
+        return False
+    try:
+        lo, hi = obj.aabb
+        hx = abs(float(hi[0]) - float(lo[0]))
+        hy = abs(float(hi[1]) - float(lo[1]))
+        hz = abs(float(hi[2]) - float(lo[2]))
+    except Exception:
+        return True
+    horiz = max(hx, hy)
+    if horiz > 0. and hz < FLAT_MAX_HEIGHT_M and (hz / horiz) < FLAT_MAX_ASPECT:
+        return False
+    return True
 
 
 def enabled():
@@ -55,7 +84,7 @@ def _standing_neighbours(backend, held, target, payload):
     except Exception:
         return out
     for obj in backend.env.scene.objects:
-        if id(obj) in skip or getattr(obj, 'fixed_base', False):
+        if id(obj) in skip or getattr(obj, 'fixed_base', False) or not _upright_meaningful(obj):
             continue
         try:
             lo, hi = [[float(v) for v in a] for a in obj.aabb]
@@ -96,13 +125,45 @@ def before_release(backend, held, target, contents):
     for obj in neighbours:
         pos, ori = obj.get_position_orientation()
         neighbour_poses.append((obj, (_clone_vec(pos), _clone_vec(ori))))
-    return {'held_standing': ref is not None and tilt_deg(ref) <= STANDING_MAX_DEG,
+    return {'held_standing': _upright_meaningful(held) and ref is not None and tilt_deg(ref) <= STANDING_MAX_DEG,
             'neighbours': neighbours,
             'neighbour_poses': neighbour_poses,
             'contents': payload}
 
 
-def restore_neighbours(before):
+def _sync_physx_scene_query(backend):
+    """Flush restored PhysX transforms into the scene-query broadphase with zero physics dt."""
+    og = getattr(backend, 'og', None)
+    sim = getattr(og, 'sim', None) if og is not None else None
+    if sim is None:
+        return
+    ctx = (sim.editing_usd()
+           if hasattr(sim, 'editing_usd') and not getattr(sim, '_editing_usd', False)
+           else nullcontext())
+    try:
+        with ctx:
+            psi = getattr(sim, 'psi', None)
+            if psi is not None and hasattr(psi, 'flush_changes'):
+                try:
+                    psi.flush_changes()
+                except Exception:
+                    pass
+            pi = getattr(sim, 'pi', None)
+            if pi is not None and hasattr(pi, 'update_simulation'):
+                try:
+                    pi.update_simulation(0.0, float(getattr(sim, 'current_time', 0.0)))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    if hasattr(sim, 'sync_physx_to_fabric'):
+        try:
+            sim.sync_physx_to_fabric()
+        except Exception:
+            pass
+
+
+def restore_neighbours(before, backend=None):
     """Put standing neighbours back at their pre-release poses (with zero velocity) before an A5 retry."""
     if before is None:
         return
@@ -110,6 +171,8 @@ def restore_neighbours(before):
         obj.set_position_orientation(_clone_vec(pos), _clone_vec(ori))
         if hasattr(obj, 'keep_still'):
             obj.keep_still()
+    if backend is not None:
+        _sync_physx_scene_query(backend)
 
 
 def evaluate(held_tilt, neighbour_tilts, contents_on_carrier, before):

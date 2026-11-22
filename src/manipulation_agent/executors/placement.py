@@ -818,13 +818,13 @@ class CheckedPlacement:
                 from . import placement_settle as PS
                 if PS.enabled():
                     def retry_release_and_check(cand):
-                        ST.restore_neighbours(st_before)
+                        ST.restore_neighbours(st_before, self)
                         return release_and_check(cand)
                     def next_candidate(tried):
                         # The selector reads the held object's current pose and shape; put the assembly back at the
                         # first selected pose (no physics step) so the next proposals are built from that pose.
                         held.set_position_orientation(*candidate['pose']); self._relocate_contents(held, contents)
-                        ST.restore_neighbours(st_before)
+                        ST.restore_neighbours(st_before, self)
                         try:
                             return self._select_surface_candidate(held, target, point, yaw_degrees, payload,
                                                                   roll_degrees=roll_degrees, exclude_positions=tried)
@@ -1002,13 +1002,13 @@ class CheckedPlacement:
                 from . import placement_settle as PS
                 if PS.enabled():
                     def retry_release_and_check(cand):
-                        ST.restore_neighbours(st_before)
+                        ST.restore_neighbours(st_before, self)
                         return release_and_check(cand)
                     def next_candidate(tried):
                         # The selector reads the held object's current pose and shape; put the assembly back at the
                         # first selected pose (no physics step) so the next proposals are built from that pose.
                         held.set_position_orientation(*candidate['pose']); self._relocate_contents(held, contents)
-                        ST.restore_neighbours(st_before)
+                        ST.restore_neighbours(st_before, self)
                         try:
                             return select_inside_release(self, held, target, contents, point=point,
                                                          residents=residents, exclude_positions=tried)
