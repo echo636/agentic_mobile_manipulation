@@ -107,8 +107,16 @@ class FullWorkflowReference:
                 point=[float(v) for v in hit['position']]
                 if all(sum((x-y)**2 for x,y in zip(point,old))>.0001 for old in candidates):candidates.append(point)
         if candidates:
-            candidates.sort(key=lambda p:(abs(p[2]-float(preferred[2])),
-                                          sum((p[i]-float(eye[i]))**2 for i in (0,1))))
+            if primitive == 'place_inside':
+                # Prefer the nearest accessible opening surface so a distant corner at eye height
+                # does not trigger a redundant short approach when already facing the container.
+                candidates.sort(key=lambda p: (
+                    round(math.hypot(p[0] - float(eye[0]), p[1] - float(eye[1])), 2),
+                    abs(p[2] - float(preferred[2])),
+                ))
+            else:
+                candidates.sort(key=lambda p:(abs(p[2]-float(preferred[2])),
+                                              sum((p[i]-float(eye[i]))**2 for i in (0,1))))
             return candidates[attempt%len(candidates)]
         # A physically meaningful top/near-face point remains subject to the
         # executor's normal visibility, collision, reach and departure checks.
@@ -163,6 +171,30 @@ class FullWorkflowReference:
             pass
         return [*target_xy, float(high[2])]
 
+    def _is_openable_role(self, role):
+        """Return True if the role is an openable container/appliance (or cannot be inspected)."""
+        getter = getattr(self.ref, 'obj', None)
+        if getter is None:
+            return True
+        try:
+            obj = getter(role)
+        except Exception:
+            return True
+        states = getattr(obj, 'states', None)
+        if not states:
+            return False
+        return any(getattr(key, '__name__', str(key)) == 'Open' for key in states)
+
+    def _role_center_xy(self, role):
+        getter = getattr(self.ref, 'obj', None)
+        if getter is None:
+            return None
+        try:
+            low, high = getter(role).aabb
+            return ((float(low[0]) + float(high[0])) * 0.5, (float(low[1]) + float(high[1])) * 0.5)
+        except Exception:
+            return None
+
     def action(self,row):
         primitive=row['primitive'];role=row.get('role')
         if primitive=='wait_for':
@@ -173,7 +205,7 @@ class FullWorkflowReference:
             return
         force_approach=False
         for attempt in range(3):
-            if primitive in ('place_on_top','place_inside') and self.backend._get_held() is None:
+            if primitive in ('place_on_top','place_inside') and hasattr(self.backend,'_get_held') and self.backend._get_held() is None:
                 preds = self.backend._predicate_values()
                 if any(preds.get(f"{k}_ontop_{role}") or preds.get(f"{k}_on_{role}") or preds.get(f"{k}_inside_{role}") or preds.get(f"{k}_in_{role}") for k in self.backend.custom_spec.get('roles', {})):
                     return
@@ -190,12 +222,23 @@ class FullWorkflowReference:
                 point=self.surface_xy_point(role,self.ref.top(role,*uv)[:2])
             elif point is None and role:point=self.surface_point(role,primitive,attempt)
             try:
+                # Skip no-op explicit floor navigation when the base is already at the target cell.
+                if (primitive == 'navigate_to' and not force_approach and point is not None
+                        and ('point' in row or 'xy' in row)
+                        and ('floor' in (role or '') or float(point[2]) <= 0.15)):
+                    base = self.backend.robot.get_position_orientation()[0]
+                    if math.dist((float(base[0]), float(base[1])), (float(point[0]), float(point[1]))) <= 0.10:
+                        return None
                 # Long-range approach is a separately recorded ordinary motor call.
                 # This generic reference has no task-specific coordinate shortcuts.
                 if role and primitive!='navigate_to':
                     base=self.backend.robot.get_position_orientation()[0]
-                    distance=sum((float(base[i])-point[i])**2 for i in (0,1))**.5
-                    if force_approach or distance>(1.2 if primitive=='grasp' else 1.4):
+                    base_xy=(float(base[0]),float(base[1]))
+                    distance=math.dist(base_xy,(float(point[0]),float(point[1])))
+                    limits=getattr(self.backend,'local_limits',None)
+                    reach=float(getattr(limits,'reach_m',1.4))
+                    fallback_reach=float(getattr(limits,'fallback_reach_m',2.0))
+                    if force_approach or distance>reach:
                         # Approach a containing appliance's visible exterior
                         # before selecting a low, recessed item. This is an
                         # ordinary recorded navigation, followed by the same
@@ -204,6 +247,14 @@ class FullWorkflowReference:
                         approach_point=(self.surface_point(approach,'navigate_to',attempt)
                                         if approach!=role or any(k in row for k in ('uv','xy','point'))
                                         else point)
+                        # Non-openable supports (e.g. wide benches or tables) can sample a surface
+                        # away from the target item and push the robot farther out; fall back to
+                        # approaching the item itself while keeping openable containers aligned.
+                        if (approach!=role and not self._is_openable_role(approach)
+                                and (math.dist(approach_point[:2],point[:2])>0.40
+                                     or math.dist(base_xy,(float(approach_point[0]),float(approach_point[1])))>distance+0.15)):
+                            approach=role
+                            approach_point=point
                         # A floor (or long worktop) can span an entire room.
                         # Its sampled surface must remain near the requested
                         # work area, otherwise navigation repeatedly approaches
@@ -211,27 +262,47 @@ class FullWorkflowReference:
                         # reach the actual placement slot.
                         if approach==role and math.dist(approach_point[:2],point[:2])>1.:
                             approach_point=point
-                        # An exact placement slot may be behind the near edge
-                        # of a distant shelf. Approach a real surface of that
-                        # same object, then retain the requested placement slot.
-                        # Retried approaches sample a different checked surface.
-                        self.ref.action('navigate_to',approach,approach_point)
-                        if 'uv' not in row and 'xy' not in row and 'point' not in row:
-                            point=self.surface_point(role,primitive,attempt)
-                return self.ref.action(primitive,role,point,**row.get('options',{}))
+                        stops=getattr(self,'_approach_stops',None)
+                        if stops is None:
+                            stops=self._approach_stops={}
+                        skip_nav=False
+                        if not force_approach and primitive!='open' and distance<=fallback_reach and approach in stops:
+                            saved_base,saved_obj,saved_nav=stops[approach]
+                            cur_obj=self._role_center_xy(approach)
+                            obj_stationary=(saved_obj is None or cur_obj is None
+                                            or math.dist(cur_obj,saved_obj)<0.25)
+                            if (math.dist(base_xy,saved_base)<0.10 and obj_stationary
+                                    and math.dist((float(point[0]),float(point[1])),saved_nav)<=0.50):
+                                skip_nav=True
+                        if not skip_nav:
+                            # An exact placement slot may be behind the near edge
+                            # of a distant shelf. Approach a real surface of that
+                            # same object, then retain the requested placement slot.
+                            # Retried approaches sample a different checked surface.
+                            self.ref.action('navigate_to',approach,approach_point)
+                            after_base=self.backend.robot.get_position_orientation()[0]
+                            after_xy=(float(after_base[0]),float(after_base[1]))
+                            stops[approach]=(after_xy,self._role_center_xy(approach),
+                                             (float(approach_point[0]),float(approach_point[1])))
+                            if 'uv' not in row and 'xy' not in row and 'point' not in row:
+                                point=self.surface_point(role,primitive,attempt)
+                result=self.ref.action(primitive,role,point,**row.get('options',{}))
+                if primitive in ('open','close') and role:
+                    getattr(self,'_approach_stops',{}).pop(role,None)
+                return result
             except SkillError as exc:
                 recoverable=exc.code in {'local_adjustment_exhausted','local_adjustment_blocked','out_of_reach',
                     'navigation_search_exhausted','sampling_error','sampling_budget_exhausted','postcondition_error'}
                 if not recoverable or attempt==2:raise
                 self.ref.log('workflow_recovery',primitive=primitive,role=role,attempt=attempt+1,code=exc.code)
                 if exc.code in {'sampling_error','sampling_budget_exhausted','postcondition_error'}:
-                    if primitive in ('place_on_top','place_inside') and self.backend._get_held() is None:
+                    if primitive in ('place_on_top','place_inside') and hasattr(self.backend,'_get_held') and self.backend._get_held() is None:
                         preds = self.backend._predicate_values()
                         if any(preds.get(f"{k}_ontop_{role}") or preds.get(f"{k}_on_{role}") or preds.get(f"{k}_inside_{role}") or preds.get(f"{k}_in_{role}") for k in self.backend.custom_spec.get('roles', {})):
                             return
                         return
                     self.ref.action('wait',seconds=1.)
-                    if primitive in ('place_on_top','place_inside') and self.backend._get_held() is None:
+                    if primitive in ('place_on_top','place_inside') and hasattr(self.backend,'_get_held') and self.backend._get_held() is None:
                         preds = self.backend._predicate_values()
                         if any(preds.get(f"{k}_ontop_{role}") or preds.get(f"{k}_on_{role}") or preds.get(f"{k}_inside_{role}") or preds.get(f"{k}_in_{role}") for k in self.backend.custom_spec.get('roles', {})):
                             return
@@ -239,6 +310,7 @@ class FullWorkflowReference:
                 else:
                     # A fresh explicit navigation call has its own recorded
                     # work budget; it never changes the selected object ID.
+                    getattr(self,'_approach_stops',{}).pop(row.get('approach_role',role),None)
                     force_approach=True
 
     def run(self,order,negative=None):
