@@ -131,3 +131,93 @@ def test_four_switch_combinations_native_false(monkeypatch, sj, tx, expected):
     except SkillError as exc:
         got = factual_execution_error(exc, 'place_on_top', 'holding_item' if tx == 'on' else 'empty')['code']
     assert got == expected
+
+
+def _fake_obj(name, *, category=None, fixed_base=False, aabb=None, links=None, states=None):
+    return type('Obj', (), {
+        'name': name,
+        'category': category,
+        'fixed_base': fixed_base,
+        'aabb': aabb or ([0.0, 0.0, 0.8], [0.08, 0.08, 0.88]),
+        'links': links if links is not None else {'base': type('L', (), {'prim_path': f'/World/scene_0/{name}/base',
+                                                                         'is_meta_link': False})()},
+        'states': states if states is not None else {},
+    })()
+
+
+def test_allows_under_support_rescue_blocks_carriers_containers_and_large_supports(monkeypatch):
+    import sys
+    from types import ModuleType
+
+    og = ModuleType('omnigibson')
+    og_states = ModuleType('omnigibson.object_states')
+    og_states.Inside = 'Inside'
+    og_states.Contains = 'Contains'
+    og_states.Open = 'Open'
+    monkeypatch.setitem(sys.modules, 'omnigibson', og)
+    monkeypatch.setitem(sys.modules, 'omnigibson.object_states', og_states)
+
+    # Carriers / plates / bowls / large flat surfaces / containers / fixed furniture -> False
+    tray = _fake_obj('ggpp_tray', category='tray', aabb=([0.0, 0.0, 0.8], [0.76, 0.71, 0.83]))
+    plate = _fake_obj('hl2_plate1', category='plate', aabb=([0.0, 0.0, 0.8], [0.24, 0.24, 0.82]))
+    small_bowl = _fake_obj('small_bowl', category='bowl', aabb=([0.0, 0.0, 0.8], [0.15, 0.14, 0.88]))
+    large_flat = _fake_obj('wooden_slab', category='slab', aabb=([0.0, 0.0, 0.8], [0.25, 0.19, 0.83]))
+    fixed_small = _fake_obj('fixed_post', category='post', fixed_base=True, aabb=([0.0, 0.0, 0.8], [0.06, 0.06, 0.88]))
+    openfillable_caddy = _fake_obj(
+        'mini_caddy', category='caddy', aabb=([0.0, 0.0, 0.8], [0.12, 0.12, 0.88]),
+        links={'vol': type('L', (), {'is_meta_link': True, 'meta_link_type': 'openfillable'})()},
+    )
+    openable_case = _fake_obj(
+        'mini_case', category='case', aabb=([0.0, 0.0, 0.8], [0.12, 0.12, 0.88]),
+        states={'Inside': object(), 'Open': object()},
+    )
+    contains_vessel = _fake_obj(
+        'mini_vessel', category='vessel', aabb=([0.0, 0.0, 0.8], [0.12, 0.12, 0.88]),
+        states={'Inside': object(), 'Contains': object()},
+    )
+    for blocked in (None, tray, plate, small_bowl, large_flat, fixed_small,
+                    openfillable_caddy, openable_case, contains_vessel):
+        assert SJ.allows_under_support_rescue(blocked) is False, getattr(blocked, 'name', None)
+
+    # Small movable non-container items (even with default OmniGibson Inside state!) -> True
+    half_apple = _fake_obj('half_apple_1', category='half_apple', aabb=([0.0, 0.0, 0.8], [0.08, 0.08, 0.84]),
+                           states={'Inside': object()})
+    small_cup = _fake_obj('small_cup', category='cup', aabb=([0.0, 0.0, 0.8], [0.08, 0.08, 0.88]),
+                          states={'Inside': object()})
+    fork = _fake_obj('hl2_fork1', category='fork', aabb=([0.0, 0.0, 0.8], [0.175, 0.08, 0.834]),
+                     states={'Inside': object()})
+    for allowed in (half_apple, small_cup, fork):
+        assert SJ.allows_under_support_rescue(allowed) is True, allowed.name
+
+
+def test_support_under_blocks_log_sliding_off_tray_onto_bench(monkeypatch, on):
+    import sys
+    from types import ModuleType
+    import torch
+
+    hits = []
+    sampling = ModuleType('omnigibson.utils.sampling_utils')
+    sampling.raytest = lambda start, end, ignore_bodies=None: (
+        hits.append(ignore_bodies) or {'hit': True, 'rigidBody': '/World/scene_0/ggpp_garage_bench/base_link'}
+    )
+    monkeypatch.setitem(sys.modules, 'omnigibson', ModuleType('omnigibson'))
+    monkeypatch.setitem(sys.modules, 'omnigibson.utils', ModuleType('omnigibson.utils'))
+    monkeypatch.setitem(sys.modules, 'omnigibson.utils.sampling_utils', sampling)
+
+    backend = type('B', (), {'torch': torch, 'robot': _fake_obj('robot')})()
+    tray = _fake_obj('ggpp_tray', category='tray', aabb=([-4.8, 6.2, 0.80], [-4.1, 6.9, 0.83]))
+    # T3 #90 regression: tray must never get an under-support rescue target, so log sliding onto bench fails
+    target_support = SJ.support_under(backend, tray)
+    assert target_support is None
+    assert hits == []
+    checks = {**GOOD, 'support_ray_hits_selected_object': False, 'selected_contact_consistent': False}
+    assert SJ.judge_on_top(checks, False, 'ggpp_garage_bench', True, target_support) == (False, None)
+
+    # Small half_apple lying on a plate still gets rescued to the plate underneath
+    sampling.raytest = lambda start, end, ignore_bodies=None: {
+        'hit': True, 'rigidBody': '/World/scene_0/hl2_plate1/base_link'
+    }
+    half_apple = _fake_obj('half_apple_1', category='half_apple', aabb=([0.0, 0.0, 0.82], [0.08, 0.08, 0.86]))
+    apple_support = SJ.support_under(backend, half_apple)
+    assert apple_support == 'hl2_plate1'
+    assert SJ.judge_on_top(checks, False, 'hl2_plate1', True, apple_support) == (True, 'on_support_under_clicked_item')

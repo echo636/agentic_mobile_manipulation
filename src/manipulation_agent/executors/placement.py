@@ -818,18 +818,21 @@ class CheckedPlacement:
                 from . import placement_settle as PS
                 if PS.enabled():
                     def retry_release_and_check(cand):
-                        ST.restore_neighbours(st_before, self)
+                        ST.restore_neighbours(st_before)
                         return release_and_check(cand)
                     def next_candidate(tried):
                         # The selector reads the held object's current pose and shape; put the assembly back at the
                         # first selected pose (no physics step) so the next proposals are built from that pose.
                         held.set_position_orientation(*candidate['pose']); self._relocate_contents(held, contents)
-                        ST.restore_neighbours(st_before, self)
+                        ST.restore_neighbours(st_before)
+                        self._a5_restored_neighbour_aabbs = ST.restored_neighbour_aabbs(st_before)
                         try:
                             return self._select_surface_candidate(held, target, point, yaw_degrees, payload,
                                                                   roll_degrees=roll_degrees, exclude_positions=tried)
                         except SkillError:
                             return None
+                        finally:
+                            self._a5_restored_neighbour_aabbs = ()
                     def record(attempts, ok):
                         self._placement_record({'status': 'settle_fallback', 'primitive': 'place_on_top',
                             'target': target.name, 'held': held.name, 'carried': [o.name for o in payload],
@@ -1002,18 +1005,21 @@ class CheckedPlacement:
                 from . import placement_settle as PS
                 if PS.enabled():
                     def retry_release_and_check(cand):
-                        ST.restore_neighbours(st_before, self)
+                        ST.restore_neighbours(st_before)
                         return release_and_check(cand)
                     def next_candidate(tried):
                         # The selector reads the held object's current pose and shape; put the assembly back at the
                         # first selected pose (no physics step) so the next proposals are built from that pose.
                         held.set_position_orientation(*candidate['pose']); self._relocate_contents(held, contents)
-                        ST.restore_neighbours(st_before, self)
+                        ST.restore_neighbours(st_before)
+                        self._a5_restored_neighbour_aabbs = ST.restored_neighbour_aabbs(st_before)
                         try:
                             return select_inside_release(self, held, target, contents, point=point,
                                                          residents=residents, exclude_positions=tried)
                         except SkillError:
                             return None
+                        finally:
+                            self._a5_restored_neighbour_aabbs = ()
                     def record(attempts, ok):
                         self._placement_record({'status': 'settle_fallback', 'primitive': 'place_inside',
                             'target': target.name, 'held': held.name, 'carried': payload_objs and [o.name for o in payload_objs],

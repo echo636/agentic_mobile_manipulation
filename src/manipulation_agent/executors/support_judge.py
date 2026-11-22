@@ -13,8 +13,10 @@ Cases it changes (sec20/released_failures/JUDGE_MISMATCH_TABLE_20261122.md, tabl
      on the same target (selected_shelf_height / selected_surface_neighborhood): success.
  (2) place_inside into a target without a real cavity (movable and at most FLAT_MAX_HEIGHT_M tall: tray, plate, open
      carrier): judged like place_on_top -- native OnTop(target) true and settled = success.
- (3) place_on_top where the clicked target is a movable item lying on a support S (a half apple on a plate, a mug on
-     a tray) and the item ends settled on S: success (coordinator choice (ii)). Receipt only; the task evaluator still
+ (3) place_on_top where the clicked target is a small movable non-carrier item lying on a support S (a half apple on
+     a plate, a fork/bottle on a tray) and the item ends settled on S: success (coordinator choice (ii)). Carriers,
+     plates, containers, and large horizontal supports (`min(dx, dy) >= 0.18 m`) are excluded so an item sliding off
+     a tray/plate onto a bench/table underneath is never silently passed. Receipt only; the task evaluator still
      judges the relations written in the task goal.
 (5) place_on_top onto a floor (coordinator 06:21): the support ray hits the target floor and the item touches only other
      floor pieces and fixed structure (walls, windows, doors, ceilings) -- e.g. a rag across two floor objects at a room
@@ -26,6 +28,15 @@ Every rescue is recorded privately (placement_diagnostics `support_judge`), neve
 import os
 
 FLAT_MAX_HEIGHT_M = 0.08
+UNDER_SUPPORT_MAX_MIN_HORIZ_M = 0.18
+UNDER_SUPPORT_DISALLOWED_CATEGORIES = frozenset({
+    'tray', 'plate', 'platter', 'dish', 'bowl', 'basket', 'box', 'carton', 'crate',
+    'pan', 'pot', 'bucket', 'bin', 'cutting_board', 'chopping_board',
+    'toolbox', 'suitcase', 'cooler', 'baking_sheet', 'cookie_sheet',
+    'wicker_basket', 'packing_box', 'cardboard_box', 'storage_box', 'trash_can',
+    'frying_pan', 'saucepan', 'stockpot', 'casserole', 'tupperware', 'colander',
+    'laundry_basket', 'picnic_basket', 'shopping_basket', 'hamper',
+})
 NATIVE_EXCEPTIONS = frozenset({'on_support_under_clicked_item', 'floor_touching_only_structure'})
 RESCUE_REQUIRED = ('released', 'upward_support', 'bottom_near_support', 'not_supported_by_robot')
 STRUCTURE_CATEGORIES = frozenset({'floors', 'walls', 'ceilings', 'fixed_window', 'window', 'door', 'sliding_door',
@@ -78,11 +89,62 @@ def judge_inside(official_inside, official_on_top, settled, flat_target, extra_c
     return (True, 'flat_target_on_top') if official_on_top else (False, None)   # case (2)
 
 
+def _is_container_target(target):
+    """True when target is an actual container (fillable/openfillable cavity, or Contains/Open state).
+
+    Note: OmniGibson puts `Inside` in `_DEFAULT_STATE_SET` on every object (including small non-containers like
+    half_apple and fork), so `Inside in target.states` cannot distinguish containers from small items.
+    """
+    links = getattr(target, 'links', None)
+    if isinstance(links, dict):
+        for link in links.values():
+            if (getattr(link, 'is_meta_link', False)
+                    and getattr(link, 'meta_link_type', None) in {'fillable', 'openfillable'}):
+                return True
+    states = getattr(target, 'states', None)
+    if states:
+        try:
+            import omnigibson.object_states as og_states
+        except ImportError:
+            og_states = None
+        if og_states is not None:
+            for attr in ('Contains', 'Open'):
+                cls = getattr(og_states, attr, None)
+                if cls is not None and cls in states:
+                    return True
+    return False
+
+
+def allows_under_support_rescue(target):
+    """Whether case (3) (`on_support_under_clicked_item`) may rescue a placement whose clicked target is `target`.
+
+    True only for small movable non-carrier items lying on a support (e.g. a half apple on a plate, a fork/bottle on
+    a tray); False for fixed furniture, carriers/plates/trays/containers, and large horizontal supports
+    (`min(dx, dy) >= 0.18 m`), preventing an item sliding off a tray/plate onto a bench/table underneath from passing.
+    """
+    if target is None or getattr(target, 'fixed_base', False):
+        return False
+    cat = getattr(target, 'category', None)
+    if cat is not None and str(cat).lower() in UNDER_SUPPORT_DISALLOWED_CATEGORIES:
+        return False
+    if _is_container_target(target):
+        return False
+    try:
+        lo, hi = target.aabb
+        dx = abs(float(hi[0]) - float(lo[0]))
+        dy = abs(float(hi[1]) - float(lo[1]))
+    except Exception:
+        dx = dy = None
+    if dx is not None and min(dx, dy) >= UNDER_SUPPORT_MAX_MIN_HORIZ_M:
+        return False
+    return True
+
+
 # ------------------------------------------------------------------ simulator accessors
 
 def support_under(backend, obj):
     """Name of the body directly under obj's bottom centre (downward ray, obj and robot ignored), else None."""
-    if not enabled():
+    if not enabled() or not allows_under_support_rescue(obj):
         return None
     try:
         from omnigibson.utils.sampling_utils import raytest

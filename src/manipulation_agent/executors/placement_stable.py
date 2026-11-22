@@ -18,15 +18,14 @@ Independent of MAS_PLACE_TRANSACTIONAL: stable check alone -> a failed release e
 stays where it fell, the receipt says so); both on -> the release is rolled back and the receipt is not_placed.
 Off (default): the 1d19707 behaviour.
 """
-from contextlib import nullcontext
 import math
 import os
 
 STANDING_MAX_DEG = 15.
 FALLEN_MIN_DEG = 45.
 EXTRA_SETTLE_STEPS = 100
-FLAT_MAX_HEIGHT_M = 0.06
-FLAT_MAX_ASPECT = 0.35
+FLAT_MAX_HEIGHT_M = 0.10
+FLAT_MAX_ASPECT = 0.30
 _CLOTH_CATEGORIES = frozenset({'rag', 'cloth', 'towel', 'dishtowel'})
 
 
@@ -122,45 +121,30 @@ def before_release(backend, held, target, contents):
     ref = (getattr(backend, '_pregrasp_orientations', None) or {}).get(id(held))
     neighbours = _standing_neighbours(backend, held, target, payload)
     neighbour_poses = []
+    neighbour_aabbs = []
     for obj in neighbours:
         pos, ori = obj.get_position_orientation()
         neighbour_poses.append((obj, (_clone_vec(pos), _clone_vec(ori))))
+        try:
+            lo, hi = obj.aabb
+            lo_t = (float(lo[0]), float(lo[1]), float(lo[2]))
+            hi_t = (float(hi[0]), float(hi[1]), float(hi[2]))
+            if all(lo_t[i] <= hi_t[i] for i in range(3)):
+                neighbour_aabbs.append((lo_t, hi_t))
+        except Exception:
+            pass
     return {'held_standing': _upright_meaningful(held) and ref is not None and tilt_deg(ref) <= STANDING_MAX_DEG,
             'neighbours': neighbours,
             'neighbour_poses': neighbour_poses,
+            'neighbour_aabbs': neighbour_aabbs,
             'contents': payload}
 
 
-def _sync_physx_scene_query(backend):
-    """Flush restored PhysX transforms into the scene-query broadphase with zero physics dt."""
-    og = getattr(backend, 'og', None)
-    sim = getattr(og, 'sim', None) if og is not None else None
-    if sim is None:
-        return
-    ctx = (sim.editing_usd()
-           if hasattr(sim, 'editing_usd') and not getattr(sim, '_editing_usd', False)
-           else nullcontext())
-    try:
-        with ctx:
-            psi = getattr(sim, 'psi', None)
-            if psi is not None and hasattr(psi, 'flush_changes'):
-                try:
-                    psi.flush_changes()
-                except Exception:
-                    pass
-            pi = getattr(sim, 'pi', None)
-            if pi is not None and hasattr(pi, 'update_simulation'):
-                try:
-                    pi.update_simulation(0.0, float(getattr(sim, 'current_time', 0.0)))
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    if hasattr(sim, 'sync_physx_to_fabric'):
-        try:
-            sim.sync_physx_to_fabric()
-        except Exception:
-            pass
+def restored_neighbour_aabbs(before):
+    """Pre-release world AABBs of standing neighbours restored during A5 retry; empty tuple when off."""
+    if before is None:
+        return ()
+    return tuple(before.get('neighbour_aabbs', ()))
 
 
 def restore_neighbours(before, backend=None):
@@ -171,8 +155,6 @@ def restore_neighbours(before, backend=None):
         obj.set_position_orientation(_clone_vec(pos), _clone_vec(ori))
         if hasattr(obj, 'keep_still'):
             obj.keep_still()
-    if backend is not None:
-        _sync_physx_scene_query(backend)
 
 
 def evaluate(held_tilt, neighbour_tilts, contents_on_carrier, before):

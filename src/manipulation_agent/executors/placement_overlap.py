@@ -53,7 +53,9 @@ def assembly_overlap_ranker(backend, held, assembly, *, support_objects=(), igno
     def score(position,quaternion):
         pos=np.asarray(position,dtype=float)
         quat=quaternion if backend.torch.is_tensor(quaternion) else backend.torch.tensor(quaternion)
-        key=tuple(round(float(v),5) for v in (*pos,*quat.cpu().tolist()))
+        raw_extra=getattr(backend,'_a5_restored_neighbour_aabbs',()) or ()
+        extra_aabbs=tuple((tuple(map(float,lo)),tuple(map(float,hi))) for lo,hi in raw_extra)
+        key=(*(round(float(v),5) for v in (*pos,*quat.cpu().tolist())),extra_aabbs)
         if key not in cache:
             stats['poses']+=1;collision=False
             orientation=tuple(quat.cpu().tolist())
@@ -61,19 +63,33 @@ def assembly_overlap_ranker(backend, held, assembly, *, support_objects=(), igno
                 rotation=T.quat2mat(quat).cpu().numpy()
                 transformed=[]
                 for center,half,axes in pieces:
-                    matrix=backend.torch.tensor(rotation@axes,dtype=backend.torch.float32)
+                    world_axes=rotation@axes
+                    matrix=backend.torch.tensor(world_axes,dtype=backend.torch.float32)
                     box_quat=tuple(T.mat2quat(matrix).cpu().tolist())
-                    transformed.append((rotation@center,tuple(map(float,half)),box_quat))
+                    world_half=np.abs(world_axes)@half
+                    transformed.append((rotation@center,tuple(map(float,half)),box_quat,world_half))
                 rotated_pieces[orientation]=transformed
             def hit(row):
                 nonlocal collision
                 if str(row.rigid_body) in ignored:return True
                 collision=True;return False
-            for center,half,box_quat in rotated_pieces[orientation]:
+            for center,half,box_quat,_ in rotated_pieces[orientation]:
                 backend.deadline.check(changed=True)
                 stats['queries']+=1
                 query.overlap_box(half,tuple(map(float,pos+center)),box_quat,hit,False)
                 if collision:break
+            if not collision and extra_aabbs:
+                for center,_,_,world_half in rotated_pieces[orientation]:
+                    wcenter=pos+center
+                    lo=wcenter-world_half
+                    hi=wcenter+world_half
+                    for nlo,nhi in extra_aabbs:
+                        if (lo[0]<=nhi[0] and hi[0]>=nlo[0]
+                                and lo[1]<=nhi[1] and hi[1]>=nlo[1]
+                                and lo[2]<=nhi[2] and hi[2]>=nlo[2]):
+                            collision=True
+                            break
+                    if collision:break
             cache[key]=int(collision)
         return cache[key]
     score.stats=stats

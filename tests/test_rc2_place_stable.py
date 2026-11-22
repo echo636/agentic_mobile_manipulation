@@ -555,32 +555,42 @@ def test_thin_flat_tools_exempt_while_upright_objects_retained(monkeypatch):
 
     brush = _PoseObj('ggpp_brush', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.240, 0.123, 0.048))
     fork = _PoseObj('hl2_fork1', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.175, 0.080, 0.034))
+    half_log = _PoseObj('half_ggpp_log_1', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.453, 0.194, 0.077))
     tea = _PoseObj('tea_bottle', [1.05, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.07, 0.07, 0.22, cx=1.05))
-    bowl = _PoseObj('bowl', [1.10, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.15, 0.14, 0.08, cx=1.10))
+    bowl = _PoseObj('bowl', [1.10, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.153, 0.136, 0.080, cx=1.10))
+    tissue_box = _PoseObj('box_of_tissues', [1.12, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.24, 0.12, 0.10, cx=1.12))
+    alarm_clock = _PoseObj('alarm_clock', [1.13, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.14, 0.09, 0.047, cx=1.13))
     bulb = _PoseObj('ggpp_bulb1', [1.15, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.08, 0.08, 0.10, cx=1.15))
     small_cube = _PoseObj('small_cube', [1.20, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.05, 0.05, 0.05, cx=1.20))
     no_aabb = type('MockNoAabb', (), {'name': 'mock_upright', 'get_position_orientation': lambda self: ([0., 0., 0.], [0., 0., 0., 1.])})()
 
     assert ST._upright_meaningful(brush) is False
     assert ST._upright_meaningful(fork) is False
-    for obj in (tea, bowl, bulb, small_cube, no_aabb):
-        assert ST._upright_meaningful(obj) is True
+    assert ST._upright_meaningful(half_log) is False
+    for obj in (tea, bowl, tissue_box, alarm_clock, bulb, small_cube, no_aabb):
+        assert ST._upright_meaningful(obj) is True, obj.name
 
-    # Flat brush held upright before grasp -> exempted from held_standing; flipping to 179 deg still passes
+    # Flat brush & half log held upright before grasp -> exempted from held_standing; rolling/flipping still passes
     backend = type('B', (), {
         'robot': robot,
-        'env': type('E', (), {'scene': type('S', (), {'objects': [target, robot, brush, fork, tea, bowl, bulb]})()})(),
-        '_pregrasp_orientations': {id(o): [0.0, 0.0, 0.0, 1.0] for o in (brush, tea, bowl, bulb)},
+        'env': type('E', (), {'scene': type('S', (), {'objects': [target, robot, brush, fork, half_log, tea, bowl, tissue_box, bulb]})()})(),
+        '_pregrasp_orientations': {id(o): [0.0, 0.0, 0.0, 1.0] for o in (brush, half_log, tea, bowl, tissue_box, bulb)},
     })()
     st_brush = ST.before_release(backend, brush, target, [])
     assert st_brush['held_standing'] is False
-    assert [o.name for o in st_brush['neighbours']] == ['tea_bottle', 'bowl', 'ggpp_bulb1']
+    assert [o.name for o in st_brush['neighbours']] == ['tea_bottle', 'bowl', 'box_of_tissues', 'ggpp_bulb1']
     half_179 = math.radians(179.0) / 2.0
     brush.ori = [math.sin(half_179), 0.0, 0.0, math.cos(half_179)]
     assert ST.after_settle(backend, brush, st_brush) == {'upright_kept': True}
 
-    # Tea bottle, bowl, and bulb all keep held_standing=True
-    for upright_obj in (tea, bowl, bulb):
+    st_log = ST.before_release(backend, half_log, target, [])
+    assert st_log['held_standing'] is False
+    half_167 = math.radians(167.0) / 2.0
+    half_log.ori = [math.sin(half_167), 0.0, 0.0, math.cos(half_167)]
+    assert ST.after_settle(backend, half_log, st_log) == {'upright_kept': True}
+
+    # Tea bottle, bowl, tissue box, and bulb all keep held_standing=True
+    for upright_obj in (tea, bowl, tissue_box, bulb):
         st_obj = ST.before_release(backend, upright_obj, target, [])
         assert st_obj['held_standing'] is True
 
@@ -592,76 +602,63 @@ def test_thin_flat_tools_exempt_while_upright_objects_retained(monkeypatch):
     assert ST.evaluate(0.0, [], [False], st_carrier)['carried_contents_kept'] is False
 
 
-def test_restore_neighbours_syncs_physx_scene_query_with_zero_dt(monkeypatch):
-    from contextlib import contextmanager
-    events = []
+def test_before_release_records_neighbour_aabbs_and_restore_skips_ineffective_physx_sync(monkeypatch):
+    import torch
+    _patch_og_states(monkeypatch)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
 
-    class FakeSim:
-        current_time = 12.5
-        _editing_usd = False
+    target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.5, 1.5, 0.78], [1.5, 2.5, 0.85]))
+    held = _PoseObj('cup', [0., 0., 1.], [0., 0., 0., 1.], aabb=_aabb_of(0.08, 0.08, 0.10))
+    robot = _PoseObj('robot', [0., 0., 0.], [0., 0., 0., 1.])
+    lo_t = torch.tensor([0.96, 1.96, 0.82])
+    hi_t = torch.tensor([1.04, 2.04, 0.92])
+    bulb = _PoseObj('ggpp_bulb1', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=(lo_t, hi_t))
 
-        def __init__(self):
-            self.psi = type('PSI', (), {'flush_changes': lambda _s: events.append(('flush_changes', self._editing_usd))})()
-            self.pi = type('PI', (), {'update_simulation': lambda _s, dt, t: events.append(('update_simulation', dt, t, self._editing_usd))})()
+    update_calls = []
+    fake_sim = type('FakeSim', (), {
+        'current_time': 12.5,
+        'pi': type('PI', (), {'update_simulation': staticmethod(lambda *a: update_calls.append(a))})(),
+    })()
+    backend = type('B', (), {
+        'robot': robot,
+        'og': type('OG', (), {'sim': fake_sim})(),
+        'env': type('E', (), {'scene': type('S', (), {'objects': [target, held, robot, bulb]})()})(),
+        '_pregrasp_orientations': {},
+    })()
 
-        @contextmanager
-        def editing_usd(self):
-            events.append(('editing_usd_enter',))
-            self._editing_usd = True
-            try:
-                yield
-            finally:
-                self._editing_usd = False
-                events.append(('editing_usd_exit',))
+    assert ST.restored_neighbour_aabbs(None) == ()
+    st_before = ST.before_release(backend, held, target, [])
+    assert st_before is not None
+    expected_aabb = ((pytest.approx(0.96), pytest.approx(1.96), pytest.approx(0.82)),
+                     (pytest.approx(1.04), pytest.approx(2.04), pytest.approx(0.92)))
+    aabbs = ST.restored_neighbour_aabbs(st_before)
+    assert len(aabbs) == 1
+    assert aabbs[0][0] == expected_aabb[0] and aabbs[0][1] == expected_aabb[1]
 
-        def sync_physx_to_fabric(self):
-            events.append(('sync_physx_to_fabric', self._editing_usd))
+    # Mutating original AABB tensors in-place must not affect the cloned tuples
+    lo_t[:] = torch.tensor([9.0, 9.0, 9.0])
+    hi_t[:] = torch.tensor([9.5, 9.5, 9.5])
+    assert ST.restored_neighbour_aabbs(st_before)[0][0] == expected_aabb[0]
 
-    bulb = _PoseObj('ggpp_bulb1', [1.2, 2.1, 0.78], [2 ** -.5, 0., 0., 2 ** -.5])
-    before = {'neighbour_poses': [(bulb, ([1.0, 2.0, 0.85], [0., 0., 0., 1.]))]}
-    backend = type('B', (), {'og': type('OG', (), {'sim': FakeSim()})()})()
-
-    ST.restore_neighbours(before, backend)
+    # restore_neighbours resets pose & velocity without calling ineffective pi.update_simulation(0.0, t)
+    bulb.pos = [1.3, 2.2, 0.78]
+    bulb.ori = [2 ** -.5, 0., 0., 2 ** -.5]
+    ST.restore_neighbours(st_before, backend)
     assert bulb.pos == pytest.approx([1.0, 2.0, 0.85])
     assert bulb.keep_still_calls == 1
-    assert events == [
-        ('editing_usd_enter',),
-        ('flush_changes', True),
-        ('update_simulation', 0.0, 12.5, True),
-        ('editing_usd_exit',),
-        ('sync_physx_to_fabric', False),
-    ]
-
-    # When already inside editing_usd, do not re-enter editing_usd
-    events.clear()
-    backend.og.sim._editing_usd = True
-    ST.restore_neighbours(before, backend)
-    assert events == [
-        ('flush_changes', True),
-        ('update_simulation', 0.0, 12.5, True),
-        ('sync_physx_to_fabric', True),
-    ]
-
-    # When switch is off (before is None), never touches PhysX sync hooks
-    events.clear()
-    ST.restore_neighbours(None, backend)
-    assert events == []
+    assert update_calls == []
+    assert not hasattr(ST, '_sync_physx_scene_query')
 
 
-def test_try_place_on_top_a5_calls_physx_broadphase_sync_before_next_candidate(monkeypatch):
+def test_a5_next_candidate_sets_and_clears_restored_neighbour_aabbs_on_top_and_inside(monkeypatch):
+    from manipulation_agent.executors import inside_sampling
     from manipulation_agent.executors.placement import CheckedPlacement
     _patch_og_states(monkeypatch)
     monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
     monkeypatch.setenv('MAS_PLACEMENT_SETTLE', 'on')
     monkeypatch.delenv('MAS_SUPPORT_JUDGE', raising=False)
 
-    sync_calls = []
-
-    class _SyncSim(_Sim):
-        current_time = 3.25
-        psi = type('PSI', (), {'flush_changes': staticmethod(lambda: sync_calls.append('flush'))})()
-        pi = type('PI', (), {'update_simulation': staticmethod(lambda dt, t: sync_calls.append(('update', dt, t)))})()
-
+    # 1) place_on_top path (both recovery and SkillError cleanup)
     target = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
     held = _PoseObj('cup', _Vec([0.0, 0.0, 1.0]), _Vec([0., 0., 0., 1.]), on_target=True)
     bulb = _PoseObj('ggpp_bulb1', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.08, 0.08, 0.10))
@@ -669,17 +666,52 @@ def test_try_place_on_top_a5_calls_physx_broadphase_sync_before_next_candidate(m
     c1 = {'index': 1, 'pose': (_Vec([1.15, 2.0, 0.85]), _Vec([0., 0., 0., 1.]))}
 
     b = _A5PlaceBackend(held, target, bulb, [c0, c1], bad_xs={1.01})
-    b.og = type('OG', (), {'sim': _SyncSim()})()
-    sync_at_select = []
+    seen_aabbs = []
     orig_select = b._select_surface_candidate
 
     def tracked_select(*a, **k):
-        sync_at_select.append(len(sync_calls))
+        seen_aabbs.append(getattr(b, '_a5_restored_neighbour_aabbs', ()))
         return orig_select(*a, **k)
 
     b._select_surface_candidate = tracked_select
     out = CheckedPlacement._try_place_on_top(b, held, target, 50, _Vec([1.0, 2.0, 0.8]))
     assert out == 'selected_surface_collision_support_after_free_settling'
-    # Initial select had 0 syncs; A5 next_1 select ran AFTER restore_neighbours synced PhysX broadphase
-    assert sync_at_select[0] == 0 and sync_at_select[1] >= 4
-    assert ('update', 0.0, 3.25) in sync_calls and 'flush' in sync_calls
+    assert seen_aabbs[0] == ()
+    assert len(seen_aabbs[1]) == 1
+    assert seen_aabbs[1][0][0] == pytest.approx((0.96, 1.96, 0.82))
+    assert seen_aabbs[1][0][1] == pytest.approx((1.04, 2.04, 0.92))
+    assert b._a5_restored_neighbour_aabbs == ()
+
+    # When next_candidate selector raises SkillError, finally still clears _a5_restored_neighbour_aabbs
+    held2 = _PoseObj('cup2', _Vec([0.0, 0.0, 1.0]), _Vec([0., 0., 0., 1.]), on_target=True)
+    bulb2 = _PoseObj('ggpp_bulb2', [1.0, 2.0, 0.85], [0., 0., 0., 1.], aabb=_aabb_of(0.08, 0.08, 0.10))
+    b_err = _A5PlaceBackend(held2, target, bulb2, [c0], bad_xs={1.01})
+    with pytest.raises(SkillError):
+        CheckedPlacement._try_place_on_top(b_err, held2, target, 50, _Vec([1.0, 2.0, 0.8]))
+    assert b_err._a5_restored_neighbour_aabbs == ()
+
+    # 2) place_inside path
+    volume = type('L', (), {'is_meta_link': True, 'meta_link_type': 'openfillable'})()
+    target_in = _PoseObj('tray', [1.0, 2.0, 0.8], [0., 0., 0., 1.], aabb=([0.8, 1.8, 0.78], [1.4, 2.3, 0.85]))
+    target_in.links = {'vol': volume}
+    held_in = _PoseObj('brush', _Vec([0.0, 0.0, 1.0]), _Vec([0., 0., 0., 1.]), inside_target=True)
+    bulb_in = _PoseObj('ggpp_bulb1', [1.0, 2.0, 0.85], [0., 0., 0., 1.], inside_target=True,
+                       aabb=_aabb_of(0.08, 0.08, 0.10))
+    b_in = _A5PlaceBackend(held_in, target_in, bulb_in, [c0, c1], bad_xs={1.01}, primitive='place_inside')
+    seen_inside_aabbs = []
+
+    def fake_select(backend, held_, target_, contents, point=None, residents=(), exclude_positions=()):
+        seen_inside_aabbs.append(getattr(backend, '_a5_restored_neighbour_aabbs', ()))
+        tried_x = {round(float(p.tolist()[0] if hasattr(p, 'tolist') else p[0]), 4) for p in exclude_positions}
+        for c in (c0, c1):
+            if round(float(c['pose'][0].tolist()[0]), 4) not in tried_x:
+                return c
+        raise SkillError('placement_surface_unavailable', 'none left')
+
+    monkeypatch.setattr(inside_sampling, 'select_inside_release', fake_select)
+    res = CheckedPlacement._checked_place_inside(b_in, target_in, 50, _Vec([1.0, 2.0, 0.8]))
+    assert res['primitive'] == 'place_inside'
+    assert seen_inside_aabbs[0] == ()
+    assert len(seen_inside_aabbs[1]) == 1
+    assert seen_inside_aabbs[1][0][0] == pytest.approx((0.96, 1.96, 0.82))
+    assert b_in._a5_restored_neighbour_aabbs == ()
