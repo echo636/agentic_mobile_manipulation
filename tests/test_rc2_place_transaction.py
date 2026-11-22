@@ -1,6 +1,4 @@
 """rc2 MAS_PLACE_TRANSACTIONAL (2026-11-22): simulator-free tests of the decision logic and the _place_state wiring."""
-import math
-
 import pytest
 
 from manipulation_agent.contracts import SkillError
@@ -15,39 +13,11 @@ def test_switch_default_off(monkeypatch):
     assert TX.enabled() is True
 
 
-def test_before_release_off_is_none(monkeypatch):
-    monkeypatch.delenv('MAS_PLACE_TRANSACTIONAL', raising=False)
-    assert TX.before_release(object(), object(), object(), []) is None
-    assert TX.evaluate(90., [90.], [False], None) == {}            # off: no extra checks at all
-
-
-def test_tilt():
+def test_transaction_module_no_longer_owns_checks():
+    """10:59 split: the release checks live in placement_stable (MAS_PLACE_STABLE_CHECK)."""
+    assert not hasattr(TX, 'evaluate') and not hasattr(TX, 'before_release') and not hasattr(TX, 'after_settle')
     s = 2 ** -.5
-    assert TX.tilt_deg([0, 0, 0, 1]) == pytest.approx(0)
-    assert TX.tilt_deg([s, 0, 0, s]) == pytest.approx(90)
-
-
-def test_standing_item_that_falls_fails():
-    before = {'held_standing': True, 'neighbours': [], 'contents': []}
-    assert TX.evaluate(80., [], [], before) == {'upright_kept': False}
-    assert TX.evaluate(10., [], [], before) == {'upright_kept': True}
-
-
-def test_item_lying_when_picked_is_not_checked():
-    before = {'held_standing': False, 'neighbours': [], 'contents': []}   # hotdog, log, fork lie by design
-    assert TX.evaluate(90., [], [], before) == {'upright_kept': True}
-
-
-def test_knocking_over_a_neighbour_fails():
-    before = {'held_standing': False, 'neighbours': ['cup'], 'contents': []}
-    assert TX.evaluate(0., [70.], [], before) == {'upright_kept': False}
-    assert TX.evaluate(0., [5.], [], before) == {'upright_kept': True}
-
-
-def test_carrier_contents_must_stay_on_it():
-    before = {'held_standing': False, 'neighbours': [], 'contents': ['mug', 'ketchup']}
-    assert TX.evaluate(0., [], [True, False], before)['carried_contents_kept'] is False
-    assert TX.evaluate(0., [], [True, True], before)['carried_contents_kept'] is True
+    assert TX.tilt_deg([s, 0, 0, s]) == pytest.approx(90)          # re-exported for the probes
 
 
 def test_should_roll_back_only_after_release():

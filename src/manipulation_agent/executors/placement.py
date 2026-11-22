@@ -670,7 +670,7 @@ class CheckedPlacement:
         with component(self, 'placement_physics'):
             self.og.sim.step_physics()
 
-    def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None):
+    def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None, extra_until_rest=0):
         """Let the released assembly settle before reading native state transitions.
 
         Sampling can put a small object to sleep before its contact state has
@@ -701,6 +701,22 @@ class CheckedPlacement:
             self.og.sim.sync_physx_to_fabric()
             if resting is not None:
                 resting.add(*held.get_position_orientation())
+        # rc2 MAS_PLACE_STABLE_CHECK: keep stepping (at most extra_until_rest more simulation steps) while the
+        # measured pose window is not yet stable; 0 (switch off) = the fixed duration above.
+        extra = 0
+        while resting is not None and extra < extra_until_rest and not resting.report()['stable']:
+            for obj in (held, *payload):
+                obj.wake()
+            for _ in range(substeps):
+                self._placement_physics_step()
+            if closed_doors and restore_doors is not None:
+                restore_doors(closed_doors, sync_fabric=False)
+            self.og.sim.sync_physx_to_fabric()
+            resting.add(*held.get_position_orientation())
+            extra += 1
+        if extra:
+            self._placement_record({'status': 'stable_check_extra_settle', 'held': held.name, 'target': target.name,
+                                    'extra_steps': extra, 'stable': bool(resting.report()['stable'])})
         for obj in objects:
             for state in obj.states.values():
                 state.clear_cache()
@@ -711,8 +727,8 @@ class CheckedPlacement:
         from .resting_motion import RestingMotionWindow
         contents = list(self._carry_contents)
         payload = [obj for obj, _ in contents]
-        from . import placement_transaction as TX
-        tx_before = TX.before_release(self, held, target, contents)   # rc2 MAS_PLACE_TRANSACTIONAL; None when off
+        from . import placement_stable as ST
+        st_before = ST.before_release(self, held, target, contents)   # rc2 MAS_PLACE_STABLE_CHECK; None when off
         from . import support_judge as SJ
         target_support = SJ.support_under(self, target)                 # rc2 MAS_SUPPORT_JUDGE; None when off
         target_movable = not bool(getattr(target, 'fixed_base', False))
@@ -737,16 +753,18 @@ class CheckedPlacement:
                 if hasattr(item, 'wake'):
                     item.wake()
             resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
-            self._settle_surface_contacts(held, target, payload, max_steps, resting=resting)
+            self._settle_surface_contacts(held, target, payload, max_steps, resting=resting,
+                                          extra_until_rest=ST.extra_settle_steps())
             contacts = self._placement_contacts(held, payload)
             touching = any(link.prim_path in contacts for link in target.links.values())
             supported, support = self._selected_surface_support(
                 held, target, vpoint, touching, payload, resting=resting.report())
-            # rc2 MAS_PLACE_TRANSACTIONAL: upright_kept / carried_contents_kept join the checks (A5 sees them too)
-            support['checks'].update(TX.after_settle(self, held, tx_before))
-            # Residual motion is diagnostic; losing the requested support is a failed result. No rewind here;
-            # the rc1 A5 settle fallback below re-runs this same release and check (placement_settle.py).
-            supported = all(value for key, value in support['checks'].items() if key != 'settled')
+            # rc2 MAS_PLACE_STABLE_CHECK: upright_kept / carried_contents_kept join the checks (A5 sees them too)
+            support['checks'].update(ST.after_settle(self, held, st_before))
+            # Residual motion is diagnostic unless MAS_PLACE_STABLE_CHECK is on (then `settled` counts); losing the
+            # requested support is a failed result. No rewind here; the rc1 A5 settle fallback below re-runs this
+            # same release and check (placement_settle.py).
+            supported = ST.passes(support['checks'])
             official = bool(held.states[OnTop].get_value(target))
             if not supported:
                 # rc2 MAS_SUPPORT_JUDGE (default off): settled on an upward surface of the target (or of the support
@@ -917,9 +935,10 @@ class CheckedPlacement:
         self._placement_record({'status': 'inside_release', 'held': held.name, 'target': target.name,
             **{k: v for k, v in candidate.items() if k != 'pose'},
             'position': candidate['pose'][0].tolist(), 'orientation': candidate['pose'][1].tolist()})
-        from . import placement_transaction as TX
+        from . import placement_stable as ST
         from . import support_judge as SJ
-        tx_before = TX.before_release(self, held, target, contents)   # rc2 MAS_PLACE_TRANSACTIONAL; None when off
+        from .resting_motion import RestingMotionWindow
+        st_before = ST.before_release(self, held, target, contents)   # rc2 MAS_PLACE_STABLE_CHECK; None when off
         flat = SJ.flat_target(target) if SJ.enabled() else False
         self._carry_detach()
         payload_objs = [obj for obj, _ in contents]
@@ -931,9 +950,14 @@ class CheckedPlacement:
             for item in (held, *payload_objs):
                 if hasattr(item, 'wake'):
                     item.wake()
-            self._settle_surface_contacts(held, target, payload_objs, max_steps)
+            resting = RestingMotionWindow(self.og.sim.get_sim_step_dt()) if ST.enabled() else None
+            self._settle_surface_contacts(held, target, payload_objs, max_steps, resting=resting,
+                                          extra_until_rest=ST.extra_settle_steps())
             inside = bool(held.states[Inside].get_value(target))
-            extra = TX.after_settle(self, held, tx_before)
+            extra = ST.after_settle(self, held, st_before)
+            if resting is not None:
+                # rc2 MAS_PLACE_STABLE_CHECK: the measured pose window must be stable, as for place_on_top
+                extra['settled'] = bool(resting.report()['stable'])
             judged = None
             if not inside and SJ.enabled():
                 # rc2 MAS_SUPPORT_JUDGE: a target without a real cavity (tray, plate) is judged like place_on_top
