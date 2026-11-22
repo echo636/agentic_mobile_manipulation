@@ -406,7 +406,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                             ),
                         },
                     }
-                    return [types.TextContent(type='text', text=json.dumps(checkpoint, ensure_ascii=False))]
+                    return [types.TextContent(type='text', text=json.dumps(without_wall_clock(checkpoint), ensure_ascii=False))]
                 zoom_note = None
                 if two_step_select and name in ('act', 'look') and isinstance(arguments, dict):
                     # v12b: arguments meant for zoom (top-level image_ref/point) sent to act/look -> show the shape.
@@ -641,7 +641,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         f"finish(outcome={arguments['outcome']}) was not accepted yet. " + stance.message()
                         + ('\n' + receipts[1] if len(receipts) > 1 else ''))
                 if deferred is not None:
-                    return [types.TextContent(type='text', text=json.dumps(deferred, ensure_ascii=False))]
+                    return [types.TextContent(type='text', text=json.dumps(without_wall_clock(deferred), ensure_ascii=False))]
                 if evidence is not None:
                     def fetch_image(ref):
                         return fetch(url.rstrip('/') + '/image/' + quote(ref, safe=''))

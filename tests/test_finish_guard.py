@@ -220,5 +220,20 @@ class MCPFinishGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['error']['code'], 'finish_deferred_budget_remaining')
         self.assertEqual(calls, ['act'])  # the deferred finish never reached the bridge
 
+    async def test_guard_deferred_reply_strips_wall_clock_keys(self):
+        calls = []
+        tool = await self.serve(calls, finish_guard=True)
+        await tool('act', primitive='grasp')
+        with patch.object(FinishGuard, 'deferral', return_value={
+            'ok': False,
+            'tool_seconds': 1.23,
+            'error': {'code': 'finish_deferred_budget_remaining', 'world_may_have_changed': False,
+                      'message': 'keep trying', 'sim_step': 42},
+        }):
+            result = json.loads((await tool('finish', **ABORT))[0].text)
+        self.assertEqual(result['error']['code'], 'finish_deferred_budget_remaining')
+        self.assertNotIn('tool_seconds', result)
+        self.assertNotIn('sim_step', result['error'])
+
 
 if __name__ == '__main__': unittest.main()

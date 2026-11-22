@@ -107,7 +107,7 @@ class CheckedClothActions:
                 supported = checks['released'] and checks['on_top']
                 raise SkillError('postcondition_error',
                     'Cloth placement did not satisfy: ' + ', '.join(key for key, ok in checks.items() if not ok),
-                    changed=True, stage='released_supported_not_adjacent' if supported else None)
+                    changed=True, stage='released_supported_not_adjacent' if supported else 'released_placement_unconfirmed')
         finally:
             self.frames_revision = -1
         return dict(primitive=primitive, implementation='single_cloth_release_then_native_physics',
