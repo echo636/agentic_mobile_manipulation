@@ -82,6 +82,7 @@ def _standing_neighbours(backend, held, target, payload):
         tlo, thi = [[float(v) for v in a] for a in target.aabb]
     except Exception:
         return out
+    accept_inside = getattr(backend, 'released_inside', None)
     for obj in backend.env.scene.objects:
         if id(obj) in skip or getattr(obj, 'fixed_base', False) or not _upright_meaningful(obj):
             continue
@@ -94,7 +95,8 @@ def _standing_neighbours(backend, held, target, payload):
             continue
         try:
             on = (OnTop in obj.states and obj.states[OnTop].get_value(target)) or \
-                 (Inside in obj.states and obj.states[Inside].get_value(target))
+                 (Inside in obj.states and obj.states[Inside].get_value(target)) or \
+                 (callable(accept_inside) and bool(accept_inside(obj, target)))
         except Exception:
             on = False
         if on and tilt_deg(obj.get_position_orientation()[1]) <= STANDING_MAX_DEG:

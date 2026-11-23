@@ -556,14 +556,26 @@ class ControlledCarry:
                       and not (accept is not None and accept(record[0], container))]
         if not candidates:
             return
-        from omnigibson.utils import transform_utils as T
+        try:
+            from omnigibson.utils import transform_utils as T
+        except ImportError:
+            T = None
         torch_mod = getattr(self, 'torch', None)
-        if torch_mod is None:
+        if torch_mod is None and T is not None:
             import torch as torch_mod
         body_aabb = _container_body_aabb(container)
         escaped_details = []
         waived_details = []
         for child,link,relative in candidates:
+            if (T is None or link is None or relative is None
+                    or not hasattr(child, 'get_position_orientation')
+                    or not hasattr(child, 'get_linear_velocity')
+                    or not hasattr(child, 'aabb')):
+                escaped_details.append({
+                    'object': getattr(child, 'name', str(child)),
+                    'anchor_link': getattr(link, 'prim_path', None),
+                })
+                continue
             position = child.get_position_orientation()[0]
             expected = T.pose_transform(*link.get_position_orientation(),*relative)[0]
             lo,hi = child.aabb; center = (lo+hi)/2
