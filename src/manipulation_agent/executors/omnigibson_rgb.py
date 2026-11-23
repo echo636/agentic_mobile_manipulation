@@ -951,9 +951,14 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 try:
                     opening_note=OS.opening_info(self,getattr(target,'selected_object',None),point)
                     if opening_note.get('normal'):
+                        keep_out=None
+                        if opening_note.get('open_low_door_box'):
+                            from . import floor_clearance as FC
+                            keep_out=(*opening_note['open_low_door_box'],FC.base_radius(self.robot)+OS.KEEP_OUT_MARGIN_M)
+                            opening_note['keep_out_radius_m']=round(keep_out[2],3)
                         k=OS.pick_front_cell(points.cpu().tolist(),distances.cpu().tolist(),
                                              self.local_limits.fallback_reach_m,opening_note['face_center'],
-                                             opening_note['normal'])
+                                             opening_note['normal'],keep_out=keep_out)
                         if k is None:
                             opening_note['stance']='rc1_rule_no_reachable_cell_in_front'
                         else:

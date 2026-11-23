@@ -158,3 +158,15 @@ def test_floor_click_at_oven_foot_inside_door_box_still_approaches_oven(monkeypa
     backend = _fake_scene(monkeypatch, [garage_door, kiln], {'kiln': [0.0, -1.0]})
     ok, body, why = OS.floor_click_is_object_approach(backend, None, [-6.33, 6.74, 0.09])
     assert ok is True and body == 'kiln' and why == 'side_opening'
+
+
+def test_open_low_door_is_a_keep_out_area():
+    """2026-11-23 (cooking candidate): the base must not stand on a drop-down door lying open over the floor."""
+    f = [0.0, 0.0]
+    pts = [(0.8, 0.0), (1.05, 0.0)]                 # 0.8 m and 1.05 m in front of the face
+    d = [0.9, 1.1]
+    door = ([0.0, -0.3], [0.55, 0.3])               # open door panel reaching 0.55 m out
+    assert OS.pick_front_cell(pts, d, 2.0, f, [1.0, 0.0]) == 0                       # unchanged without keep-out
+    assert OS.pick_front_cell(pts, d, 2.0, f, [1.0, 0.0], keep_out=(*door, 0.30)) == 1  # 0.8 m overlaps the door
+    assert OS.pick_front_cell(pts, d, 2.0, f, [1.0, 0.0], keep_out=(*door, 0.55)) is None  # both overlap -> rc1 rule
+    assert OS.circle_hits_box_xy(0.8, 0.0, 0.3, *door) and not OS.circle_hits_box_xy(1.05, 0.0, 0.3, *door)

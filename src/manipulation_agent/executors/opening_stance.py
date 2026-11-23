@@ -134,12 +134,28 @@ def face_center(body_center, body_yaw, half_extents, normal):
     return [body_center[0] + normal[0] * d, body_center[1] + normal[1] * d]
 
 
-def pick_front_cell(points_xy, dist_to_click, reach_m, front, normal):
+LOW_DOOR_Z_M = 0.5               # an open door panel reaching below this height can be driven onto by the base
+KEEP_OUT_MARGIN_M = 0.05
+
+
+def circle_hits_box_xy(x, y, r, lo, hi):
+    """Does a circle of radius r at (x, y) overlap the axis-aligned box [lo, hi] in plan view?"""
+    dx = max(lo[0] - x, 0.0, x - hi[0])
+    dy = max(lo[1] - y, 0.0, y - hi[1])
+    return dx * dx + dy * dy < r * r
+
+
+def pick_front_cell(points_xy, dist_to_click, reach_m, front, normal, keep_out=None):
     """Index of the reachable cell best placed in front of the opening, or None.
-    points_xy: list of (x, y); dist_to_click: list of distances to the clicked point."""
+    points_xy: list of (x, y); dist_to_click: list of distances to the clicked point.
+    keep_out (2026-11-23, cooking candidate): optional (lo_xy, hi_xy, radius) -- an open low door panel (a drop-down
+    dishwasher door lying 0.55 m out over the floor) that the base must not stand on; C4 r6 habit on the PRO 6000: the
+    front stance put the base on the open door and contact closed it (2/2; MAS_OPENING_STANCE=off: door stayed open)."""
     best, best_score = None, None
     for k, (x, y) in enumerate(points_xy):
         if dist_to_click[k] > reach_m:
+            continue
+        if keep_out is not None and circle_hits_box_xy(x, y, keep_out[2], keep_out[0], keep_out[1]):
             continue
         rx, ry = x - front[0], y - front[1]
         t = rx * normal[0] + ry * normal[1]
@@ -280,6 +296,15 @@ def opening_info(backend, obj, point):
     if normal:
         info['normal'] = [round(normal[0], 4), round(normal[1], 4)]
         info['face_center'] = [round(v, 3) for v in face_center(bc, yaw, half, normal)]
+        # an open door panel low over the floor is a keep-out area for the base (see pick_front_cell)
+        try:
+            from omnigibson.object_states import Open
+            drop_down = kind == 'revolute' and abs(axis_w[2]) < 1 - VERTICAL_AXIS_MIN   # horizontal hinge only
+            if drop_down and bool(body.states[Open].get_value()) and float(lo[2]) < LOW_DOOR_Z_M:
+                info['open_low_door_box'] = [[round(float(lo[0]), 3), round(float(lo[1]), 3)],
+                                             [round(float(hi[0]), 3), round(float(hi[1]), 3)]]
+        except Exception:
+            pass
     return info
 
 
