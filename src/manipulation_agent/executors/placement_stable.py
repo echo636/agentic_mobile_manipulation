@@ -184,20 +184,48 @@ def upright_failures(held, before):
     return out
 
 
+def _directly_supported_on(obj, support, OnTop, Inside):
+    try:
+        states = getattr(obj, 'states', None) or {}
+        return bool((OnTop in states and states[OnTop].get_value(support)) or
+                    (Inside in states and states[Inside].get_value(support)))
+    except Exception:
+        return False
+
+
+def _carried_contents_supported(held, contents, OnTop, Inside):
+    """Transitive OnTop/Inside reachability from `held` across `contents` (e.g. apple -> plate -> tray).
+
+    OmniGibson's OnTop predicate is non-transitive, so checking only direct OnTop(obj, held) falsely fails
+    multi-layer stacks carried on a tray. Only items detached from the entire support chain rooted at `held`
+    return False.
+    """
+    if not contents:
+        return []
+    supported_ids = {id(held)}
+    frontier = [held]
+    remaining = list(contents)
+    while frontier and remaining:
+        next_frontier = []
+        still_remaining = []
+        for obj in remaining:
+            if any(_directly_supported_on(obj, sup, OnTop, Inside) for sup in frontier):
+                supported_ids.add(id(obj))
+                next_frontier.append(obj)
+            else:
+                still_remaining.append(obj)
+        frontier = next_frontier
+        remaining = still_remaining
+    return [id(obj) in supported_ids for obj in contents]
+
+
 def after_settle(backend, held, before):
     if before is None:
         return {}
     from omnigibson.object_states import Inside, OnTop
-
-    def on_carrier(obj):
-        try:
-            return bool((OnTop in obj.states and obj.states[OnTop].get_value(held)) or
-                        (Inside in obj.states and obj.states[Inside].get_value(held)))
-        except Exception:
-            return False
     return evaluate(tilt_deg(held.get_position_orientation()[1]),
                     [tilt_deg(o.get_position_orientation()[1]) for o in before['neighbours']],
-                    [on_carrier(o) for o in before['contents']], before)
+                    _carried_contents_supported(held, before['contents'], OnTop, Inside), before)
 
 
 def passes(checks):

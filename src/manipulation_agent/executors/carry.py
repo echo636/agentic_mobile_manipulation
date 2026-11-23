@@ -2,11 +2,49 @@
 
 No body pose is projected during subsequent physics steps.
 """
+import contextlib
 import json
 import math
 from ..contracts import SkillError
 from ..records import now
 from .particle_payload import snapshot_particles, relocate_particles, verify_particles, particle_count
+
+
+@contextlib.contextmanager
+def suppress_slicing_rules(backend):
+    """Temporarily suspend passive SlicingRule/DicingRule during non-cut placement settling.
+
+    Explicit `cut` invokes SlicingRule/DicingRule directly via CheckedMaterialActions._checked_cut.
+    During placement, a knife settling next to or onto sliceable food would otherwise destroy the food in
+    the post-settle env.step() and also abort MAS_PLACE_TRANSACTIONAL rollback (`scene_objects_changed`).
+    Other transition rules (cooking, heating, washing, etc.) stay active.
+    """
+    env = getattr(backend, 'env', None)
+    scene = getattr(env, 'scene', None)
+    api = getattr(scene, 'transition_rule_api', None)
+    active = getattr(api, 'active_rules', None)
+    if not isinstance(active, set) or not active:
+        yield
+        return
+    try:
+        from omnigibson.transition_rules import DicingRule, SlicingRule
+        rule_types = (SlicingRule, DicingRule)
+    except Exception:
+        yield
+        return
+    removed = [rule for rule in tuple(active) if isinstance(rule, rule_types)]
+    if not removed:
+        yield
+        return
+    for rule in removed:
+        active.discard(rule)
+    try:
+        yield
+    finally:
+        live = getattr(api, 'active_rules', None)
+        if isinstance(live, set):
+            for rule in removed:
+                live.add(rule)
 
 
 def support_closure(root, objects, relation):
@@ -241,7 +279,8 @@ class ControlledCarry:
             return self._place_state_once(primitive, target, max_steps, point, yaw_degrees,
                                           roll_degrees=roll_degrees, held=held, contents=contents)
         except SkillError as exc:
-            if transaction is None or not TX.should_roll_back(exc):
+            released = held is not None and self._get_held() is not held
+            if transaction is None or not TX.should_roll_back(exc, released=released):
                 raise
             ok, reason = TX.restore(self, transaction)
             self._placement_record({'status': 'transaction_rolled_back' if ok else 'transaction_not_rolled_back',
@@ -250,7 +289,17 @@ class ControlledCarry:
             if not ok:
                 raise
             # Native transitions and evaluation see the restored world once, as after any placement.
-            self._step(self.primitives._empty_action())
+            # When rolling back a local_work_budget exhaustion, the step/sampling counters are already at limit;
+            # pause the local-operation budget check for this single commit step so rollback finishes cleanly.
+            saved_local = getattr(self, '_local_operation', None)
+            if saved_local is not None and exc.code in TX.BUDGET_ROLLBACK_CODES:
+                self._local_operation = None
+                try:
+                    self._step(self.primitives._empty_action())
+                finally:
+                    self._local_operation = saved_local
+            else:
+                self._step(self.primitives._empty_action())
             raise SkillError('pre_condition_error', 'Placement did not hold; the scene was restored with the item '
                              'still in the hand', changed=False, stage='released_rolled_back') from exc
 
@@ -260,18 +309,19 @@ class ControlledCarry:
         self._placement_particle_payload=(held,snapshot_particles(
             self.env.scene,[held,*[child for child,_ in contents]],include_supported=True))
         try:
-            if held.prim_type == PrimType.CLOTH and primitive in {'place_on_top', 'place_next_to'}:
-                result = self._place_cloth_surface(primitive, held, target, max_steps, point,
-                                                   yaw_degrees, roll_degrees=roll_degrees)
-            elif primitive=='place_inside':
-                result = self._checked_place_inside(target,max_steps,point=point)
-            elif primitive=='place_under':
-                result = self._checked_place_under(target,max_steps)
-            elif primitive=='place_on_top':
-                result = self._checked_place_on_top(target,max_steps,point,yaw_degrees,
-                                                    roll_degrees=roll_degrees)
-            else:
-                result = self._checked_place_next_to(target,max_steps,point,yaw_degrees)
+            with suppress_slicing_rules(self):
+                if held.prim_type == PrimType.CLOTH and primitive in {'place_on_top', 'place_next_to'}:
+                    result = self._place_cloth_surface(primitive, held, target, max_steps, point,
+                                                       yaw_degrees, roll_degrees=roll_degrees)
+                elif primitive=='place_inside':
+                    result = self._checked_place_inside(target,max_steps,point=point)
+                elif primitive=='place_under':
+                    result = self._checked_place_under(target,max_steps)
+                elif primitive=='place_on_top':
+                    result = self._checked_place_on_top(target,max_steps,point,yaw_degrees,
+                                                        roll_degrees=roll_degrees)
+                else:
+                    result = self._checked_place_next_to(target,max_steps,point,yaw_degrees)
             from . import carrier_registry as CR
             # rc2 (MAS_CARRIER_POSE_HOLD, default off since 2026-11-22): carried contents keep their pose relative to the carrier when
             # the carrier is put down; tilts before/after go to the private carry_diagnostics record.

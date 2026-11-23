@@ -350,3 +350,201 @@ def test_local_wrapper_world_may_have_changed_on_rollback_depends_on_reposition(
     assert receipt_moved['code'] == 'not_placed'
     assert receipt_moved['hand'] == 'holding_item'
     assert receipt_moved['world_may_have_changed'] is True
+
+
+def test_should_roll_back_local_work_budget_only_after_release():
+    budget_err = SkillError('local_adjustment_exhausted', 'Local operation work limit reached',
+                            changed=True, stage='local_work_budget')
+    assert not TX.should_roll_back(budget_err)
+    assert not TX.should_roll_back(budget_err, released=False)
+    assert TX.should_roll_back(budget_err, released=True)
+    # Pre-release stance/planning budget or wall guard must never roll back even if released=True
+    assert not TX.should_roll_back(SkillError('local_adjustment_exhausted', 'x', changed=True,
+                                              stage='local_planning_budget'), released=True)
+    assert not TX.should_roll_back(SkillError('executor_wall_guard', 'x', changed=True,
+                                              stage='wall_guard'), released=True)
+
+
+def test_place_state_local_work_budget_pre_release_no_rollback_post_release_rolls_back(monkeypatch):
+    """B2 (rc2 P0): local_adjustment_exhausted before detach keeps item in hand without rollback;
+    after detach it restores the snapshot (without tripping local.check() on the commit step)
+    and returns the existing `not_placed` receipt."""
+    from manipulation_agent.executors.carry import ControlledCarry
+    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'on')
+
+    class _BudgetLocalOp:
+        def check(self):
+            raise SkillError('local_adjustment_exhausted', 'Local operation work limit reached',
+                             changed=True, stage='local_work_budget')
+
+    class _BudgetBackend:
+        def __init__(self, *, detach_before_exhaust):
+            self.held = 'table'
+            self.detach_before_exhaust = detach_before_exhaust
+            self._local_operation = _BudgetLocalOp()
+            self.records = []
+            self.restored = 0
+            self.steps_taken = 0
+            self.primitives = type('P', (), {'_empty_action': staticmethod(lambda: None)})()
+
+        def _get_held(self):
+            return self.held
+
+        @property
+        def _carry_contents(self):
+            return []
+
+        def _place_state_once(self, *a, **k):
+            if self.detach_before_exhaust:
+                self.held = None
+            self._local_operation.check()
+
+        def _placement_record(self, row):
+            self.records.append(row)
+
+        def _step(self, action):
+            if self._local_operation is not None:
+                self._local_operation.check()
+            self.steps_taken += 1
+
+    monkeypatch.setattr(TX, 'snapshot', lambda b: {'held': b.held})
+
+    def fake_restore(b, snap):
+        b.held = snap['held']
+        b.restored += 1
+        return True, None
+
+    monkeypatch.setattr(TX, 'restore', fake_restore)
+
+    # 1) Pre-release candidate search budget exhaustion -> must NOT roll back
+    b_pre = _BudgetBackend(detach_before_exhaust=False)
+    with pytest.raises(SkillError) as info_pre:
+        ControlledCarry._place_state(b_pre, 'place_on_top', 'microwave', 10, None)
+    assert info_pre.value.code == 'local_adjustment_exhausted'
+    assert info_pre.value.stage == 'local_work_budget'
+    assert b_pre.restored == 0 and b_pre.steps_taken == 0 and b_pre._get_held() == 'table'
+
+    # 2) Post-release settle budget exhaustion (T1 r2 s015 failure mode) -> MUST roll back to not_placed
+    b_post = _BudgetBackend(detach_before_exhaust=True)
+    saved_op = b_post._local_operation
+    with pytest.raises(SkillError) as info_post:
+        ControlledCarry._place_state(b_post, 'place_on_top', 'microwave', 10, None)
+    assert info_post.value.code == 'pre_condition_error'
+    assert info_post.value.stage == 'released_rolled_back'
+    assert b_post.restored == 1 and b_post.steps_taken == 1 and b_post._get_held() == 'table'
+    assert b_post._local_operation is saved_op
+    assert b_post.records[-1]['status'] == 'transaction_rolled_back'
+    assert b_post.records[-1]['original_code'] == 'local_adjustment_exhausted'
+    assert b_post.records[-1]['original_stage'] == 'local_work_budget'
+    receipt = factual_execution_error(info_post.value, 'place_on_top', 'holding_item')
+    assert receipt['code'] == 'not_placed' and receipt['hand'] == 'holding_item'
+
+    # 3) Switch off -> no rollback even after release
+    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'off')
+    b_off = _BudgetBackend(detach_before_exhaust=True)
+    with pytest.raises(SkillError) as info_off:
+        ControlledCarry._place_state(b_off, 'place_on_top', 'microwave', 10, None)
+    assert info_off.value.code == 'local_adjustment_exhausted'
+    assert b_off.restored == 0 and b_off._get_held() is None
+
+
+def test_place_state_suppresses_passive_slicing_and_allows_clean_rollback(monkeypatch):
+    """B4 (rc2 P1): non-cut placement suspends SlicingRule/DicingRule during settling env.step()
+    while keeping unrelated rules active and always restoring active_rules afterwards."""
+    import sys
+    from types import ModuleType
+    from manipulation_agent.executors import carry as carry_mod
+    from manipulation_agent.executors.carry import ControlledCarry
+
+    class _SlicingRule:
+        pass
+
+    class _DicingRule:
+        pass
+
+    class _CookingRule:
+        pass
+
+    og_tr = ModuleType('omnigibson.transition_rules')
+    og_tr.SlicingRule = _SlicingRule
+    og_tr.DicingRule = _DicingRule
+    og_utils = ModuleType('omnigibson.utils')
+    og_const = ModuleType('omnigibson.utils.constants')
+    og_const.PrimType = type('PrimType', (), {'CLOTH': 'CLOTH', 'RIGID': 'RIGID'})
+    monkeypatch.setitem(sys.modules, 'omnigibson.transition_rules', og_tr)
+    monkeypatch.setitem(sys.modules, 'omnigibson.utils', og_utils)
+    monkeypatch.setitem(sys.modules, 'omnigibson.utils.constants', og_const)
+    monkeypatch.setattr(carry_mod, 'snapshot_particles', lambda *a, **k: [])
+    monkeypatch.setenv('MAS_PLACE_TRANSACTIONAL', 'on')
+
+    slicing, dicing, cooking = _SlicingRule(), _DicingRule(), _CookingRule()
+    active_rules = {slicing, dicing, cooking}
+    scene = type('Scene', (), {
+        'objects': ['hl2_knife', 'hl2_hotdog2'],
+        'transition_rule_api': type('API', (), {'active_rules': active_rules})(),
+    })()
+
+    class _KnifePlaceBackend:
+        def __init__(self):
+            self.env = type('Env', (), {'scene': scene})()
+            self.held = type('Knife', (), {'name': 'hl2_knife', 'prim_type': 'RIGID'})()
+            self.primitives = type('P', (), {'_empty_action': staticmethod(lambda: None)})()
+            self.records = []
+            self.restored = 0
+            self.rules_seen_in_settle_step = None
+
+        def _get_held(self):
+            return self.held
+
+        @property
+        def _carry_contents(self):
+            return []
+
+        def _placement_record(self, row):
+            self.records.append(row)
+
+        def _step(self, action):
+            # Emulate OmniGibson TransitionRuleAPI.step(): if SlicingRule were still active,
+            # the knife touching hotdog2 would delete hotdog2 and break TX.restore.
+            if any(isinstance(r, _SlicingRule) for r in scene.transition_rule_api.active_rules):
+                if self.held is None and 'hl2_hotdog2' in scene.objects:
+                    scene.objects.remove('hl2_hotdog2')
+                    scene.objects.extend(['half_hl2_hotdog2_0', 'half_hl2_hotdog2_1'])
+
+        def _checked_place_on_top(self, target, max_steps, point, yaw_degrees, *, roll_degrees=None):
+            self.held = None
+            try:
+                raise SkillError('postcondition_error', 'unstable', changed=True,
+                                 stage='released_placement_unconfirmed')
+            finally:
+                self.rules_seen_in_settle_step = set(scene.transition_rule_api.active_rules)
+                self._step(self.primitives._empty_action())
+
+        def _place_state_once(self, *a, **k):
+            return ControlledCarry._place_state_once(self, *a, **k)
+
+    monkeypatch.setattr(TX, 'snapshot', lambda b: {'held': b.held, 'objs': tuple(scene.objects)})
+
+    def fake_restore(b, snap):
+        if tuple(scene.objects) != snap['objs']:
+            return False, 'scene_objects_changed'
+        b.held = snap['held']
+        b.restored += 1
+        return True, None
+
+    monkeypatch.setattr(TX, 'restore', fake_restore)
+
+    b = _KnifePlaceBackend()
+    hotdog = type('Hotdog', (), {'name': 'hl2_hotdog2'})()
+    with pytest.raises(SkillError) as info:
+        ControlledCarry._place_state(b, 'place_on_top', hotdog, 10, None)
+
+    # During placement settle step: SlicingRule/DicingRule suspended, CookingRule still active
+    assert b.rules_seen_in_settle_step == {cooking}
+    # After placement exits: all rules cleanly restored
+    assert scene.transition_rule_api.active_rules == {slicing, dicing, cooking}
+    # Hotdog remained intact and TX.restore succeeded cleanly
+    assert scene.objects == ['hl2_knife', 'hl2_hotdog2']
+    assert b.restored == 1 and b._get_held() is not None
+    assert info.value.stage == 'released_rolled_back'
+    assert factual_execution_error(info.value, 'place_on_top', 'holding_item')['code'] == 'not_placed'

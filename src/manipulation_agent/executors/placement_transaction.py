@@ -23,6 +23,7 @@ import random
 from .placement_stable import tilt_deg  # noqa: F401  (kept here: probes import it from this module)
 
 ROLLBACK_CODES = frozenset({'postcondition_error', 'physics_instability', 'target_changed'})
+BUDGET_ROLLBACK_CODES = frozenset({'local_adjustment_exhausted'})
 BOOKKEEPING = ('_grasped_payload', '_grasped_registered_ids', '_pregrasp_orientations', '_carrier_registry')
 
 
@@ -30,11 +31,18 @@ def enabled():
     return os.environ.get('MAS_PLACE_TRANSACTIONAL', 'on') == 'on'
 
 
-def should_roll_back(exc):
-    """Only failures after the item left the hand: the stages the model sees as result_unconfirmed / released."""
+def should_roll_back(exc, *, released=False):
+    """Only failures after the item left the hand: released postcondition failures, or a local work-budget
+    exhaustion that occurred after the grasp was already detached (never pre-release candidate search)."""
     from ..observations.boundary import RELEASED_STAGES
-    return (getattr(exc, 'code', None) in ROLLBACK_CODES and bool(getattr(exc, 'changed', False))
-            and getattr(exc, 'stage', None) in RELEASED_STAGES)
+    code = getattr(exc, 'code', None)
+    changed = bool(getattr(exc, 'changed', False))
+    stage = getattr(exc, 'stage', None)
+    if code in ROLLBACK_CODES and changed and stage in RELEASED_STAGES:
+        return True
+    if released and code in BUDGET_ROLLBACK_CODES and changed and stage == 'local_work_budget':
+        return True
+    return False
 
 
 # ---------------------------------------------------------------- snapshot / restore (needs a simulator)

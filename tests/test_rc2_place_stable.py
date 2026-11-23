@@ -716,3 +716,62 @@ def test_a5_next_candidate_sets_and_clears_restored_neighbour_aabbs_on_top_and_i
     assert len(seen_inside_aabbs[1]) == 1
     assert seen_inside_aabbs[1][0][0] == pytest.approx((0.96, 1.96, 0.82))
     assert b_in._a5_restored_neighbour_aabbs == ()
+
+
+class _GraphObj:
+    """Minimal object with explicit pairwise OnTop/Inside relations for multi-layer stack tests."""
+
+    def __init__(self, name, *, on_top=(), inside=()):
+        self.name = name
+        self._on_top = set(on_top)
+        self._inside = set(inside)
+        self.states = {
+            'OnTop': type('S', (), {'get_value': lambda _self, sup: sup in self._on_top})(),
+            'Inside': type('S', (), {'get_value': lambda _self, sup: sup in self._inside})(),
+        }
+
+    def get_position_orientation(self):
+        return ([0.0, 0.0, 0.8], [0.0, 0.0, 0.0, 1.0])
+
+
+def test_carried_contents_kept_supports_multi_layer_stack_and_detects_any_drop(monkeypatch):
+    """B1 (rc2 P0): apple -> plate -> tray (2 layers) and garnish -> apple -> bowl -> tray (3 layers)
+    must pass carried_contents_kept even though OmniGibson OnTop is non-transitive, while any layer
+    detaching from the carrier chain must fail."""
+    _patch_og_states(monkeypatch)
+    monkeypatch.setenv('MAS_PLACE_STABLE_CHECK', 'on')
+
+    # 1) 2-layer stack: two apple halves OnTop plate, plate OnTop tray; OnTop(apple, tray) is False
+    tray = _GraphObj('hl2_tray')
+    plate = _GraphObj('hl2_plate1', on_top=[tray])
+    apple0 = _GraphObj('half_hl2_apple_0', on_top=[plate])
+    apple1 = _GraphObj('half_hl2_apple_1', on_top=[plate])
+    before_2 = {'held_standing': False, 'neighbours': [], 'contents': [plate, apple0, apple1]}
+    assert ST.after_settle(None, tray, before_2) == {'upright_kept': True, 'carried_contents_kept': True}
+
+    # Order of contents in list must not matter (apple listed before plate)
+    before_2_rev = {'held_standing': False, 'neighbours': [], 'contents': [apple1, apple0, plate]}
+    assert ST.after_settle(None, tray, before_2_rev) == {'upright_kept': True, 'carried_contents_kept': True}
+
+    # 2) 3-layer mixed OnTop + Inside stack: garnish OnTop apple Inside bowl OnTop tray
+    bowl = _GraphObj('bowl', on_top=[tray])
+    apple_in = _GraphObj('apple_in', inside=[bowl])
+    garnish = _GraphObj('garnish', on_top=[apple_in])
+    before_3 = {'held_standing': False, 'neighbours': [], 'contents': [garnish, apple_in, bowl]}
+    assert ST.after_settle(None, tray, before_3) == {'upright_kept': True, 'carried_contents_kept': True}
+
+    # 3) Top item drops off onto the table/floor -> False
+    apple1._on_top.clear()
+    assert ST.after_settle(None, tray, before_2) == {'upright_kept': True, 'carried_contents_kept': False}
+
+    # 4) Middle layer (plate) drops off tray while apples still sit on the fallen plate -> False
+    apple1._on_top.add(plate)
+    plate._on_top.clear()
+    assert ST.after_settle(None, tray, before_2) == {'upright_kept': True, 'carried_contents_kept': False}
+
+    # 5) Detached cycle between two dropped items never loops and still returns False
+    a = _GraphObj('a')
+    b = _GraphObj('b', on_top=[a])
+    a._on_top.add(b)
+    before_cycle = {'held_standing': False, 'neighbours': [], 'contents': [a, b]}
+    assert ST.after_settle(None, tray, before_cycle) == {'upright_kept': True, 'carried_contents_kept': False}
