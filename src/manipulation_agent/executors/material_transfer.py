@@ -10,6 +10,47 @@ from ..contracts import SkillError
 from .particle_payload import snapshot_particles, _indices
 from .particle_view import physical_particle_view
 
+# rc2 B8 fix: side-opening / closed-top enclosures (cabinets, wardrobes, appliances) cannot receive top-down
+# pouring onto destination.aabb[1][2] even when they expose ContainedParticles / Open states.
+NON_POURABLE_ENCLOSURE_CATEGORIES = frozenset({
+    'cabinet', 'bottom_cabinet', 'bottom_cabinet_no_top', 'top_cabinet',
+    'wardrobe', 'wardrobe_cabinet', 'dresser', 'chest', 'medicine_cabinet',
+    'nightstand', 'locker', 'cupboard', 'pantry', 'hutch', 'sideboard',
+    'fridge', 'refrigerator', 'freezer', 'mini_fridge',
+    'microwave', 'oven', 'toaster_oven',
+    'washer', 'dryer', 'clothes_dryer', 'dishwasher',
+})
+
+
+def _has_side_opening_articulation(destination):
+    """Generic check for openable enclosures whose door or drawer opens sideways (not a top-opening lid)."""
+    try:
+        from omnigibson.object_states import Open
+        if Open not in (getattr(destination, 'states', None) or {}):
+            return False
+    except Exception:
+        return False
+    try:
+        from .opening_stance import is_thin, opening_info
+        if not getattr(destination, 'links', None) or is_thin(destination):
+            return False
+        lo, hi = destination.aabb
+        center = [(float(lo[i]) + float(hi[i])) / 2.0 for i in range(3)]
+        info = opening_info(None, destination, center)
+        return bool(info.get('normal'))
+    except Exception:
+        return False
+
+
+def is_non_pourable_enclosure(destination):
+    """Return True if destination is a closed-top or side-opening enclosure that must not receive pour."""
+    if destination is None:
+        return False
+    category = str(getattr(destination, 'category', '') or '').strip().lower()
+    if category in NON_POURABLE_ENCLOSURE_CATEGORIES or category.endswith('_cabinet'):
+        return True
+    return _has_side_opening_articulation(destination)
+
 
 def rigid_receiver_relation(obj, destination):
     """A poured object may rest on a tray below its annotated fill volume.
@@ -199,6 +240,9 @@ class CheckedMaterialTransfer:
         """
         from omnigibson.object_states import ContainedParticles
         from .particle_payload import particle_bounds, relocate_particles
+        if is_non_pourable_enclosure(destination):
+            raise SkillError('unsupported_relation',
+                             'Pour cannot release contents onto a closed-top or side-opening enclosure')
         torch = self.torch
         self.deadline.check()
         assembly = list(objects)
@@ -294,11 +338,29 @@ class CheckedMaterialTransfer:
                 result['source_has_more_material'] = True
         # One spilled component must not discard the other transfer outcomes.
         # Native transformations remain unconfirmed rather than presumed lost.
+        # rc2 B8 invariant: pouring rigid items into a container (receiver_kind == 'container') must never
+        # silently succeed when zero rigid items entered the container (inside_objects == 0, e.g. all landed
+        # on top of a closed roof) and no particle transfer was retained.
         rigid = result.get('rigid_transfer', {})
-        retained = (rigid.get('retained_objects', 0) or rigid.get('identities_changed_during_settling') or
-                    any(item['retained_particles'] or item.get('identities_changed_during_settling')
-                        for item in result.get('materials', [])))
-        if not retained:
+        material_retained = any(
+            item['retained_particles'] or item.get('identities_changed_during_settling')
+            for item in result.get('materials', [])
+        )
+        rigid_retained = bool(
+            rigid.get('identities_changed_during_settling')
+            or (
+                rigid.get('inside_objects', 0) > 0
+                if result['receiver_kind'] == 'container'
+                else rigid.get('retained_objects', 0) > 0
+            )
+        )
+        if not (rigid_retained or material_retained):
+            if moved and result['receiver_kind'] == 'container' and rigid.get('inside_objects', 0) == 0:
+                raise SkillError(
+                    'postcondition_error',
+                    'Poured rigid contents did not enter the receiving container',
+                    changed=True,
+                )
             raise SkillError('postcondition_error', 'Transferred contents did not remain at the receiver', changed=True)
         return result
 
@@ -314,6 +376,9 @@ class CheckedMaterialTransfer:
         if primitive == 'scoop' and ContainedParticles not in destination.states:
             raise SkillError('invalid_transfer_destination',
                 'Scoop needs a held receiving vessel')
+        if primitive == 'pour' and is_non_pourable_enclosure(destination):
+            raise SkillError('unsupported_relation',
+                'Pour cannot target a closed-top or side-opening enclosure')
         for obj in (source, destination):
             if Open in obj.states and not obj.states[Open].get_value():
                 raise SkillError('container_closed', 'Open the material source and receiving vessel before transfer')

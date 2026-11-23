@@ -59,18 +59,23 @@ def envelope_protrusion(center, extent, low, high, settling_drop=0., floor_toler
                for axis, (c, e, lo, hi) in enumerate(zip(resting, extent, low, high)))
 
 
-def a8_level_quat(backend, held, root_quat, torch):
+def a8_level_quat(backend, held, root_quat, torch, *, allow_large_tilt=False):
     """rc1 A8 for place_inside (2026-11-20 21:56): the held object's level pose (pre-grasp roll/pitch, asset upright
     if unknown, held heading kept) as an extra proposal ranked before the in-hand pose. None when the switch
-    MAS_PLACE_LEVEL is off, the tilt is under 3 deg / over 45 deg, or the object has authored resting poses."""
+    MAS_PLACE_LEVEL is off, the tilt is under 0.5 deg / over 45 deg (unless allow_large_tilt is True for an unladen
+    standing item), or the object has authored resting poses."""
     import os
     authored = [e for e in (getattr(held, 'orientations', None) or {}).values() if e.get('prob', 0) > 0]
     if os.environ.get('MAS_PLACE_LEVEL', 'on') == 'off' or authored:
         return None
-    from .surface_geometry import level_to_reference
+    from .surface_geometry import A8_MAX_TILT_DEGREES, level_to_reference
+    from . import placement_stable as ST
     import numpy as np
-    reference = (getattr(backend, '_pregrasp_orientations', None) or {}).get(id(held)) or [0., 0., 0., 1.]
-    quat, rotation, _ = level_to_reference(root_quat.detach().cpu().numpy(), reference)
+    pregrasp = (getattr(backend, '_pregrasp_orientations', None) or {}).get(id(held))
+    reference = pregrasp if pregrasp is not None else [0., 0., 0., 1.]
+    unrestricted = bool(allow_large_tilt and pregrasp is not None and ST.tilt_deg(pregrasp) <= ST.STANDING_MAX_DEG)
+    max_tilt = None if unrestricted else A8_MAX_TILT_DEGREES
+    quat, rotation, _ = level_to_reference(root_quat.detach().cpu().numpy(), reference, maximum_tilt_degrees=max_tilt)
     if np.allclose(rotation, np.eye(3)):
         return None
     return torch.as_tensor(quat, dtype=root_quat.dtype, device=root_quat.device)
@@ -226,7 +231,7 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
     loaded = bool(contents or particles)
     orientations = assembly_orientations(held, original_quat, torch, T,
         reference_quat=target.get_position_orientation()[1], allow_reorientation=not loaded,
-        level_quat=a8_level_quat(backend, held, original_quat, torch))
+        level_quat=a8_level_quat(backend, held, original_quat, torch, allow_large_tilt=not loaded))
     closure_geometry = closed_geometry_proposals(backend, target)
     # No body moves during proposal construction. Read receiver geometry once.
     volume_geometry = []
@@ -494,7 +499,7 @@ Rejected candidate poses never become committed actions or task evidence.
             volume_geometry[volume.prim_path]=(lo,hi,vp,rotation,local_volume)
         orientations = assembly_orientations(
             held,root_quat,torch,T,reference_quat=target_quat,allow_reorientation=not payload_locked,
-            level_quat=a8_level_quat(backend, held, root_quat, torch))
+            level_quat=a8_level_quat(backend, held, root_quat, torch, allow_large_tilt=not payload_locked))
         if orientation_phase not in {'all', 'resting', 'additional'}:
             raise ValueError('Unknown placement orientation phase')
         if orientation_phase != 'all':

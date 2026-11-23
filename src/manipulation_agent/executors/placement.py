@@ -337,13 +337,29 @@ class CheckedPlacement:
         elif not center_footprint and os.environ.get('MAS_PLACE_LEVEL', 'on') != 'off':
             # rc1 A8 (switch MAS_PLACE_LEVEL, default on; off = v12b): no authored resting poses -> level the
             # held object to its pre-grasp roll/pitch (asset upright if unknown), keeping the held heading.
-            from .surface_geometry import level_to_reference
-            reference = (getattr(self, '_pregrasp_orientations', None) or {}).get(id(held))
-            source = 'pregrasp_pose' if reference is not None else 'asset_upright'
-            reference = reference if reference is not None else [0., 0., 0., 1.]
-            quaternion, rotation, tilt = level_to_reference(orientation.detach().cpu().numpy(), reference)
+            # rc2 B7 fix: keep the 45-deg safety cap for loaded carriers (rigid payload or particle payload),
+            # but lift it for unladen single items that were standing before grasp (tilt <= 15 deg) when no
+            # explicit roll_degrees was requested, preventing a permanent upright_kept + TX.restore deadlock.
+            from .surface_geometry import A8_MAX_TILT_DEGREES, level_to_reference
+            from . import placement_stable as ST
+            pregrasp = (getattr(self, '_pregrasp_orientations', None) or {}).get(id(held))
+            source = 'pregrasp_pose' if pregrasp is not None else 'asset_upright'
+            reference = pregrasp if pregrasp is not None else [0., 0., 0., 1.]
+            has_particles = bool(getattr(self, '_placement_particle_payload', (None, ()))[1])
+            unrestricted = (
+                not payload
+                and not has_particles
+                and roll_degrees is None
+                and pregrasp is not None
+                and ST.tilt_deg(pregrasp) <= ST.STANDING_MAX_DEG
+            )
+            max_tilt = None if unrestricted else A8_MAX_TILT_DEGREES
+            quaternion, rotation, tilt = level_to_reference(
+                orientation.detach().cpu().numpy(), reference, maximum_tilt_degrees=max_tilt
+            )
             self._placement_record({'status': 'rc1_A8_level', 'held': held.name, 'target': target.name,
                                     'reference': source, 'tilt_degrees': round(tilt, 2),
+                                    'unrestricted_upright': unrestricted,
                                     'applied': bool((rotation != np.eye(3)).any())})
             geometry = (geometry-origin) @ rotation.T + origin
             orientation = self.torch.as_tensor(quaternion, dtype=orientation.dtype,
