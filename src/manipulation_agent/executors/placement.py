@@ -695,6 +695,7 @@ class CheckedPlacement:
         snapshot_doors = getattr(self, '_snapshot_closed_doors', None)
         restore_doors = getattr(self, '_restore_closed_doors', None)
         closed_doors = snapshot_doors() if snapshot_doors is not None else []
+        from .articulation_hold import enforce as enforce_hold
         for index in range(steps):
             if index == max(0, steps - 5):
                 for obj in (held, *payload):
@@ -706,6 +707,7 @@ class CheckedPlacement:
                 self._placement_physics_step()
             if closed_doors and restore_doors is not None:
                 restore_doors(closed_doors, sync_fabric=False)
+            enforce_hold(modes=('open',))
             self.og.sim.sync_physx_to_fabric()
             if resting is not None:
                 resting.add(*held.get_position_orientation())
@@ -719,6 +721,7 @@ class CheckedPlacement:
                 self._placement_physics_step()
             if closed_doors and restore_doors is not None:
                 restore_doors(closed_doors, sync_fabric=False)
+            enforce_hold(modes=('open',))
             self.og.sim.sync_physx_to_fabric()
             resting.add(*held.get_position_orientation())
             extra += 1
@@ -1066,12 +1069,14 @@ class CheckedPlacement:
         # Controls, contacts and physics still run; these private trials do not
         # advance task metrics, render frames or trigger transition rules.
         physics_step=type(sim).step_physics.__get__(sim,type(sim))
+        from .articulation_hold import enforce as enforce_hold
         for _ in range(max(1,int(.75/control_dt))):
             for _ in range(max(1,round(control_dt/dt))):
                 self.deadline.check(changed=True)
                 local=getattr(self,'_local_operation',None)
                 if local is not None:local.check()
                 self.sampling_physics_steps+=1;physics_step()
+            enforce_hold(modes=('open',))
             sim.sync_physx_to_fabric()
             resting.add(*held.get_position_orientation())
             if not held.states[Inside].get_value(target):break

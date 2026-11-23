@@ -533,6 +533,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             return []
         from omnigibson.object_states import Open
         from omnigibson.object_states.open_state import _compute_joint_threshold, _is_in_range
+        from .articulation_hold import is_held_open
         active_joints = set(getattr(self, '_active_open_joints', ()) or ())
         latched = getattr(self, '_latched_closed_positions', None)
         if latched is None:
@@ -555,7 +556,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 is_open = bool(open_state.get_value())
                 for joint in joints:
                     key = (id(obj), getattr(joint, 'joint_name', getattr(joint, 'name', str(id(joint)))))
-                    if joint in active_joints or is_open:
+                    if joint in active_joints or is_open or is_held_open(obj, joint):
                         latched.pop(key, None)
                         continue
                     target_pos = latched.setdefault(key, float(joint.get_state()[0]))
@@ -563,7 +564,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             else:
                 for joint, direction in zip(joints, directions):
                     key = (id(obj), getattr(joint, 'joint_name', getattr(joint, 'name', str(id(joint)))))
-                    if joint in active_joints:
+                    if joint in active_joints or is_held_open(obj, joint):
                         latched.pop(key, None)
                         continue
                     pos = float(joint.get_state()[0])
@@ -608,6 +609,24 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 sim.sync_physx_to_fabric()
         return restored_any
 
+    def _refresh_held_open_doors(self, is_held_open):
+        """Clear Open caches and sync Fabric after restoring any drifted held-open joint."""
+        env = getattr(self, 'env', None)
+        scene = getattr(env, 'scene', None)
+        if scene is not None:
+            from omnigibson.object_states import Open
+            for obj in scene.objects:
+                if not is_held_open(obj):
+                    continue
+                open_state = getattr(obj, 'states', {}).get(Open)
+                if open_state is not None and hasattr(open_state, 'clear_cache'):
+                    open_state.clear_cache()
+                if hasattr(obj, 'state_updated'):
+                    obj.state_updated()
+        sim = getattr(getattr(self, 'og', None), 'sim', None)
+        if sim is not None and hasattr(sim, 'sync_physx_to_fabric'):
+            sim.sync_physx_to_fabric()
+
     def _step(self, action):
         self._check_renderer_health()
         self.deadline.check(changed=True)
@@ -621,6 +640,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             action = action.clone()
             action[self.robot.controller_action_idx['trunk']] = trunk_target.to(action)
         closed_doors = self._snapshot_closed_doors()
+        active_joints = set(getattr(self, '_active_open_joints', ()) or ())
         # RGB observation boundaries and the video cadence already own rendering.
         # OmniGibson's ordinary env.step also renders implicitly, duplicating
         # that work. Its native no-render branch advances the same physics
@@ -632,6 +652,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             with self.og.sim.render_on_step(False):
                 with component(self,'physics_and_metrics'):super()._step(action)
             self._restore_closed_doors(closed_doors)
+            from .articulation_hold import enforce as enforce_hold, is_held_open
+            if enforce_hold(modes=('open',), exclude_joints=active_joints):
+                self._refresh_held_open_doors(is_held_open)
             # rc1 A6: registered carrier contents follow the held carrier, not friction (carrier_registry.py).
             from . import carrier_registry as _CR
             _CR.pin_contents(self)

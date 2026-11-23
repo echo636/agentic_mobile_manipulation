@@ -119,47 +119,49 @@ def check_closure_clearance(backend, target, assembly):
     supports = {obj: contacting_support(backend, obj, [target]) for obj in assembly}
     existing_pairs = {frozenset((str(a),str(b))) for a,b in RigidContactAPI.get_contact_pairs(
         target.scene.idx, query_set=[target], with_set=list(assembly), current_only=True)}
-    try:
-        if not target.states[Open].set_value(False, fully=True):
-            return {'applicable': True, 'clear': False, 'reason': 'closed_state_setter_rejected'}
-        moving = set()
-        for link in links:
-            before = poses[str(link.prim_path)]
-            after = link.get_position_orientation()
-            if not all(backend.torch.allclose(a, b, atol=1e-5, rtol=0.) for a, b in zip(before, after)):
-                moving.add(str(link.prim_path))
-        # Drawers carry their contents with the fillable link. Hinged lids do
-        # not move the base cavity. Use the same link-relative rule as close.
-        backend._relocate_container_payload(payload)
-        target.keep_still()
-        sim.step_physics()
-        pairs = RigidContactAPI.get_contact_pairs(target.scene.idx, query_set=[target],
-                                                  with_set=list(assembly), current_only=True)
-        supported_pairs = set()
-        for obj, support in supports.items():
-            if support is None:
-                continue
-            after = contacting_support(backend, obj, [target])
-            if after is not None and after[1] is support[1]:
-                supported_pairs.update(pair for link in obj.links.values() if not link.is_meta_link
-                    if (pair := frozenset((str(support[1].prim_path), str(link.prim_path)))) in existing_pairs)
-        blocking = sorted((str(a), str(b)) for a, b in pairs
-                          if ((str(a) in moving and str(b) in paths)
-                          or (str(b) in moving and str(a) in paths))
-                          and frozenset((str(a), str(b))) not in supported_pairs)
-        contained = all(obj.states[Inside].get_value(target) for obj in assembly)
-        return {'applicable': True, 'clear': not blocking and contained,
-                'moving_links': sorted(moving), 'blocking_contacts': blocking,
-                'preserved_support_contacts': [sorted(pair) for pair in sorted(supported_pairs, key=lambda p:sorted(p))],
-                'contents_inside_closed_container': contained,
-                'reason': 'new_contents_contact_closed_articulation' if blocking else
-                          'contents_outside_closed_container' if not contained else None}
-    finally:
-        random.setstate(rng)
-        np.random.set_state(numpy_rng)
-        backend.torch.random.set_rng_state(torch_rng)
-        backend.frames_revision = -1
-        if scene_object_identities(sim) != identities or not particle_state_unchanged(particles):
-            raise SkillError('target_changed','Scene identities changed during closure preview',changed=True)
-        sim.load_state(state, serialized=False)
-        restore_particle_state(particles)
+    from . import articulation_hold as _AH
+    with _AH.pause(target):
+        try:
+            if not target.states[Open].set_value(False, fully=True):
+                return {'applicable': True, 'clear': False, 'reason': 'closed_state_setter_rejected'}
+            moving = set()
+            for link in links:
+                before = poses[str(link.prim_path)]
+                after = link.get_position_orientation()
+                if not all(backend.torch.allclose(a, b, atol=1e-5, rtol=0.) for a, b in zip(before, after)):
+                    moving.add(str(link.prim_path))
+            # Drawers carry their contents with the fillable link. Hinged lids do
+            # not move the base cavity. Use the same link-relative rule as close.
+            backend._relocate_container_payload(payload)
+            target.keep_still()
+            sim.step_physics()
+            pairs = RigidContactAPI.get_contact_pairs(target.scene.idx, query_set=[target],
+                                                      with_set=list(assembly), current_only=True)
+            supported_pairs = set()
+            for obj, support in supports.items():
+                if support is None:
+                    continue
+                after = contacting_support(backend, obj, [target])
+                if after is not None and after[1] is support[1]:
+                    supported_pairs.update(pair for link in obj.links.values() if not link.is_meta_link
+                        if (pair := frozenset((str(support[1].prim_path), str(link.prim_path)))) in existing_pairs)
+            blocking = sorted((str(a), str(b)) for a, b in pairs
+                              if ((str(a) in moving and str(b) in paths)
+                              or (str(b) in moving and str(a) in paths))
+                              and frozenset((str(a), str(b))) not in supported_pairs)
+            contained = all(obj.states[Inside].get_value(target) for obj in assembly)
+            return {'applicable': True, 'clear': not blocking and contained,
+                    'moving_links': sorted(moving), 'blocking_contacts': blocking,
+                    'preserved_support_contacts': [sorted(pair) for pair in sorted(supported_pairs, key=lambda p:sorted(p))],
+                    'contents_inside_closed_container': contained,
+                    'reason': 'new_contents_contact_closed_articulation' if blocking else
+                              'contents_outside_closed_container' if not contained else None}
+        finally:
+            random.setstate(rng)
+            np.random.set_state(numpy_rng)
+            backend.torch.random.set_rng_state(torch_rng)
+            backend.frames_revision = -1
+            if scene_object_identities(sim) != identities or not particle_state_unchanged(particles):
+                raise SkillError('target_changed','Scene identities changed during closure preview',changed=True)
+            sim.load_state(state, serialized=False)
+            restore_particle_state(particles)

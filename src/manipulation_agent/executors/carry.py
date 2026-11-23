@@ -9,6 +9,18 @@ from ..contracts import SkillError
 from ..records import now
 from .particle_payload import snapshot_particles, relocate_particles, verify_particles, particle_count
 
+_CONTAINER_PAYLOAD_UNMOVED_DISP_M = 0.01
+_CONTAINER_PAYLOAD_UNMOVED_SPEED_MPS = 0.05
+
+
+def _container_body_aabb(container):
+    """World AABB of the container's stationary body (`base_link`), excluding hinged doors."""
+    links = getattr(container, 'links', None) or {}
+    base = links.get(getattr(container, 'root_link_name', 'base_link')) or links.get('base_link')
+    if base is not None and hasattr(base, 'aabb'):
+        return base.aabb
+    return getattr(container, 'aabb', None)
+
 
 @contextlib.contextmanager
 def suppress_slicing_rules(backend):
@@ -346,17 +358,19 @@ class ControlledCarry:
         particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in payload]]) if state is Open else []
         from .particle_payload import particle_link_motion, particle_containment_observation
         moved_particles=particle_link_motion(particles)
-        # rc1 articulation_hold (benchmark side): an explicit open releases a door held closed by an earlier close
-        # (before the open goal is computed); contact physics can no longer push a held door open.
-        from .articulation_hold import unlock
+        # rc1/rc2 articulation_hold (benchmark side): an explicit open releases any prior hold on the operated panels;
+        # an explicit close releases any prior open/closed hold on the object before closing.
+        from .articulation_hold import unlock, lock_closed, lock_open, install_toggle_guard
         hold_record = {}
-        if primitive=='open':
-            hold_record['released'] = unlock(self, obj)
         open_goal=None
         opening_feedback={}
+        controlled_joints=[]
         if primitive=='open':
             from .articulation_goal import native_open_goal, opened_joints
             open_goal,controlled_joints=native_open_goal(self,obj,feedback=opening_feedback)
+            hold_record['released'] = unlock(self, obj, joints=[j for j, _ in controlled_joints] or None)
+        elif primitive=='close':
+            hold_record['released'] = unlock(self, obj)
         samples=[]
         def capture(phase):
             if state is Open:
@@ -380,9 +394,6 @@ class ControlledCarry:
                 info = getattr(obj.states[Open], 'relevant_joints_info', None)
                 operated_open_joints = set(info[1]) if info and info[1] else ()
         self._active_open_joints = operated_open_joints
-        # rc1 articulation_hold (benchmark side): an explicit open releases a door held closed by an earlier close;
-        # contact physics can no longer push a closed door open or finger contact re-toggle a switch.
-        from .articulation_hold import lock_closed, install_toggle_guard
         install_toggle_guard()
         try:
             # Apply the native annotated opening to the selected panel; close fully.
@@ -420,10 +431,22 @@ class ControlledCarry:
         finally:
             self._active_open_joints = ()
         if actual!=wanted:
+            if primitive == 'close':
+                hold_record['released_on_failure'] = unlock(self, obj)
             report('failed',reason='state_reopened_or_reclosed_after_step',
                    payload=[child.name for child,_,_ in payload],**({'articulation_hold':hold_record} if hold_record else {}))
             raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
-        self._verify_container_payload(obj,payload,stage='articulation_contents_unconfirmed')
+        # rc2 N5b: lock the door open ONLY after the real post-setter physics step confirmed it genuinely opened
+        # and was not blocked by a static obstacle; this prevents subsequent placement settling / chassis contact
+        # from slamming the door shut and _snapshot_closed_doors from latching it closed.
+        if primitive == 'open':
+            hold_record['held'] = lock_open(self, obj, [j for j, _ in controlled_joints])
+        try:
+            self._verify_container_payload(obj,payload,stage='articulation_contents_unconfirmed')
+        except SkillError:
+            report('failed',reason='container_payload_violation',
+                   payload=[child.name for child,_,_ in payload],**({'articulation_hold':hold_record} if hold_record else {}))
+            raise
         if particles:
             self._placement_record({'status':'articulation_particle_settle',
                 'target':obj.name,'primitive':primitive,
@@ -492,17 +515,20 @@ class ControlledCarry:
         links=[link for link in container.links.values() if link.is_meta_link and
                link.meta_link_type in {'fillable','openfillable'}]
         if not links:return []
+        accept = getattr(self, 'released_inside', None)
         payload=[]
         lo,hi=container.aabb
         for child in self.env.scene.objects:
             if child in (container,self.robot) or getattr(child,'fixed_base',True) or Inside not in getattr(child,'states',{}):continue
             a,b=child.aabb;center=(a+b)/2
-            if not bool(((center>=lo)&(center<=hi)).all()) or not child.states[Inside].get_value(container):continue
+            native_inside = bool(child.states[Inside].get_value(container))
+            accepted_inside = accept is not None and bool(accept(child, container))
+            if not bool(((center>=lo)&(center<=hi)).all()) or not (native_inside or accepted_inside):continue
             link=next((link for link in links if bool(link.check_points_in_volume(center.unsqueeze(0)).item())),None)
             if link is None:
-                # 2026-11-21: native Inside holds but the centre lies outside every annotated volume (a dish on
-                # an oven rack above the fillable box, C2 r3 closing the oven); track it with the nearest volume
-                # instead of refusing the door motion.
+                # 2026-11-21: native Inside or task-declared released_inside holds but the centre lies outside
+                # every annotated volume (a dish on an oven rack above the fillable box, C2 r3 closing the oven);
+                # track it with the nearest volume instead of refusing the door motion.
                 link=min(links,key=lambda l:float(((l.get_position_orientation()[0]-center)**2).sum()))
             relative=T.relative_pose_transform(*child.get_position_orientation(),*link.get_position_orientation())
             payload.append((child,link,relative))
@@ -524,25 +550,59 @@ class ControlledCarry:
         # 2026-11-23: an item still inside by the task-declared cavity acceptance (``released_inside``, v8) is
         # not displaced; native Inside alone flagged a fish resting unmoved on the oven rack after the door closed
         # (C2 r4 reference, displacement 0.000 m).
-        accept=getattr(self,'released_inside',None)
-        escaped=[record for record in payload if not record[0].states[Inside].get_value(container)
-                 and not (accept is not None and accept(record[0],container))]
-        if escaped:
+        accept = getattr(self, 'released_inside', None)
+        candidates = [record for record in payload
+                      if not record[0].states[Inside].get_value(container)
+                      and not (accept is not None and accept(record[0], container))]
+        if not candidates:
+            return
+        from omnigibson.utils import transform_utils as T
+        torch_mod = getattr(self, 'torch', None)
+        if torch_mod is None:
+            import torch as torch_mod
+        body_aabb = _container_body_aabb(container)
+        escaped_details = []
+        waived_details = []
+        for child,link,relative in candidates:
+            position = child.get_position_orientation()[0]
+            expected = T.pose_transform(*link.get_position_orientation(),*relative)[0]
+            lo,hi = child.aabb; center = (lo+hi)/2
+            displacement_m = float(torch_mod.linalg.vector_norm(position - expected))
+            velocity = child.get_linear_velocity()
+            linear_speed_mps = float(torch_mod.linalg.vector_norm(velocity))
+            in_container_body = (
+                bool(((center >= body_aabb[0]) & (center <= body_aabb[1])).all())
+                if body_aabb is not None else False
+            )
+            detail = {
+                'object': child.name,
+                'anchor_link': getattr(link, 'prim_path', None),
+                'position': position.tolist(),
+                'expected_link_relative_position': expected.tolist(),
+                'displacement_m': displacement_m,
+                'linear_speed_mps': linear_speed_mps,
+                'aabb_center_in_anchor_volume': bool(link.check_points_in_volume(center.unsqueeze(0)).item())
+                    if getattr(link, 'is_meta_link', False) else None,
+                'aabb_center_in_container_body': in_container_body,
+                'linear_velocity': velocity.tolist(),
+            }
+            # rc2 N5a: native Inside checks only the annotated fillable volume; an item resting near the
+            # lower edge can flip Inside=False after stepping with zero physical motion (e.g. 1e-7 m in C2 r4).
+            # Waive only when the item did not move, is stationary, and remains inside the container body.
+            if (displacement_m <= _CONTAINER_PAYLOAD_UNMOVED_DISP_M
+                    and linear_speed_mps <= _CONTAINER_PAYLOAD_UNMOVED_SPEED_MPS
+                    and in_container_body):
+                detail['near_boundary_unmoved'] = True
+                waived_details.append(detail)
+            else:
+                escaped_details.append(detail)
+        if waived_details and hasattr(self, 'output'):
+            self._carry_record(event='container_payload_boundary_unmoved_waived',
+                               container=container.name, waived_contents=waived_details)
+        if escaped_details:
             if hasattr(self, 'output'):
-                from omnigibson.utils import transform_utils as T
-                details=[]
-                for child,link,relative in escaped:
-                    position=child.get_position_orientation()[0]
-                    expected=T.pose_transform(*link.get_position_orientation(),*relative)[0]
-                    lo,hi=child.aabb;center=(lo+hi)/2
-                    details.append({'object':child.name,'anchor_link':link.prim_path,
-                        'position':position.tolist(),'expected_link_relative_position':expected.tolist(),
-                        'displacement_m':float(self.torch.linalg.vector_norm(position-expected)),
-                        'aabb_center_in_anchor_volume':bool(link.check_points_in_volume(center.unsqueeze(0)).item())
-                            if link.is_meta_link else None,
-                        'linear_velocity':child.get_linear_velocity().tolist()})
                 self._carry_record(event='container_payload_violation',container=container.name,
-                                   escaped_contents=details)
+                                   escaped_contents=escaped_details)
             raise SkillError('postcondition_error','Operation displaced existing contents from the container',
                              changed=True,stage=stage)
 
