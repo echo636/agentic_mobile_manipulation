@@ -24,9 +24,64 @@ from .local_rgb import LocalRGBManipulation
 from .local_manipulation import LocalLimits
 
 
+# Global furniture / large-fixture ungraspable categories (benchmark executor side, rc2 P0 fix):
+# OmniGibson scene furniture often defaults to fixed_base=False. Single-arm grasping of tables, chairs,
+# sofas, cabinets, beds, appliances, or architectural elements is physically invalid regardless of whether
+# a specific task listed them in fixed_supports.
+UNGRASPABLE_FURNITURE_CATEGORIES = frozenset({
+    'breakfast_table', 'dining_table', 'coffee_table', 'console_table', 'end_table', 'side_table',
+    'pool_table', 'pedestal_table', 'picnic_table', 'conference_table', 'stand',
+    'straight_chair', 'armchair', 'swivel_chair', 'folding_chair', 'garden_chair', 'eames_chair',
+    'office_chair', 'rocking_chair', 'cantilever_chair',
+    'stool', 'barstool', 'ottoman', 'bench', 'sofa', 'couch', 'bed', 'desk',
+    'countertop', 'bar', 'kitchen_island',
+    'bottom_cabinet', 'bottom_cabinet_no_top', 'top_cabinet', 'cabinet', 'wardrobe', 'wardrobe_cabinet',
+    'shelf', 'bookshelf', 'nightstand', 'dresser', 'chest',
+    'fridge', 'refrigerator', 'freezer', 'oven', 'stove', 'range_hood', 'microwave',
+    'dishwasher', 'washer', 'dryer', 'clothes_dryer',
+    'sink', 'drop_in_sink', 'bathtub', 'shower', 'toilet',
+    'fireplace', 'grill', 'charcoal_grill', 'piano', 'television', 'mirror',
+    'door', 'sliding_door', 'window', 'walls', 'floors', 'ceilings',
+})
+UNGRASPABLE_MAX_EXTENT_M = 1.15
+UNGRASPABLE_MIN_SECOND_EXTENT_M = 0.35
+UNGRASPABLE_MAX_FOOTPRINT_M2 = 0.70
+UNGRASPABLE_MIN_HEIGHT_M = 0.35
+
+
+def _too_large_for_single_arm_grasp(obj):
+    """Geometric safety cap catching bulky atypically-named furniture while allowing slender tools
+    (e.g. brooms/mops/vacuums) and large flat trays (e.g. mhhoga 1.5x = 0.69x0.47x0.034 m)."""
+    aabb = getattr(obj, 'aabb', None)
+    if aabb is None:
+        return False
+    try:
+        lo, hi = aabb
+        hx = abs(float(hi[0]) - float(lo[0]))
+        hy = abs(float(hi[1]) - float(lo[1]))
+        hz = abs(float(hi[2]) - float(lo[2]))
+    except Exception:
+        return False
+    if not (math.isfinite(hx) and math.isfinite(hy) and math.isfinite(hz)):
+        return False
+    dims = sorted((hx, hy, hz))
+    max_dim, mid_dim = dims[2], dims[1]
+    if max_dim > UNGRASPABLE_MAX_EXTENT_M and mid_dim > UNGRASPABLE_MIN_SECOND_EXTENT_M:
+        return True
+    if (hx * hy) > UNGRASPABLE_MAX_FOOTPRINT_M2 and hz > UNGRASPABLE_MIN_HEIGHT_M:
+        return True
+    return False
+
+
 def fixed_for_grasp(backend,obj):
-    # Fixed in the scene, or declared a fixed support by the task input (v11; see CustomTaskBackend).
-    return bool(getattr(obj,'fixed_base',False)) or getattr(obj,'name',None) in getattr(backend,'fixed_support_names',())
+    # Fixed in the scene, declared a fixed support by the task input (v11; see CustomTaskBackend),
+    # an ungraspable furniture/fixture category, or exceeding the single-arm geometric safety cap.
+    if bool(getattr(obj,'fixed_base',False)) or getattr(obj,'name',None) in getattr(backend,'fixed_support_names',()):
+        return True
+    cat = getattr(obj, 'category', None)
+    if isinstance(cat, str) and cat.strip().lower() in UNGRASPABLE_FURNITURE_CATEGORIES:
+        return True
+    return _too_large_for_single_arm_grasp(obj)
 
 
 NOT_MOVED_M = 0.1
