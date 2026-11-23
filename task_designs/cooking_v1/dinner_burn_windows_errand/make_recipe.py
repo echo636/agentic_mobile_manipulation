@@ -97,7 +97,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'dinner_burn_windows_errand',
-        'instance_id': 'dinner_burn_windows_errand_seed0_r6b',
+        'instance_id': 'dinner_burn_windows_errand_seed0_r7',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -202,8 +202,10 @@ def build_recipe() -> dict:
             state('fridge', 'Open', True, fully=True),
             on('soup1', 'fridge', [7.66, -1.95], support_probe_height=1.0, initial_relation='Inside'),
             on('soup2', 'fridge', [7.94, -1.95], support_probe_height=1.0, initial_relation='Inside'),
-            on('steak1', 'fridge', [7.66, -1.72], yaw90=True, support_probe_height=1.0, initial_relation='Inside'),
-            on('steak2', 'fridge', [7.94, -1.72], yaw90=True, support_probe_height=1.0, initial_relation='Inside'),
+            # r7 (2026-11-23): steaks on the next shelf down (C2's fish shelf, probe 0.6), not in front of the soup bowls:
+            # the habit order reached past steak1 for soup1 and knocked it 37 cm down to the door edge.
+            on('steak1', 'fridge', [7.66, -1.80], yaw90=True, support_probe_height=0.6, initial_relation='Inside'),
+            on('steak2', 'fridge', [7.94, -1.80], yaw90=True, support_probe_height=0.6, initial_relation='Inside'),
             state('fridge', 'Open', False, fully=True),
             on('veg', 'storage', [6.75, -1.94]),
             on('pan', 'stove', [4.17, -0.50], yaw90=True),  # flat griddle (r5/C3 r2)
