@@ -917,8 +917,24 @@ class CustomTaskBackend(RGBBackend):
             joints = [obj.joints[n] for n in names]
             obj.states[Open].relevant_joints_info = (False, joints, [1] * len(joints))
             obj.states[Open].clear_cache()
-            applied[role] = list(names)
+            # 2026-11-23: the other movable joints (ffitak's two racks) are no longer Open joints, so the rc1
+            # articulation hold no longer keeps them in; the door then dragged a loaded rack and the reference's
+            # open/close was rejected for displaced contents (C2 r4 close, C3 open). No task slides a rack, so they
+            # are locked at their pushed-in (lower) limit; limits of non-Open joints do not affect any Open threshold.
+            locked = []
+            for jname, joint in obj.joints.items():
+                if jname in names or not getattr(joint, 'is_single_dof', False):
+                    continue
+                if getattr(joint, 'joint_type', None) not in ('PrismaticJoint', 'RevoluteJoint'):
+                    continue
+                low = float(joint.lower_limit)
+                joint.set_pos(low)
+                joint.upper_limit = low + 1e-4
+                locked.append({'joint': jname, 'type': joint.joint_type, 'locked_at': low})
+            applied[role] = {'open_state': list(names), 'locked_in': locked}
         self._open_state_joints_applied = applied
+        if getattr(self, 'output', None) is not None:
+            write_json(self.output / 'open_state_joints.json', {'audience': 'executor_private', 'applied': applied})
 
     def _released_inside_extra(self, held, target):
         # Benchmark side (2026-11-21): for an appliance with a declared Inside timed process, an item whose

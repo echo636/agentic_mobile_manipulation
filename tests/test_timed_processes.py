@@ -591,3 +591,57 @@ class CavityInsideAcceptanceTests(unittest.TestCase):
         # an appliance without a declared Inside process gets no extra acceptance
         cup = self._Obj('cup_1', (0, 0, 0), (0.6, 0.5, 0.6), body=((0, 0, 0), (0.6, 0.5, 0.6)))
         self.assertFalse(b._released_inside_extra(on_floor, cup))
+
+
+class OvenRackAndPayloadTests(unittest.TestCase):
+    """2026-11-23: racks of an open_state_joints appliance are locked in; payload check uses cavity acceptance."""
+
+    class _Joint:
+        def __init__(self, kind, low=0.0, high=0.3):
+            self.is_single_dof, self.joint_type, self.lower_limit, self.upper_limit = True, kind, low, high
+            self.pos = None
+        def set_pos(self, p):
+            self.pos = p
+
+    def test_non_door_joints_locked_at_lower_limit(self):
+        import sys, tempfile
+        from types import ModuleType, SimpleNamespace
+        from unittest.mock import patch
+        from manipulation_agent.executors.custom_task import CustomTaskBackend
+        Open = type('Open', (), {})
+        states = ModuleType('omnigibson.object_states'); states.Open = Open
+        door, rack1, rack2 = self._Joint('RevoluteJoint', 0, 1.57), self._Joint('PrismaticJoint'), self._Joint('PrismaticJoint')
+        fixed = self._Joint('FixedJoint')
+        open_state = SimpleNamespace(relevant_joints_info=None, clear_cache=lambda: None)
+        oven = SimpleNamespace(name='oven_0', states={Open: open_state},
+                               joints={'j_door': door, 'rack1': rack1, 'rack2': rack2, 'fixed': fixed})
+        b = CustomTaskBackend.__new__(CustomTaskBackend)
+        b.env = SimpleNamespace(scene=SimpleNamespace(objects=[oven]))
+        with tempfile.TemporaryDirectory() as d:
+            b.output = Path(d)
+            with patch.dict(sys.modules, {'omnigibson': ModuleType('omnigibson'), 'omnigibson.object_states': states}):
+                b._apply_open_state_joints({'roles': {'oven': 'oven_0'}, 'open_state_joints': {'oven': ['j_door']}})
+            self.assertTrue((Path(d) / 'open_state_joints.json').exists())
+        self.assertEqual(open_state.relevant_joints_info[1], [door])
+        self.assertIsNone(door.pos); self.assertEqual(door.upper_limit, 1.57)
+        for rack in (rack1, rack2):
+            self.assertEqual(rack.pos, 0.0); self.assertAlmostEqual(rack.upper_limit, 1e-4)
+        self.assertEqual(fixed.upper_limit, 0.3)
+        self.assertEqual([r['joint'] for r in b._open_state_joints_applied['oven']['locked_in']], ['rack1', 'rack2'])
+
+    def test_payload_inside_by_cavity_acceptance_is_not_escaped(self):
+        import sys
+        from types import ModuleType, SimpleNamespace
+        from unittest.mock import patch
+        from manipulation_agent.executors.custom_task import CustomTaskBackend
+        Inside = type('Inside', (), {})
+        states = ModuleType('omnigibson.object_states'); states.Inside = Inside
+        fish = SimpleNamespace(name='fish', states={Inside: SimpleNamespace(get_value=lambda t: False)})
+        oven = SimpleNamespace(name='oven_0')
+        b = CustomTaskBackend.__new__(CustomTaskBackend)
+        with patch.dict(sys.modules, {'omnigibson': ModuleType('omnigibson'), 'omnigibson.object_states': states}):
+            b.released_inside = lambda item, target: True
+            b._verify_container_payload(oven, [(fish, None, None)])           # accepted: no error
+            b.released_inside = lambda item, target: False
+            with self.assertRaises(SkillError):
+                b._verify_container_payload(oven, [(fish, None, None)])

@@ -471,7 +471,12 @@ class ControlledCarry:
 
     def _verify_container_payload(self,container,payload,*,stage=None):
         from omnigibson.object_states import Inside
-        escaped=[record for record in payload if not record[0].states[Inside].get_value(container)]
+        # 2026-11-23: an item still inside by the task-declared cavity acceptance (``released_inside``, v8) is
+        # not displaced; native Inside alone flagged a fish resting unmoved on the oven rack after the door closed
+        # (C2 r4 reference, displacement 0.000 m).
+        accept=getattr(self,'released_inside',None)
+        escaped=[record for record in payload if not record[0].states[Inside].get_value(container)
+                 and not (accept is not None and accept(record[0],container))]
         if escaped:
             if hasattr(self, 'output'):
                 from omnigibson.utils import transform_utils as T
