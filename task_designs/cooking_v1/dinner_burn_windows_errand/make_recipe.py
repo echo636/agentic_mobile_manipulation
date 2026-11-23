@@ -97,7 +97,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'dinner_burn_windows_errand',
-        'instance_id': 'dinner_burn_windows_errand_seed0_r5b',
+        'instance_id': 'dinner_burn_windows_errand_seed0_r6b',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -153,14 +153,20 @@ def build_recipe() -> dict:
             *[native(f'c3_soup{i}', 'bowl', 'ajzltc',
                      '9b6bb0e23e537cccaa2bc372997bceb1d0e7cc4f6a520119de03ea75b1a739ad', 100.0 + 2 * i,
                      [1.2, 1.2, 1.2]) for i in (1, 2)],
+            # r6: steaks at 0.8 (about 10 x 16 cm): two full-size 13 x 19.5 cm steaks overlapped on the 49 cm griddle,
+            # the second slid 12 cm and overhung its north edge (rc2 stable check rejected it).
             *[native(f'c3_steak{i}', 'steak', 'ppykkp',
-                     '6640ed708d8939d9bdcf4e2cb836a62afffc696f84977ec6a68720652cd61eeb', 104.0 + 2 * i)
+                     '6640ed708d8939d9bdcf4e2cb836a62afffc696f84977ec6a68720652cd61eeb', 104.0 + 2 * i,
+                     [0.8, 0.8, 0.8])
               for i in (1, 2)],
             native('c3_veg', 'casserole', 'mmbavt',
                    'c1c415281c0c235cbaeb04e3b054e95b3a3afec114009e9939fec42851c66363', 109.0, [0.8, 0.8, 0.8]),
             native('c3_wine', 'bottle_of_wine', 'hnkiog',
                    'a409aaa61c3b38196ef480631b5934e5e0b246bde95e1e28264ceaa4b5d08c81', 111.0),
         ],
+        # 2026-11-23: the oven's Open state is its door only and its racks are locked in (as C1/C2): without it,
+        # `open` also pulled the racks out and carried the dish on rack2 21 cm out of the oven (C3 r5b reference)
+        'open_state_joints': {'oven': ['j_door']},
         'timed_processes': [
             {
                 'id': 'heat_soup', 'appliance': 'microwave', 'items': ['soup1', 'soup2'],
@@ -345,8 +351,8 @@ def build_reference_plan() -> dict:
                                           g('tray2'), put('table', uv=[0.75, 0.75])], 'after': []},
         'oven_off': {'actions': [wait('veg_roasted', 10.0, 40), act('toggle_off', 'oven')], 'after': ['start_oven']},
         'start_steaks': {'actions': [act('open', 'fridge'),
-                                     g('steak1', approach_role='fridge'), put('pan', xy=[4.17, -0.58]),
-                                     g('steak2', approach_role='fridge'), put('pan', xy=[4.17, -0.41]),
+                                     g('steak1', approach_role='fridge'), put('pan', xy=[4.17, -0.62]),
+                                     g('steak2', approach_role='fridge'), put('pan', xy=[4.17, -0.40]),
                                      act('close', 'fridge'), act('toggle_on', 'stove')], 'after': []},
         # stay by the stove: detect "done" within 5 s and switch off before the 30 s window closes
         'stove_watch': {'actions': [wait(steaks_done, 5.0, 40), act('toggle_off', 'stove')],

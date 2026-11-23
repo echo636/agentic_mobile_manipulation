@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "after_dinner_three_zone_reset",
- "instance_id": "after_dinner_three_zone_reset_seed0_r4c",
+ "instance_id": "after_dinner_three_zone_reset_seed0_r4d",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -250,6 +250,11 @@
    ]
   }
  ],
+ "open_state_joints": {
+  "oven": [
+   "j_door"
+  ]
+ },
  "timed_processes": [
   {
    "id": "wash_dishes",

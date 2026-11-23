@@ -116,7 +116,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'after_dinner_three_zone_reset',
-        'instance_id': 'after_dinner_three_zone_reset_seed0_r4c',
+        'instance_id': 'after_dinner_three_zone_reset_seed0_r4d',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,
@@ -192,6 +192,9 @@ def build_recipe() -> dict:
             native('c4_napkin2', 'rag', 'oocmed',
                    '732677fea4ca1e96c8b71f843249e2b5740287542aae48245871d7a6daeb7068', 116.0, [0.5, 0.5, 10.0]),
         ],
+        # 2026-11-23: the oven's Open state is its door only and its racks are locked in (as C1/C2): without it,
+        # `open` also pulled the racks out and carried the dish on rack2 21 cm out of the oven (C3 r5b reference)
+        'open_state_joints': {'oven': ['j_door']},
         'timed_processes': [
             {
                 'id': 'wash_dishes',
