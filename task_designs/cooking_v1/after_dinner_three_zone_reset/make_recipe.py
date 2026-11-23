@@ -88,8 +88,8 @@ def build_recipe() -> dict:
     req_dishes = (
         'Wash all four used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls '
         'on the living-room coffee table, and the two mugs on the low nightstand '
-        "in the children's bedroom (the north-east bedroom with the single bed, off the long east "
-        'corridor). The dishwasher is built in under the counter between the sink and the refrigerator. '
+        "in the children's bedroom whose sliding door stands open (off the long east corridor; the doors of "
+        'the other bedrooms are closed). The dishwasher is built in under the counter between the sink and the refrigerator. '
         'A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it '
         'switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. '
         'The dishes may stay in the dishwasher afterwards.'
@@ -116,7 +116,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'after_dinner_three_zone_reset',
-        'instance_id': 'after_dinner_three_zone_reset_seed0_r4b',
+        'instance_id': 'after_dinner_three_zone_reset_seed0_r4c',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,

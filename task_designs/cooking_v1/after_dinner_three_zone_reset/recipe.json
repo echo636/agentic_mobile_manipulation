@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "after_dinner_three_zone_reset",
- "instance_id": "after_dinner_three_zone_reset_seed0_r4b",
+ "instance_id": "after_dinner_three_zone_reset_seed0_r4c",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -674,7 +674,7 @@
  "replacements": [],
  "public_instruction": "After dinner, wash the used dishes and the cloth napkins, warm the apple pie and serve it on the living-room coffee table, and leave the appliances off and closed.",
  "public_context": [
-  "Wash all four used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
+  "Wash all four used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom whose sliding door stands open (off the long east corridor; the doors of the other bedrooms are closed). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
   "Wash both cloth napkins from the living-room coffee table in the white washing machine under the counter in the south-east utility room until its wash cycle has finished. A cycle takes about 4 minutes once the door is closed and it is switched on, and the machine switches itself off at the end. The napkins may stay in the washing machine afterwards.",
   "Warm the apple pie from the kitchen island in the black built-in oven to the right of the refrigerator and serve it on the living-room coffee table (directly on the table or on the serving tray resting on the table). Warming takes about 3 minutes with the oven door closed and the oven switched on. The oven does not switch itself off: if the warm pie stays in the running oven for more than about 2 more minutes it burns, and a burnt pie cannot be served.",
   "Leave the oven switched off and the oven, dishwasher and washing machine doors closed. A 48 x 48 cm serving tray is available on the kitchen island.",
@@ -683,7 +683,7 @@
  "requirements": [
   {
    "id": "dishes_washed",
-   "text": "Wash all four used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom (the north-east bedroom with the single bed, off the long east corridor). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
+   "text": "Wash all four used dishes in the kitchen dishwasher until its wash cycle has finished: the two bowls on the living-room coffee table, and the two mugs on the low nightstand in the children's bedroom whose sliding door stands open (off the long east corridor; the doors of the other bedrooms are closed). The dishwasher is built in under the counter between the sink and the refrigerator. A wash cycle takes about 5 minutes once the dishwasher door is closed and it is switched on; it switches itself off when the cycle ends, and only the dishes inside during that cycle are washed. The dishes may stay in the dishwasher afterwards.",
    "terminal": [
     "dishes_washed"
    ]
