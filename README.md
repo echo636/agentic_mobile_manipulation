@@ -16,7 +16,7 @@ Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/a
 2. **上层（路线 B）：零领域假设的通用前置条件与时空代价图规划器（保证“做得快、不死锁”）**
    - **将早期先导实验中写死电器（`timed_processes`）与托盘（`carriers`）的旧版 `schedule_planner` 彻底推倒重做**，抽象为零领域假设的通用前置条件与时空代价图规划器（General Precondition & Cost-Aware Task Graph Planner）；
    - 输入与内部表示**只认物理世界通用的四个基本原语：“状态变量、前置条件与后置效果、持续时间（及是否占用单手）、空间移动代价”**，让**异步等待并行、跨区顺路合并、最少状态重置排序、有限空间无死锁借位腾挪**全部从同一个通用图搜索里**自然涌现**。
-3. **三级通用消融阶梯**：① **裸模型最小基线** → ② **+ 通用具身感知记忆 Harness（路线 A）** → ③ **+ 零领域假设通用前置条件与时空代价图规划器（路线 A + B 结合）**。完整进展与无代号六项指标实验表见 **[总进度与实验报告（2026-11-15）](docs/progress_and_results_20261115.md)** 与 **[多模式规划难任务构造规范](docs/multi_mode_planning_benchmark_design_20261115.md)**。
+3. **三级通用消融阶梯**：① **裸模型最小基线** → ② **+ 通用具身感知记忆 Harness（路线 A）** → ③ **+ 零领域假设通用前置条件与时空代价图规划器（路线 A + B 结合）**。最新进展与六项指标对照见 **[阶段进展与实验成果报告（2026-11-24）](docs/progress_and_results_20261124.md)**；早期先导汇总见 **[总进度与实验报告（2026-11-15）](docs/progress_and_results_20261115.md)** 与 **[多模式规划难任务构造规范](docs/multi_mode_planning_benchmark_design_20261115.md)**。
 
 ---
 
