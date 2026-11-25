@@ -1,7 +1,7 @@
 {
  "schema_version": 3,
  "id": "thaw_then_bake_two_rooms",
- "instance_id": "thaw_then_bake_two_rooms_seed0_r4",
+ "instance_id": "thaw_then_bake_two_rooms_seed0_r5",
  "status": "complete_recipe_physics_pending",
  "benchmark_ready": false,
  "official_submission_eligible": false,
@@ -649,7 +649,7 @@
  "replacements": [],
  "public_instruction": "Thaw and bake the frozen fish casserole and the frozen lasagna; serve the fish with a fork and tea in the children's bedroom and the lasagna with plates and forks in the living room, and leave the kitchen appliances off and closed.",
  "public_context": [
-  "Two frozen dishes are inside the refrigerator: a fish casserole in the round baking dish and a lasagna in the rectangular baking dish. Each must first be thawed in the microwave on the west preparation counter and then baked in the black built-in oven to the right of the refrigerator; a dish that is still frozen does not bake in the oven. The fish casserole thaws in about 6 minutes and then bakes in about 4 minutes; the lasagna thaws in about 2 minutes and then bakes in about 10 minutes. Thawing and baking only progress while the appliance door is closed and the appliance is switched on. The microwave takes only one baking dish at a time and switches itself off when it is done; the oven holds both dishes at once and does not switch itself off.",
+  "Two frozen dishes are inside the refrigerator (the tall white appliance between the sink counter and the black built-in oven): a fish casserole in the round baking dish and a lasagna in the rectangular baking dish. Each must first be thawed in the microwave on the west preparation counter and then baked in the black built-in oven to the right of the refrigerator; a dish that is still frozen does not bake in the oven. The fish casserole thaws in about 6 minutes and then bakes in about 4 minutes; the lasagna thaws in about 2 minutes and then bakes in about 10 minutes. Thawing and baking only progress while the appliance door is closed and the appliance is switched on. The microwave takes only one baking dish at a time and switches itself off when it is done; the oven holds both dishes at once and does not switch itself off.",
   "Serve the baked fish casserole with one fork and the bottle of tea on the single bed in the children's bedroom whose sliding door stands open (off the long east corridor; the doors of the other bedrooms are closed), for the person resting there: directly on the bed or on the serving tray resting on it.",
   "Serve the baked lasagna with two plates and two forks on the living-room coffee table (the low square table in front of the sofas east of the kitchen): directly on the table or on the serving tray resting on it. The plates, the three forks, the bottle of tea and a 48 x 48 cm serving tray start on the kitchen island.",
   "Leave the oven and the microwave switched off, and the oven, microwave and refrigerator closed.",
@@ -658,7 +658,7 @@
  "requirements": [
   {
    "id": "dishes_baked",
-   "text": "Two frozen dishes are inside the refrigerator: a fish casserole in the round baking dish and a lasagna in the rectangular baking dish. Each must first be thawed in the microwave on the west preparation counter and then baked in the black built-in oven to the right of the refrigerator; a dish that is still frozen does not bake in the oven. The fish casserole thaws in about 6 minutes and then bakes in about 4 minutes; the lasagna thaws in about 2 minutes and then bakes in about 10 minutes. Thawing and baking only progress while the appliance door is closed and the appliance is switched on. The microwave takes only one baking dish at a time and switches itself off when it is done; the oven holds both dishes at once and does not switch itself off.",
+   "text": "Two frozen dishes are inside the refrigerator (the tall white appliance between the sink counter and the black built-in oven): a fish casserole in the round baking dish and a lasagna in the rectangular baking dish. Each must first be thawed in the microwave on the west preparation counter and then baked in the black built-in oven to the right of the refrigerator; a dish that is still frozen does not bake in the oven. The fish casserole thaws in about 6 minutes and then bakes in about 4 minutes; the lasagna thaws in about 2 minutes and then bakes in about 10 minutes. Thawing and baking only progress while the appliance door is closed and the appliance is switched on. The microwave takes only one baking dish at a time and switches itself off when it is done; the oven holds both dishes at once and does not switch itself off.",
    "terminal": [
     "dishes_baked"
    ]

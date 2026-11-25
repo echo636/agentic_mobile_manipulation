@@ -977,6 +977,7 @@ class CheckedPlacement:
         from . import support_judge as SJ
         from .resting_motion import RestingMotionWindow
         st_before = ST.before_release(self, held, target, contents)   # rc2 MAS_PLACE_STABLE_CHECK; None when off
+        res_before = ST.resident_snapshot(self, target, residents)    # rc4 protect all existing residents in container
         flat = SJ.flat_target(target) if SJ.enabled() else False
         self._carry_detach()
         payload_objs = [obj for obj, _ in contents]
@@ -994,6 +995,10 @@ class CheckedPlacement:
             official = bool(held.states[Inside].get_value(target))
             inside = official or self._released_inside_extra(held, target)
             extra = ST.after_settle(self, held, st_before)
+            res_failed = []
+            if res_before is not None:
+                res_ok, res_failed = ST.check_residents(self, target, res_before)
+                extra['residents_kept'] = res_ok
             upright_failed = (ST.upright_failures(held, st_before)
                               if extra.get('upright_kept') is False else [])
             if resting is not None:
@@ -1013,11 +1018,13 @@ class CheckedPlacement:
                 'position': held.get_position_orientation()[0].tolist(),
                 **({'transaction_checks': extra} if extra else {}),
                 **({'upright_failures': upright_failed} if upright_failed else {}),
+                **({'resident_failures': res_failed} if res_failed else {}),
                 **({'support_judge': judged} if judged else {})})
             ok = inside and all(extra.values())
             return ok, {'official_inside': bool(held.states[Inside].get_value(target)), 'position': held.get_position_orientation()[0].tolist(),
                         **({'transaction_checks': extra} if extra else {}),
-                        **({'upright_failures': upright_failed} if upright_failed else {})}
+                        **({'upright_failures': upright_failed} if upright_failed else {}),
+                        **({'resident_failures': res_failed} if res_failed else {})}
         try:
             inside, first = release_and_check(candidate)
             if not inside:
@@ -1026,13 +1033,17 @@ class CheckedPlacement:
                 if PS.enabled():
                     def retry_release_and_check(cand):
                         ST.restore_neighbours(st_before)
+                        ST.restore_residents(res_before)
                         return release_and_check(cand)
                     def next_candidate(tried):
                         # The selector reads the held object's current pose and shape; put the assembly back at the
                         # first selected pose (no physics step) so the next proposals are built from that pose.
                         held.set_position_orientation(*candidate['pose']); self._relocate_contents(held, contents)
                         ST.restore_neighbours(st_before)
-                        self._a5_restored_neighbour_aabbs = ST.restored_neighbour_aabbs(st_before)
+                        ST.restore_residents(res_before)
+                        self._a5_restored_neighbour_aabbs = (
+                            ST.restored_neighbour_aabbs(st_before) + ST.restored_resident_aabbs(res_before)
+                        )
                         try:
                             return select_inside_release(self, held, target, contents, point=point,
                                                          residents=residents, exclude_positions=tried)

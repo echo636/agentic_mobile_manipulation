@@ -70,7 +70,8 @@ def served(item, dest):
 
 def build_recipe() -> dict:
     req_cook = (
-        'Two frozen dishes are inside the refrigerator: a fish casserole in the round baking dish and a '
+        'Two frozen dishes are inside the refrigerator (the tall white appliance between the sink counter '
+        'and the black built-in oven): a fish casserole in the round baking dish and a '
         'lasagna in the rectangular baking dish. Each must first be thawed in the microwave on the west '
         'preparation counter and then baked in the black built-in oven to the right of the refrigerator; '
         'a dish that is still frozen does not bake in the oven. The fish casserole thaws in about 6 minutes '
@@ -100,7 +101,7 @@ def build_recipe() -> dict:
     spec = {
         'schema_version': 3,
         'id': 'thaw_then_bake_two_rooms',
-        'instance_id': 'thaw_then_bake_two_rooms_seed0_r4',
+        'instance_id': 'thaw_then_bake_two_rooms_seed0_r5',
         'status': 'complete_recipe_physics_pending',
         'benchmark_ready': False,
         'official_submission_eligible': False,

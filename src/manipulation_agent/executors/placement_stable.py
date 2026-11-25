@@ -233,3 +233,102 @@ def after_settle(backend, held, before):
 def passes(checks):
     """The pass decision over a place_on_top check dict: `settled` counts only when the switch is on."""
     return all(v for k, v in checks.items() if k != 'settled' or settled_counts())
+
+
+RESIDENT_MAX_DISP_M = 0.12
+
+
+def _vec3(v):
+    try:
+        return (float(v[0]), float(v[1]), float(v[2]))
+    except Exception:
+        return (0.0, 0.0, 0.0)
+
+
+def resident_snapshot(backend, target, residents):
+    """rc4 generic resident guard: snapshot ALL movable pre-existing items inside `target` before `place_inside`,
+    including flat items (baking dishes, plates) that `_upright_meaningful` skips. None when switch off or empty."""
+    if not enabled() or not residents:
+        return None
+    entries = []
+    aabbs = []
+    seen = set()
+    for row in residents:
+        obj = row[0] if isinstance(row, (tuple, list)) else row
+        if obj is None or id(obj) in seen or getattr(obj, 'fixed_base', False):
+            continue
+        seen.add(id(obj))
+        try:
+            pos, ori = obj.get_position_orientation()
+            pre_pos = _clone_vec(pos)
+            pre_ori = _clone_vec(ori)
+            pre_tilt = tilt_deg(pre_ori)
+        except Exception:
+            continue
+        entries.append((obj, (pre_pos, pre_ori), _vec3(pre_pos), pre_tilt))
+        try:
+            lo, hi = obj.aabb
+            lo_t = (float(lo[0]), float(lo[1]), float(lo[2]))
+            hi_t = (float(hi[0]), float(hi[1]), float(hi[2]))
+            if all(lo_t[i] <= hi_t[i] for i in range(3)):
+                aabbs.append((lo_t, hi_t))
+        except Exception:
+            pass
+    if not entries:
+        return None
+    return {'entries': entries, 'aabbs': aabbs}
+
+
+def restored_resident_aabbs(snapshot):
+    if snapshot is None:
+        return ()
+    return tuple(snapshot.get('aabbs', ()))
+
+
+def restore_residents(snapshot):
+    """Restore all pre-existing container residents to their pre-release pose with zero velocity before A5 retry."""
+    if snapshot is None:
+        return
+    for obj, (pos, ori), _, _ in snapshot.get('entries', ()):
+        obj.set_position_orientation(_clone_vec(pos), _clone_vec(ori))
+        if hasattr(obj, 'keep_still'):
+            obj.keep_still()
+
+
+def check_residents(backend, target, snapshot, *, max_disp_m=RESIDENT_MAX_DISP_M):
+    """Verify every pre-existing container resident stayed inside `target`, did not displace > `max_disp_m`,
+    and did not tip > `FALLEN_MIN_DEG` relative to its pre-release tilt."""
+    if snapshot is None:
+        return True, []
+    try:
+        from omnigibson.object_states import Inside
+    except Exception:
+        Inside = None
+    accept_inside = getattr(backend, 'released_inside', None)
+    failures = []
+    for obj, _, pre_xyz, pre_tilt in snapshot.get('entries', ()):
+        try:
+            cur_pos, cur_ori = obj.get_position_orientation()
+            cur_xyz = _vec3(cur_pos)
+            disp_m = math.sqrt(sum((cur_xyz[i] - pre_xyz[i]) ** 2 for i in range(3)))
+            tilt_delta = abs(tilt_deg(cur_ori) - pre_tilt)
+        except Exception:
+            failures.append({'name': getattr(obj, 'name', str(obj)), 'error': 'pose_unavailable'})
+            continue
+        still_inside = False
+        try:
+            states = getattr(obj, 'states', None) or {}
+            if Inside is not None and Inside in states and states[Inside].get_value(target):
+                still_inside = True
+            elif callable(accept_inside) and bool(accept_inside(obj, target)):
+                still_inside = True
+        except Exception:
+            still_inside = False
+        if (not still_inside) or (disp_m > max_disp_m) or (tilt_delta > FALLEN_MIN_DEG):
+            failures.append({
+                'name': getattr(obj, 'name', str(obj)),
+                'still_inside': still_inside,
+                'disp_m': round(disp_m, 4),
+                'tilt_delta_deg': round(tilt_delta, 2),
+            })
+    return (len(failures) == 0), failures

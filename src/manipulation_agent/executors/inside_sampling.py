@@ -327,10 +327,11 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                                           inward_clearance))
     pose_score = backend._inside_pose_overlap_ranker(held, assembly)
     envelope_score = backend._inside_overlap_ranker(assembly)
-    selected = None; best = None; scored = 0
+    selected = None; best = None; scored = 0; used_tight_clearance = None
     # Bounds order candidates; they do not veto a pose in a hollow receiver.
     # One physical release, below the caller, determines the actual outcome.
-    for candidate in sorted(proposals, key=lambda row: row[0]):
+    sorted_proposals = sorted(proposals, key=lambda row: row[0])
+    for candidate in sorted_proposals:
         check()
         priority, position, quat, center, extent, *_ = candidate
         # rc1 A5: a pose already tried by the placement settle fallback is skipped (within 1 cm).
@@ -343,12 +344,42 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
         rank = (overlap, *priority)
         if best is None or rank < best: best, selected = rank, candidate
         if overlap == 0: break
+    # rc4 tight-headroom fallback: only when every standard 2.5 cm drop-clearance proposal overlaps
+    # (e.g. a 9.9 cm dish placed onto a lower oven/fridge shelf with ~10.5 cm headroom below an upper
+    # rack or resident), test the same internal support proposals lowered to 3 mm clearance so the
+    # released object does not spawn interpenetrating the shelf or resident directly above it.
+    tight_clearance = 0.003
+    if best is not None and best[0] > 0 and clearance > tight_clearance + 1e-4:
+        drop_delta = clearance - tight_clearance
+        for candidate in sorted_proposals:
+            check()
+            priority, position, quat, center, extent, volume, effective_kind, label, inward_clearance = candidate
+            if not effective_kind.startswith('support_'):
+                continue
+            tight_pos = position.clone()
+            tight_pos[2] = tight_pos[2] - drop_delta
+            if any(float(torch.linalg.norm(tight_pos - torch.as_tensor(q, dtype=tight_pos.dtype, device=tight_pos.device))) < 0.01
+                   for q in exclude_positions):
+                continue
+            tight_center = center.clone()
+            tight_center[2] = tight_center[2] - drop_delta
+            overlap = (pose_score(tight_pos, quat) if pose_score is not None else 0)
+            if particles: overlap += envelope_score(tight_center.tolist(), extent.tolist())
+            scored += 1
+            rank = (overlap, *priority)
+            if overlap < best[0] or (overlap == best[0] and rank < best):
+                best = rank
+                selected = (priority, tight_pos, quat, tight_center, extent, volume, effective_kind, label, inward_clearance)
+                used_tight_clearance = tight_clearance
+            if overlap == 0:
+                break
     if selected is None:
         raise SkillError('sampling_error', 'No receiving pose in the selected container')
     _, position, quat, _, _, volume, kind, label, inward_clearance = selected
     return dict(pose=(position, quat), volume=volume.prim_path, domain=kind,
                 orientation_source=label, candidates=len(proposals), scored=scored,
                 proposal_overlap_score=best[0],
+                **({'tight_headroom_clearance_m': used_tight_clearance} if used_tight_clearance is not None else {}),
                 inward_clearance_m=None if inward_clearance is None else round(inward_clearance, 4))
 
 
